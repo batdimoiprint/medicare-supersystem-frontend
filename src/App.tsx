@@ -1,10 +1,13 @@
 import { ThemeProvider } from "@/components/theme-provider"
-import { ModeToggle } from "./components/mode-toggle"
+import { BrowserRouter } from "react-router-dom"
+import AppRoutes from "./routes/routes"
 
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <ModeToggle />
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
     </ThemeProvider>
   )
 }
