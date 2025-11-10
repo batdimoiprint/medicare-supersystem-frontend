@@ -1,11 +1,11 @@
 import { ModeToggle } from "@/components/mode-toggle"
 import BlurText from '@/components/ui/BlurText'
 
-export default function LandingPage() {
+export default function AdminPage() {
     return (
         <div>
             <ModeToggle />
-            <BlurText text="Landing Page" delay={100} className="text-lg font-semibold" />
+            <BlurText text="Admin Page" delay={100} className="text-lg font-semibold" />
         </div>
     )
 }
