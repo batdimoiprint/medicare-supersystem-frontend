@@ -1,28 +1,37 @@
-import LandingPage from '@/pages/public/LandingPage';
+import AdminLayout from '@/layout/AdminLayout';
+import CashierLayout from '@/layout/CashierLayout';
+import DentistLayout from '@/layout/DentistLayout';
+import PatientLayout from '@/layout/PatientLayout';
+import PublicLayout from '@/layout/PublicLayout';
+import ReceptionistLayout from '@/layout/ReceptionistLayout';
 import AdminPage from '@/pages/admin/AdminPage';
+import CashierPage from '@/pages/cashier/CashierPage';
 import DentistPage from '@/pages/dentist/DentistPage';
-import FrontDeskPage from '@/pages/receptionist/ReceptionistPage';
 import InventoryPage from '@/pages/inventory/InventoryPage';
 import PatientPage from '@/pages/patient/PatientPage';
+import AboutUs from '@/pages/public/AboutUs';
+import ContactPage from '@/pages/public/ContactPage';
+import LandingPage from '@/pages/public/LandingPage';
+import LoginPage from '@/pages/public/LoginPage';
+import OurDentistPage from '@/pages/public/OurDentistPage';
+import RegisterPage from '@/pages/public/RegisterPage';
+import ServicesPage from '@/pages/public/ServicesPage';
+import FrontDeskPage from '@/pages/receptionist/ReceptionistPage';
 import { Route, Routes } from 'react-router-dom';
-import PublicLayout from '@/layout/PublicLayout';
-import AdminLayout from '@/layout/AdminLayout';
-import PatientLayout from '@/layout/PatientLayout';
-import ReceptionistLayout from '@/layout/ReceptionistLayout';
-import DentistLayout from '@/layout/DentistLayout';
-import CashierLayout from '@/layout/CashierLayout';
-import CashierPage from '@/pages/cashier/CashierPage';
 
 export default function AppRoutes() {
     return (
         <Routes>
             {/* Public Routes - Nested under LandingPage */}
             <Route path='/' element={<PublicLayout />}>
-                <Route path='' element={<LandingPage />} />
-                <Route path='services' element={null} />
-                <Route path='contact' element={null} />
-                <Route path='login' element={null} />
-                <Route path='register' element={null} />
+                <Route index element={<LandingPage />} />
+                <Route path='services' element={<ServicesPage />} />
+                <Route path='our-dentist' element={<OurDentistPage />} />
+                <Route path='about-us' element={<AboutUs />} />
+                <Route path='contact' element={<ContactPage />} />
+                <Route path='login' element={<LoginPage />} />
+                <Route path='register' element={<RegisterPage />} />
+
             </Route>
 
             {/* Patient Dashboard */}

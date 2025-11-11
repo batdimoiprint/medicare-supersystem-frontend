@@ -19,7 +19,7 @@ const PublicHeader = () => {
             <div className='mx-auto flex max-w-7xl items-center justify-between gap-8 px-4 py-7 sm:px-6'>
                 <div className='text-muted-foreground flex flex-1 items-center gap-8 font-medium md:justify-center lg:gap-16'>
                     <Link to='/services' className='hover:text-primary max-md:hidden'>Services Offered</Link>
-                    <Link to='/dentist' className='hover:text-primary max-md:hidden'>Our Dentists</Link>
+                    <Link to='/our-dentist' className='hover:text-primary max-md:hidden'>Our Dentists</Link>
                     <Link to='/' className='ml-4'><Logo /></Link>
                     <Link to='/about-us' className='hover:text-primary max-md:hidden'>About Us</Link>
                     <Link to='/contact' className='hover:text-primary max-md:hidden'>Contact</Link>
