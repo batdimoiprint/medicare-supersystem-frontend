@@ -1,11 +1,14 @@
-import { ModeToggle } from "@/components/mode-toggle"
-import BlurText from '@/components/ui/BlurText'
+import CTA from '@/components/landing/CTA'
+
+// Import only functional components on this page
+
+
 
 export default function LandingPage() {
     return (
         <div>
-            <ModeToggle />
-            <BlurText text="Landing Page" delay={100} className="text-lg font-semibold" />
+            <CTA />
+
         </div>
     )
 }
