@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import { User, Search, Plus } from 'lucide-react';
+import { User, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -29,11 +27,7 @@ interface PatientSelectorProps {
 }
 
 export const PatientSelector = ({ selectedPatient, onPatientChange, onNewPatient }: PatientSelectorProps) => {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const filteredPatients = MOCK_PATIENTS.filter(patient =>
-    searchTerm === '' || patient.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPatients = MOCK_PATIENTS;
 
   return (
     <Card>

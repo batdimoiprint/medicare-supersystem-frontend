@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Pill,
   Plus,
@@ -9,9 +9,6 @@ import {
   Calendar,
   User,
   Search,
-  FileText,
-  Stethoscope,
-  ClipboardList,
   Printer,
   Briefcase,
 } from 'lucide-react';
