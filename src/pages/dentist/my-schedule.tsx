@@ -1,0 +1,379 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Calendar,
+  Clock,
+  Save,
+  X,
+  CheckCircle,
+  XCircle,
+  Printer,
+  TrendingUp,
+  Edit,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+// --- Type Definitions ---
+interface TimeSlot {
+  id: number;
+  day: string;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+}
+
+interface ScheduleDay {
+  day: string;
+  isWorking: boolean;
+  slots: TimeSlot[];
+}
+
+// --- Constants ---
+const DAYS_OF_WEEK = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+const TIME_SLOTS = [
+  '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
+  '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM',
+  '4:00 PM', '4:30 PM', '5:00 PM', '5:30 PM',
+];
+
+// --- Main Component ---
+const MySchedule = () => {
+  const [schedule, setSchedule] = useState<ScheduleDay[]>(() => {
+    return DAYS_OF_WEEK.map((day) => ({
+      day,
+      isWorking: day !== 'Sunday',
+      slots: TIME_SLOTS.map((time, index) => ({
+        id: index,
+        day,
+        startTime: time,
+        endTime: TIME_SLOTS[index + 1] || '6:00 PM',
+        isAvailable: day !== 'Sunday',
+      })),
+    }));
+  });
+
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<{ startTime: string; endTime: string }>({
+    startTime: '',
+    endTime: '',
+  });
+
+  const toggleDayWorking = (day: string) => {
+    setSchedule(schedule.map(d =>
+      d.day === day
+        ? { ...d, isWorking: !d.isWorking, slots: d.slots.map(s => ({ ...s, isAvailable: !d.isWorking })) }
+        : d
+    ));
+  };
+
+  const toggleSlotAvailability = (day: string, slotId: number) => {
+    setSchedule(schedule.map(d =>
+      d.day === day
+        ? {
+            ...d,
+            slots: d.slots.map(s => s.id === slotId ? { ...s, isAvailable: !s.isAvailable } : s),
+          }
+        : d
+    ));
+  };
+
+  const handleBulkEdit = (day: string) => {
+    setSelectedDay(day);
+    setIsEditing(true);
+    const daySchedule = schedule.find(d => d.day === day);
+    if (daySchedule) {
+      const availableSlots = daySchedule.slots.filter(s => s.isAvailable);
+      setEditForm({
+        startTime: availableSlots[0]?.startTime || '9:00 AM',
+        endTime: availableSlots[availableSlots.length - 1]?.endTime || '5:00 PM',
+      });
+    }
+  };
+
+  const handleSaveBulkEdit = () => {
+    if (!selectedDay) return;
+    
+    const startIndex = TIME_SLOTS.indexOf(editForm.startTime);
+    const endIndex = TIME_SLOTS.indexOf(editForm.endTime);
+    
+    if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
+      alert('Please select valid start and end times');
+      return;
+    }
+
+    setSchedule(schedule.map(d =>
+      d.day === selectedDay
+        ? {
+            ...d,
+            slots: d.slots.map((s, index) => ({
+              ...s,
+              isAvailable: index >= startIndex && index <= endIndex,
+            })),
+          }
+        : d
+    ));
+
+    setIsEditing(false);
+    setSelectedDay(null);
+  };
+
+  const getAvailableCount = (day: string) => {
+    const daySchedule = schedule.find(d => d.day === day);
+    return daySchedule?.slots.filter(s => s.isAvailable).length || 0;
+  };
+
+  const totalAvailableSlots = schedule.reduce((sum, d) => sum + getAvailableCount(d.day), 0);
+  const workingDays = schedule.filter(d => d.isWorking).length;
+
+  return (
+    <div className="min-h-screen bg-background p-4 sm:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-3xl mb-2 flex items-center gap-2">
+                  <Calendar className="w-8 h-8" />
+                  My Availability Schedule
+                </CardTitle>
+                <p className="text-muted-foreground">
+                  Set your working hours and availability for appointments
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => window.print()}>
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print
+                </Button>
+                <Button>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Schedule
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Quick Stats */}
+        <div className="grid md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Working Days</p>
+                  <p className="text-2xl font-bold">{workingDays} / {DAYS_OF_WEEK.length}</p>
+                </div>
+                <Calendar className="w-8 h-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Available Slots</p>
+                  <p className="text-2xl font-bold">{totalAvailableSlots}</p>
+                </div>
+                <Clock className="w-8 h-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Avg. Slots/Day</p>
+                  <p className="text-2xl font-bold">
+                    {workingDays > 0 ? Math.round(totalAvailableSlots / workingDays) : 0}
+                  </p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Bulk Edit Modal */}
+        {isEditing && selectedDay && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Edit Availability - {selectedDay}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field orientation="vertical">
+                  <FieldLabel>Start Time</FieldLabel>
+                  <FieldContent>
+                    <Select
+                      value={editForm.startTime}
+                      onValueChange={(value) => setEditForm({ ...editForm, startTime: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIME_SLOTS.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FieldContent>
+                </Field>
+                <Field orientation="vertical">
+                  <FieldLabel>End Time</FieldLabel>
+                  <FieldContent>
+                    <Select
+                      value={editForm.endTime}
+                      onValueChange={(value) => setEditForm({ ...editForm, endTime: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIME_SLOTS.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FieldContent>
+                </Field>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setIsEditing(false); setSelectedDay(null); }}>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveBulkEdit}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Schedule Days */}
+        <div className="space-y-4">
+          {schedule.map((daySchedule) => (
+            <Card key={daySchedule.day}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-semibold">{daySchedule.day}</h3>
+                      <button
+                        onClick={() => toggleDayWorking(daySchedule.day)}
+                        className={`p-1 rounded ${
+                          daySchedule.isWorking
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                        }`}
+                      >
+                        {daySchedule.isWorking ? (
+                          <CheckCircle className="w-5 h-5" />
+                        ) : (
+                          <XCircle className="w-5 h-5" />
+                        )}
+                      </button>
+                      <span className="text-sm text-muted-foreground">
+                        {daySchedule.isWorking ? 'Working' : 'Not Working'}
+                      </span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {getAvailableCount(daySchedule.day)} slots available
+                    </span>
+                  </div>
+                  {daySchedule.isWorking && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleBulkEdit(daySchedule.day)}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Bulk Edit
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {daySchedule.isWorking ? (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                    {daySchedule.slots.map((slot) => (
+                      <button
+                        key={slot.id}
+                        onClick={() => toggleSlotAvailability(daySchedule.day, slot.id)}
+                        className={`p-3 rounded-lg border-2 transition-all text-center ${
+                          slot.isAvailable
+                            ? 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                            : 'bg-gray-100 text-gray-400 border-gray-300 hover:bg-gray-200 dark:bg-gray-900/30 dark:text-gray-600 dark:border-gray-700'
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{slot.startTime}</div>
+                        {slot.isAvailable ? (
+                          <CheckCircle className="w-4 h-4 mx-auto mt-1" />
+                        ) : (
+                          <XCircle className="w-4 h-4 mx-auto mt-1" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>Not working on this day</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Quick Link to Appointments */}
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold mb-1">View Appointments</p>
+                <p className="text-sm text-muted-foreground">
+                  See how your schedule affects appointment availability
+                </p>
+              </div>
+              <Button asChild>
+                <Link to="/dentist/appointments">
+                  View Appointments
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default MySchedule;
+

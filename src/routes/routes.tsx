@@ -1,12 +1,21 @@
 import AdminLayout from '@/layout/AdminLayout';
 import CashierLayout from '@/layout/CashierLayout';
 import DentistLayout from '@/layout/DentistLayout';
+import InventoryLayout from '@/layout/InventoryLayout';
 import PatientLayout from '@/layout/PatientLayout';
 import PublicLayout from '@/layout/PublicLayout';
 import ReceptionistLayout from '@/layout/ReceptionistLayout';
 import AdminPage from '@/pages/admin/AdminPage';
 import CashierPage from '@/pages/cashier/CashierPage';
-import DentistPage from '@/pages/dentist/DentistPage';
+import Dashboard from '@/pages/dentist/Dashboard';
+import AppointmentWorkflow from '@/pages/dentist/appointments/appointment';
+import FollowupApp from '@/pages/dentist/appointments/followup';
+import DentalCharting from '@/pages/dentist/patient/charting';
+import PatientRecords from '@/pages/dentist/patient/records';
+import TreatmentPlanPage from '@/pages/dentist/patient/treatment-plan';
+import PrescriptionsPage from '@/pages/dentist/patient/prescriptions';
+import MaterialsLogging from '@/pages/dentist/logging';
+import MySchedule from '@/pages/dentist/my-schedule';
 import InventoryPage from '@/pages/inventory/InventoryPage';
 import PatientPage from '@/pages/patient/PatientPage';
 import AboutUs from '@/pages/public/AboutUs';
@@ -50,11 +59,21 @@ export default function AppRoutes() {
             </Route>
 
             {/* Inventory Dashboard */}
-            <Route path='/inventory' element={<InventoryPage />} />
+            <Route path='/inventory' element={<InventoryLayout />}>
+                <Route index element={<InventoryPage />} />
+            </Route>
 
             {/* Dentist Dashboard */}
             <Route path='/dentist' element={<DentistLayout />}>
-                <Route index element={<DentistPage />} />
+                <Route index element={<Dashboard />} />
+                <Route path='appointments' element={<AppointmentWorkflow />} />
+                <Route path='appointments/followup' element={<FollowupApp />} />
+                <Route path='patient/charting' element={<DentalCharting />} />
+                <Route path='patient/records' element={<PatientRecords />} />
+                <Route path='patient/treatment/plan' element={<TreatmentPlanPage />} />
+                <Route path='patient/prescriptions' element={<PrescriptionsPage />} />
+                <Route path='logging' element={<MaterialsLogging />} />
+                <Route path='my-schedule' element={<MySchedule />} />
             </Route>
 
             {/* Admin Dashboard */}
