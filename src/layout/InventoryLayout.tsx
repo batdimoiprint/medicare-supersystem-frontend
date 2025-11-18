@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import SidebarLayout from '@/components/shared/sidebars/Sidebar'
 
 
 export default function InventoryLayout() {
@@ -14,9 +15,8 @@ export default function InventoryLayout() {
 
 
     return (
-        <>
-
+        <SidebarLayout>
             <Outlet />
-        </>
+        </SidebarLayout>
     )
 }

@@ -18,10 +18,5 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "registries": {
-    "@shadcn-studio": "https://shadcnstudio.com/r/{name}.json",
-    "@shadcnblocks": "https://shadcnblocks.com/r/{name}.json",
-    "@shadcndesign": "https://shadcndesign-free.vercel.app/r/{name}.json",
-    "@react-bits": "https://reactbits.dev/r/{name}.json"
-  }
+  "registries": {}
 }

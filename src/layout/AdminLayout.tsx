@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import SidebarLayout from '@/components/shared/sidebars/Sidebar'
 
 
 export default function AdminLayout() {
@@ -14,9 +15,8 @@ export default function AdminLayout() {
 
 
     return (
-        <>
-
+        <SidebarLayout>
             <Outlet />
-        </>
+        </SidebarLayout>
     )
 }

@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import SidebarLayout from '@/components/shared/sidebars/Sidebar'
 
 export default function CashierLayout() {
     // For layout only
@@ -7,8 +8,8 @@ export default function CashierLayout() {
     // Eto ung masterpage
     // Outlet iis ung mga pages
     return (
-        <>
+        <SidebarLayout>
             <Outlet />
-        </>
+        </SidebarLayout>
     )
 }
