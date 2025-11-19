@@ -23,7 +23,7 @@ export default function DentistLayout() {
     return (
         <>
             <SidebarLayout>
-                <SidebarInset>
+                <SidebarInset className='flex flex-col box-content w-full px-4 gap-4 '>
                     <header className="flex h-16 shrink-0 items-center gap-2">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger />
@@ -45,7 +45,9 @@ export default function DentistLayout() {
                             </Breadcrumb>
                         </div>
                     </header>
-                    <Outlet />
+                    <section className='flex flex-col gap-4 '>
+                        <Outlet />
+                    </section>
                 </SidebarInset>
             </SidebarLayout>
 
