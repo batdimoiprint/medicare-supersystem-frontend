@@ -1,9 +1,11 @@
 import InventoryLayout from '@/layout/InventoryLayout';
-import InventoryPage from '@/pages/inventory/InventoryPage';
+import InventoryDashboard from '@/pages/inventory/InventoryDashboard';
+import InventoryTable from '@/pages/inventory/inventorytable/InventoryTable';
 import { Route } from 'react-router-dom';
 
 export const inventoryRouteData = [
-    { index: true, path: undefined, element: <InventoryPage />, title: 'Inventory Dashboard' }
+    { index: true, path: undefined, element: <InventoryDashboard />, title: 'Inventory Dashboard' },
+    { index: false, path: 'table', element: <InventoryTable />, title: 'Inventory Table' }
 ];
 
 export const inventoryRoutes = (
