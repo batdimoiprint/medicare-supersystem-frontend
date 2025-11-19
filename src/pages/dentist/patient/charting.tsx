@@ -163,13 +163,13 @@ const DentalCharting = () => {
     });
 
     const procedures: ProcedureOverview[] = [];
-    
+
     if (implants.length > 0) {
       procedures.push({
         type: 'Implant',
         teeth: implants,
-        recommendedProcedures: implantProcedures.length > 0 
-          ? implantProcedures 
+        recommendedProcedures: implantProcedures.length > 0
+          ? implantProcedures
           : ['Single Tooth Implant'], // Default recommendation
       });
     }
@@ -178,8 +178,8 @@ const DentalCharting = () => {
       procedures.push({
         type: 'Filling',
         teeth: fillings,
-        recommendedProcedures: fillingProcedures.length > 0 
-          ? fillingProcedures 
+        recommendedProcedures: fillingProcedures.length > 0
+          ? fillingProcedures
           : ['Composite Filling'], // Default recommendation
       });
     }
@@ -213,8 +213,8 @@ const DentalCharting = () => {
     updatedTeeth[selectedTooth] = {
       number: selectedTooth,
       condition: selectedCondition,
-      procedureType: (selectedCondition === 'Implant' || selectedCondition === 'For Filling') 
-        ? procedureType 
+      procedureType: (selectedCondition === 'Implant' || selectedCondition === 'For Filling')
+        ? procedureType
         : undefined,
       notes: notes.trim() || undefined,
     };
@@ -247,7 +247,7 @@ const DentalCharting = () => {
       alert('Please select at least one tooth first.');
       return;
     }
-    
+
     setSelectedTooth(null);
     setSelectedCondition('Healthy');
     setProcedureType('');
@@ -263,8 +263,8 @@ const DentalCharting = () => {
       updatedTeeth[toothNum] = {
         number: toothNum,
         condition: selectedCondition,
-        procedureType: (selectedCondition === 'Implant' || selectedCondition === 'For Filling') 
-          ? procedureType 
+        procedureType: (selectedCondition === 'Implant' || selectedCondition === 'For Filling')
+          ? procedureType
           : undefined,
         notes: notes.trim() || undefined,
       };
@@ -321,496 +321,493 @@ const DentalCharting = () => {
   const procedures = calculateProcedures();
 
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Workspace Header */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-3xl mb-2 flex items-center gap-2">
-                  <Briefcase className="w-8 h-8" />
-                  Workspace
-                </CardTitle>
-                <p className="text-muted-foreground">
-                  Patient management workspace for dental charting, records, and treatment planning.
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {/* Navigation */}
-        <PatientNav />
-
-        {/* Patient Selector */}
-        <PatientSelector
-          selectedPatient={selectedPatient}
-          onPatientChange={setSelectedPatient}
-        />
-
-        {/* Header */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-3xl mb-2 flex items-center gap-2">
-                  <Stethoscope className="w-8 h-8" />
-                  Dental Charting - {selectedPatient}
-                </CardTitle>
-                <p className="text-muted-foreground">
-                  Interactive dental chart for patient tooth condition tracking (Teeth 1-32)
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => window.print()}>
-                  <Printer className="w-4 h-4 mr-2" />
-                  Print
-                </Button>
-                <Button variant="outline" onClick={handleReset}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Reset All
-                </Button>
-                <Button>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Chart
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {/* Quick Select */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Layers className="w-5 h-5" />
-                Quick Select
+    <>
+      {/* Workspace Header */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-3xl mb-2 flex items-center gap-2">
+                <Briefcase className="w-8 h-8" />
+                Workspace
               </CardTitle>
-              <div className="flex items-center gap-2">
-                {selectedTeeth.length > 0 && (
-                  <span className="text-sm text-muted-foreground">
-                    {selectedTeeth.length} tooth{selectedTeeth.length !== 1 ? 's' : ''} selected
-                  </span>
+              <p className="text-muted-foreground">
+                Patient management workspace for dental charting, records, and treatment planning.
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Navigation */}
+      <PatientNav />
+
+      {/* Patient Selector */}
+      <PatientSelector
+        selectedPatient={selectedPatient}
+        onPatientChange={setSelectedPatient}
+      />
+
+      {/* Header */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-3xl mb-2 flex items-center gap-2">
+                <Stethoscope className="w-8 h-8" />
+                Dental Charting - {selectedPatient}
+              </CardTitle>
+              <p className="text-muted-foreground">
+                Interactive dental chart for patient tooth condition tracking (Teeth 1-32)
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => window.print()}>
+                <Printer className="w-4 h-4 mr-2" />
+                Print
+              </Button>
+              <Button variant="outline" onClick={handleReset}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reset All
+              </Button>
+              <Button>
+                <Save className="w-4 h-4 mr-2" />
+                Save Chart
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Quick Select */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Layers className="w-5 h-5" />
+              Quick Select
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {selectedTeeth.length > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  {selectedTeeth.length} tooth{selectedTeeth.length !== 1 ? 's' : ''} selected
+                </span>
+              )}
+              <Button
+                variant={isMultiSelectMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setIsMultiSelectMode(!isMultiSelectMode);
+                  if (!isMultiSelectMode) {
+                    setSelectedTeeth([]);
+                  }
+                }}
+              >
+                {isMultiSelectMode ? (
+                  <>
+                    <CheckSquare className="w-4 h-4 mr-2" />
+                    Multi-Select ON
+                  </>
+                ) : (
+                  <>
+                    <Square className="w-4 h-4 mr-2" />
+                    Multi-Select OFF
+                  </>
                 )}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickSelect('upperRight')}
+                className="flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Upper Right (1-8)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickSelect('upperLeft')}
+                className="flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Upper Left (9-16)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickSelect('lowerLeft')}
+                className="flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Lower Left (17-24)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickSelect('lowerRight')}
+                className="flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Lower Right (25-32)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickSelect('all')}
+                className="flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </Button>
+            </div>
+            {selectedTeeth.length > 0 && (
+              <div className="flex items-center gap-2 pt-2 border-t">
                 <Button
-                  variant={isMultiSelectMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setIsMultiSelectMode(!isMultiSelectMode);
-                    if (!isMultiSelectMode) {
-                      setSelectedTeeth([]);
-                    }
-                  }}
+                  variant="default"
+                  onClick={handleApplyConditionToSelected}
+                  className="flex items-center gap-2"
                 >
-                  {isMultiSelectMode ? (
-                    <>
-                      <CheckSquare className="w-4 h-4 mr-2" />
-                      Multi-Select ON
-                    </>
-                  ) : (
-                    <>
-                      <Square className="w-4 h-4 mr-2" />
-                      Multi-Select OFF
-                    </>
-                  )}
+                  <ClipboardList className="w-4 h-4" />
+                  Apply Condition to Selected ({selectedTeeth.length})
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleClearSelection}
+                  className="flex items-center gap-2"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Clear Selection
                 </Button>
               </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Teeth Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Teeth Chart (Click on a tooth number to update condition)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-8">
+            {/* Upper Jaw */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-center">Upper Jaw</h3>
+              <div className="grid grid-cols-2 gap-8">
+                {/* Upper Right (1-8) */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Upper Right</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {TEETH_LAYOUT.upperRight.map((toothNum) => {
+                      const tooth = teeth[toothNum];
+                      const Icon = getConditionIcon(tooth.condition);
+                      const isSelected = selectedTeeth.includes(toothNum);
+                      return (
+                        <button
+                          key={toothNum}
+                          onClick={() => handleToothClick(toothNum)}
+                          className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
+                        >
+                          <div className="flex flex-col items-center gap-1">
+                            <Icon className="w-4 h-4" />
+                            <span className="font-bold text-lg">{toothNum}</span>
+                            <span className="text-xs">{tooth.condition}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Upper Left (9-16) */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Upper Left</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {TEETH_LAYOUT.upperLeft.map((toothNum) => {
+                      const tooth = teeth[toothNum];
+                      const Icon = getConditionIcon(tooth.condition);
+                      const isSelected = selectedTeeth.includes(toothNum);
+                      return (
+                        <button
+                          key={toothNum}
+                          onClick={() => handleToothClick(toothNum)}
+                          className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
+                        >
+                          <div className="flex flex-col items-center gap-1">
+                            <Icon className="w-4 h-4" />
+                            <span className="font-bold text-lg">{toothNum}</span>
+                            <span className="text-xs">{tooth.condition}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Lower Jaw */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-center">Lower Jaw</h3>
+              <div className="grid grid-cols-2 gap-8">
+                {/* Lower Left (17-24) */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Lower Left</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {TEETH_LAYOUT.lowerLeft.map((toothNum) => {
+                      const tooth = teeth[toothNum];
+                      const Icon = getConditionIcon(tooth.condition);
+                      const isSelected = selectedTeeth.includes(toothNum);
+                      return (
+                        <button
+                          key={toothNum}
+                          onClick={() => handleToothClick(toothNum)}
+                          className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
+                        >
+                          <div className="flex flex-col items-center gap-1">
+                            <Icon className="w-4 h-4" />
+                            <span className="font-bold text-lg">{toothNum}</span>
+                            <span className="text-xs">{tooth.condition}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Lower Right (25-32) */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Lower Right</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {TEETH_LAYOUT.lowerRight.map((toothNum) => {
+                      const tooth = teeth[toothNum];
+                      const Icon = getConditionIcon(tooth.condition);
+                      const isSelected = selectedTeeth.includes(toothNum);
+                      return (
+                        <button
+                          key={toothNum}
+                          onClick={() => handleToothClick(toothNum)}
+                          className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
+                        >
+                          <div className="flex flex-col items-center gap-1">
+                            <Icon className="w-4 h-4" />
+                            <span className="font-bold text-lg">{toothNum}</span>
+                            <span className="text-xs">{tooth.condition}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary and Overview */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Condition Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="w-5 h-5" />
+              Condition Summary
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickSelect('upperRight')}
-                  className="flex items-center gap-2"
-                >
-                  <CheckSquare className="w-4 h-4" />
-                  Upper Right (1-8)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickSelect('upperLeft')}
-                  className="flex items-center gap-2"
-                >
-                  <CheckSquare className="w-4 h-4" />
-                  Upper Left (9-16)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickSelect('lowerLeft')}
-                  className="flex items-center gap-2"
-                >
-                  <CheckSquare className="w-4 h-4" />
-                  Lower Left (17-24)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickSelect('lowerRight')}
-                  className="flex items-center gap-2"
-                >
-                  <CheckSquare className="w-4 h-4" />
-                  Lower Right (25-32)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickSelect('all')}
-                  className="flex items-center gap-2"
-                >
-                  <CheckSquare className="w-4 h-4" />
-                  Select All
-                </Button>
-              </div>
-              {selectedTeeth.length > 0 && (
-                <div className="flex items-center gap-2 pt-2 border-t">
-                  <Button
-                    variant="default"
-                    onClick={handleApplyConditionToSelected}
-                    className="flex items-center gap-2"
-                  >
-                    <ClipboardList className="w-4 h-4" />
-                    Apply Condition to Selected ({selectedTeeth.length})
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleClearSelection}
-                    className="flex items-center gap-2"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Clear Selection
-                  </Button>
-                </div>
+            <div className="space-y-3">
+              {summary.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No teeth data available</p>
+              ) : (
+                summary.map((item) => {
+                  const Icon = getConditionIcon(item.condition);
+                  return (
+                    <div
+                      key={item.condition}
+                      className={`p-4 rounded-lg border ${getConditionColor(item.condition)}`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-5 h-5" />
+                          <span className="font-semibold">{item.condition}</span>
+                        </div>
+                        <span className="text-2xl font-bold">{item.count}</span>
+                      </div>
+                      <p className="text-xs opacity-75">
+                        Teeth: {item.teeth.join(', ')}
+                      </p>
+                    </div>
+                  );
+                })
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Teeth Chart */}
+        {/* Procedure Overview */}
         <Card>
           <CardHeader>
-            <CardTitle>Teeth Chart (Click on a tooth number to update condition)</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Procedure Overview
+              </CardTitle>
+              {procedures.length > 0 && (
+                <Button size="sm" asChild>
+                  <Link to={`/dentist/patient/treatment/plan?patient=${selectedPatient}&fromChart=true`}>
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    Create Treatment Plan
+                  </Link>
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-8">
-              {/* Upper Jaw */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center">Upper Jaw</h3>
-                <div className="grid grid-cols-2 gap-8">
-                  {/* Upper Right (1-8) */}
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Upper Right</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {TEETH_LAYOUT.upperRight.map((toothNum) => {
-                        const tooth = teeth[toothNum];
-                        const Icon = getConditionIcon(tooth.condition);
-                        const isSelected = selectedTeeth.includes(toothNum);
-                        return (
-                          <button
-                            key={toothNum}
-                            onClick={() => handleToothClick(toothNum)}
-                            className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <Icon className="w-4 h-4" />
-                              <span className="font-bold text-lg">{toothNum}</span>
-                              <span className="text-xs">{tooth.condition}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
+            <div className="space-y-4">
+              {procedures.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">
+                  No procedures needed. All teeth are healthy or have been treated.
+                </p>
+              ) : (
+                procedures.map((procedure, index) => (
+                  <div
+                    key={index}
+                    className={`p-4 rounded-lg border ${procedure.type === 'Implant'
+                        ? 'bg-primary/10 border-primary/20'
+                        : 'bg-destructive/10 border-destructive/20'
+                      }`}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle className="w-5 h-5" />
+                      <h4 className="font-semibold text-lg">{procedure.type}s Needed</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      <span className="font-medium">Teeth:</span> {procedure.teeth.join(', ')} ({procedure.teeth.length} {procedure.type.toLowerCase()}{procedure.teeth.length !== 1 ? 's' : ''})
+                    </p>
+                    <div className="mt-3">
+                      <p className="text-sm font-medium mb-2">Recommended Procedures:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        {procedure.recommendedProcedures.map((proc, idx) => (
+                          <li key={idx} className="text-sm text-muted-foreground">
+                            {proc}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
-
-                  {/* Upper Left (9-16) */}
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Upper Left</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {TEETH_LAYOUT.upperLeft.map((toothNum) => {
-                        const tooth = teeth[toothNum];
-                        const Icon = getConditionIcon(tooth.condition);
-                        const isSelected = selectedTeeth.includes(toothNum);
-                        return (
-                          <button
-                            key={toothNum}
-                            onClick={() => handleToothClick(toothNum)}
-                            className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <Icon className="w-4 h-4" />
-                              <span className="font-bold text-lg">{toothNum}</span>
-                              <span className="text-xs">{tooth.condition}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lower Jaw */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center">Lower Jaw</h3>
-                <div className="grid grid-cols-2 gap-8">
-                  {/* Lower Left (17-24) */}
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Lower Left</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {TEETH_LAYOUT.lowerLeft.map((toothNum) => {
-                        const tooth = teeth[toothNum];
-                        const Icon = getConditionIcon(tooth.condition);
-                        const isSelected = selectedTeeth.includes(toothNum);
-                        return (
-                          <button
-                            key={toothNum}
-                            onClick={() => handleToothClick(toothNum)}
-                            className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <Icon className="w-4 h-4" />
-                              <span className="font-bold text-lg">{toothNum}</span>
-                              <span className="text-xs">{tooth.condition}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Lower Right (25-32) */}
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-3 text-center">Lower Right</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {TEETH_LAYOUT.lowerRight.map((toothNum) => {
-                        const tooth = teeth[toothNum];
-                        const Icon = getConditionIcon(tooth.condition);
-                        const isSelected = selectedTeeth.includes(toothNum);
-                        return (
-                          <button
-                            key={toothNum}
-                            onClick={() => handleToothClick(toothNum)}
-                            className={`p-3 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${getConditionColor(tooth.condition)} ${isSelected ? 'ring-4 ring-primary ring-offset-2' : ''}`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <Icon className="w-4 h-4" />
-                              <span className="font-bold text-lg">{toothNum}</span>
-                              <span className="text-xs">{tooth.condition}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        {/* Summary and Overview */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Condition Summary */}
-          <Card>
+      {/* Edit Tooth Modal */}
+      {isDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsDialogOpen(false)}>
+          <Card className="w-full max-w-[500px] m-4" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="w-5 h-5" />
-                Condition Summary
+              <CardTitle>
+                {selectedTeeth.length > 0
+                  ? `Update ${selectedTeeth.length} Selected Tooth${selectedTeeth.length !== 1 ? 's' : ''}`
+                  : `Update Tooth #${selectedTooth}`
+                }
               </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {selectedTeeth.length > 0
+                  ? `Update the condition and procedure details for ${selectedTeeth.length} selected tooth${selectedTeeth.length !== 1 ? 's' : ''}.`
+                  : 'Update the condition and procedure details for this tooth.'
+                }
+              </p>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {summary.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">No teeth data available</p>
-                ) : (
-                  summary.map((item) => {
-                    const Icon = getConditionIcon(item.condition);
-                    return (
-                      <div
-                        key={item.condition}
-                        className={`p-4 rounded-lg border ${getConditionColor(item.condition)}`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Icon className="w-5 h-5" />
-                            <span className="font-semibold">{item.condition}</span>
-                          </div>
-                          <span className="text-2xl font-bold">{item.count}</span>
-                        </div>
-                        <p className="text-xs opacity-75">
-                          Teeth: {item.teeth.join(', ')}
-                        </p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </CardContent>
-          </Card>
+            <CardContent className="space-y-4">
+              <Field orientation="vertical">
+                <FieldLabel>Condition</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={selectedCondition}
+                    onValueChange={(value) => {
+                      setSelectedCondition(value as ToothCondition);
+                      if (value !== 'Implant' && value !== 'For Filling') {
+                        setProcedureType('');
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TOOTH_CONDITIONS.map((condition) => (
+                        <SelectItem key={condition} value={condition}>
+                          {condition}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
 
-          {/* Procedure Overview */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Procedure Overview
-                </CardTitle>
-                {procedures.length > 0 && (
-                  <Button size="sm" asChild>
-                    <Link to={`/dentist/patient/treatment/plan?patient=${selectedPatient}&fromChart=true`}>
-                      <ClipboardList className="w-4 h-4 mr-2" />
-                      Create Treatment Plan
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {procedures.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">
-                    No procedures needed. All teeth are healthy or have been treated.
-                  </p>
-                ) : (
-                  procedures.map((procedure, index) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg border ${
-                        procedure.type === 'Implant'
-                          ? 'bg-primary/10 border-primary/20'
-                          : 'bg-destructive/10 border-destructive/20'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <AlertCircle className="w-5 h-5" />
-                        <h4 className="font-semibold text-lg">{procedure.type}s Needed</h4>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        <span className="font-medium">Teeth:</span> {procedure.teeth.join(', ')} ({procedure.teeth.length} {procedure.type.toLowerCase()}{procedure.teeth.length !== 1 ? 's' : ''})
-                      </p>
-                      <div className="mt-3">
-                        <p className="text-sm font-medium mb-2">Recommended Procedures:</p>
-                        <ul className="list-disc list-inside space-y-1">
-                          {procedure.recommendedProcedures.map((proc, idx) => (
-                            <li key={idx} className="text-sm text-muted-foreground">
-                              {proc}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Edit Tooth Modal */}
-        {isDialogOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsDialogOpen(false)}>
-            <Card className="w-full max-w-[500px] m-4" onClick={(e) => e.stopPropagation()}>
-              <CardHeader>
-                <CardTitle>
-                  {selectedTeeth.length > 0 
-                    ? `Update ${selectedTeeth.length} Selected Tooth${selectedTeeth.length !== 1 ? 's' : ''}`
-                    : `Update Tooth #${selectedTooth}`
-                  }
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {selectedTeeth.length > 0
-                    ? `Update the condition and procedure details for ${selectedTeeth.length} selected tooth${selectedTeeth.length !== 1 ? 's' : ''}.`
-                    : 'Update the condition and procedure details for this tooth.'
-                  }
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
+              {(selectedCondition === 'Implant' || selectedCondition === 'For Filling') && (
                 <Field orientation="vertical">
-                  <FieldLabel>Condition</FieldLabel>
+                  <FieldLabel>
+                    {selectedCondition === 'Implant' ? 'Implant Type' : 'Filling Type'}
+                  </FieldLabel>
                   <FieldContent>
-                    <Select
-                      value={selectedCondition}
-                      onValueChange={(value) => {
-                        setSelectedCondition(value as ToothCondition);
-                        if (value !== 'Implant' && value !== 'For Filling') {
-                          setProcedureType('');
-                        }
-                      }}
-                    >
+                    <Select value={procedureType} onValueChange={setProcedureType}>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder={`Select ${selectedCondition === 'Implant' ? 'implant' : 'filling'} type`} />
                       </SelectTrigger>
                       <SelectContent>
-                        {TOOTH_CONDITIONS.map((condition) => (
-                          <SelectItem key={condition} value={condition}>
-                            {condition}
+                        {(selectedCondition === 'Implant' ? IMPLANT_TYPES : FILLING_TYPES).map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </FieldContent>
                 </Field>
+              )}
 
-                {(selectedCondition === 'Implant' || selectedCondition === 'For Filling') && (
-                  <Field orientation="vertical">
-                    <FieldLabel>
-                      {selectedCondition === 'Implant' ? 'Implant Type' : 'Filling Type'}
-                    </FieldLabel>
-                    <FieldContent>
-                      <Select value={procedureType} onValueChange={setProcedureType}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={`Select ${selectedCondition === 'Implant' ? 'implant' : 'filling'} type`} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(selectedCondition === 'Implant' ? IMPLANT_TYPES : FILLING_TYPES).map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FieldContent>
-                  </Field>
-                )}
-
-                <Field orientation="vertical">
-                  <FieldLabel>Notes (Optional)</FieldLabel>
-                  <FieldContent>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className="w-full min-h-[100px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Add any additional notes about this tooth..."
-                    />
-                  </FieldContent>
-                </Field>
-              </CardContent>
-              <CardContent className="flex justify-end gap-2 pt-0">
-                <Button variant="outline" onClick={() => {
-                  setIsDialogOpen(false);
-                  if (selectedTeeth.length > 0) {
-                    setSelectedTeeth([]);
-                    setIsMultiSelectMode(false);
-                  }
-                }}>
-                  Cancel
-                </Button>
-                <Button onClick={selectedTeeth.length > 0 ? handleApplyCondition : handleSave}>
-                  {selectedTeeth.length > 0 ? `Apply to ${selectedTeeth.length} Tooth${selectedTeeth.length !== 1 ? 's' : ''}` : 'Save Changes'}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-    </div>
+              <Field orientation="vertical">
+                <FieldLabel>Notes (Optional)</FieldLabel>
+                <FieldContent>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full min-h-[100px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Add any additional notes about this tooth..."
+                  />
+                </FieldContent>
+              </Field>
+            </CardContent>
+            <CardContent className="flex justify-end gap-2 pt-0">
+              <Button variant="outline" onClick={() => {
+                setIsDialogOpen(false);
+                if (selectedTeeth.length > 0) {
+                  setSelectedTeeth([]);
+                  setIsMultiSelectMode(false);
+                }
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={selectedTeeth.length > 0 ? handleApplyCondition : handleSave}>
+                {selectedTeeth.length > 0 ? `Apply to ${selectedTeeth.length} Tooth${selectedTeeth.length !== 1 ? 's' : ''}` : 'Save Changes'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </>
   );
 };
 

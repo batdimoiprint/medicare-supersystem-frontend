@@ -1,13 +1,8 @@
 "use client"
 
-import {
-    BadgeCheck,
-    Bell,
-    ChevronsUpDown,
-    CreditCard,
-    LogOut,
-    Sparkles,
-} from "lucide-react"
+import { BadgeCheck, ChevronsUpDown, LogOut as LogOutIcon } from "lucide-react"
+import { ModeToggle } from "@/components/mode-toggle"
+import { useNavigate } from "react-router-dom"
 
 import {
     Avatar,
@@ -40,6 +35,12 @@ export function NavUser({
     }
 }) {
     const { isMobile } = useSidebar()
+    const navigate = useNavigate()
+
+    function handleLogout() {
+        // TODO: hook up auth/logout flow — for now, route to `/`
+        navigate('/')
+    }
 
     return (
         <SidebarMenu>
@@ -78,30 +79,28 @@ export function NavUser({
                             </div>
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
+                        <DropdownMenuSeparator />
                         <DropdownMenuGroup>
+                            <DropdownMenuItem asChild>
+                                {/* My Profile — for now routes to `/` */}
+                                <a href="/">
+                                    <BadgeCheck />
+                                    My Profile
+                                </a>
+                            </DropdownMenuItem>
                             <DropdownMenuItem>
-                                <Sparkles />
-                                Upgrade to Pro
+                                <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-2">
+                                        <ChevronsUpDown />
+                                        Dark Mode
+                                    </div>
+                                    <ModeToggle />
+                                </div>
                             </DropdownMenuItem>
                         </DropdownMenuGroup>
                         <DropdownMenuSeparator />
-                        <DropdownMenuGroup>
-                            <DropdownMenuItem>
-                                <BadgeCheck />
-                                Account
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <CreditCard />
-                                Billing
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <Bell />
-                                Notifications
-                            </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem>
-                            <LogOut />
+                        <DropdownMenuItem onClick={handleLogout}>
+                            <LogOutIcon />
                             Log out
                         </DropdownMenuItem>
                     </DropdownMenuContent>

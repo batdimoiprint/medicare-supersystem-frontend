@@ -3,7 +3,12 @@
 import { ChevronRight, type LucideIcon, Home, Calendar, Users, FileText, Clock, List, Settings } from "lucide-react"
 import React from "react"
 import { useLocation } from "react-router-dom"
-import dentistRoutes from "@/routes/dentistRoutes"
+import { dentistRouteData } from "@/routes/dentistRoutes"
+import { adminRouteData } from "@/routes/adminRoutes"
+import { cashierRouteData } from "@/routes/cashierRoutes"
+import { inventoryRouteData } from "@/routes/inventoryRoutes"
+import { patientRouteData } from "@/routes/patientRoutes"
+import { receptionistRouteData } from "@/routes/receptionistRoutes"
 
 import {
     Collapsible,
@@ -28,9 +33,25 @@ export function NavMain() {
     const location = useLocation()
 
     const computedItems = React.useMemo(() => {
-        const root = dentistRoutes as unknown as React.ReactElement<{ path?: string; children?: React.ReactElement | React.ReactElement[] }>
-        const basePath: string = (root?.props?.path) || "/dentist"
-        const children = React.Children.toArray(root?.props?.children || []) as React.ReactElement[]
+        let basePath = "/dentist"
+        let children: any[] = dentistRouteData
+
+        if (location.pathname.startsWith("/admin")) {
+            basePath = "/admin"
+            children = adminRouteData
+        } else if (location.pathname.startsWith("/cashier")) {
+            basePath = "/cashier"
+            children = cashierRouteData
+        } else if (location.pathname.startsWith("/inventory")) {
+            basePath = "/inventory"
+            children = inventoryRouteData
+        } else if (location.pathname.startsWith("/patient")) {
+            basePath = "/patient"
+            children = patientRouteData
+        } else if (location.pathname.startsWith("/receptionist")) {
+            basePath = "/receptionist"
+            children = receptionistRouteData
+        }
 
         type SubItem = { title: string; url: string }
         type MainItem = { title: string; url: string; items?: SubItem[]; icon?: LucideIcon }
@@ -47,12 +68,10 @@ export function NavMain() {
         }
 
         children.forEach((route) => {
-            const r = route as React.ReactElement<{ path?: string; index?: boolean; element?: React.ReactElement }>
-            const { path, index, element } = r.props
-                if (index) {
+            const { path, index, title: routeTitle } = route
+            if (index) {
                 // Dashboard index route
-                const elementType = element?.type as { displayName?: string; name?: string } | undefined
-                const title = elementType?.displayName || elementType?.name || "Dashboard"
+                const title = routeTitle || "Dashboard"
                 mainMap.set("__index__", { title, url: basePath, icon: ICONS[Math.floor(Math.random() * ICONS.length)] })
                 return
             }
@@ -70,13 +89,13 @@ export function NavMain() {
 
             if (segments.length === 1) {
                 // top level route, e.g., appointments
-                mainMap.set(top, { title: humanize(top), url: fullPath, icon: ICONS[Math.floor(Math.random() * ICONS.length)] })
+                mainMap.set(top, { title: routeTitle || humanize(top), url: fullPath, icon: ICONS[Math.floor(Math.random() * ICONS.length)] })
             } else {
                 // nested route - group under top (e.g., patient/charting or appointments/followup)
                 const parent = mainMap.get(top) || { title: humanize(top), url: `${basePath}/${top}`, items: [], icon: ICONS[Math.floor(Math.random() * ICONS.length)] }
                 const subPath = segments.slice(1).join("/")
                 parent.items = parent.items || []
-                parent.items.push({ title: humanize(subPath.replace(/\//g, " ")), url: fullPath })
+                parent.items.push({ title: routeTitle || humanize(subPath.replace(/\//g, " ")), url: fullPath })
                 mainMap.set(top, parent)
             }
         })

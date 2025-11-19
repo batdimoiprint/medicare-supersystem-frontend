@@ -1,7 +1,13 @@
 "use client"
 
 import React from "react"
-import dentistRoutes from "@/routes/dentistRoutes"
+import { useLocation } from "react-router-dom"
+import { dentistRouteData } from "@/routes/dentistRoutes"
+import { adminRouteData } from "@/routes/adminRoutes"
+import { cashierRouteData } from "@/routes/cashierRoutes"
+import { inventoryRouteData } from "@/routes/inventoryRoutes"
+import { patientRouteData } from "@/routes/patientRoutes"
+import { receptionistRouteData } from "@/routes/receptionistRoutes"
 
 import {
     Folder,
@@ -30,24 +36,41 @@ import {
 
 export function NavProjects() {
     const { isMobile } = useSidebar()
+    const location = useLocation()
 
     const computedProjects = React.useMemo(() => {
-        const root = dentistRoutes as unknown as React.ReactElement<{ path?: string; children?: React.ReactElement | React.ReactElement[] }>
-        const basePath: string = root?.props?.path || "/dentist"
-        const children = React.Children.toArray(root?.props?.children || []) as React.ReactElement[]
+        let basePath = "/dentist"
+        let children: any[] = dentistRouteData
+
+        if (location.pathname.startsWith("/admin")) {
+            basePath = "/admin"
+            children = adminRouteData
+        } else if (location.pathname.startsWith("/cashier")) {
+            basePath = "/cashier"
+            children = cashierRouteData
+        } else if (location.pathname.startsWith("/inventory")) {
+            basePath = "/inventory"
+            children = inventoryRouteData
+        } else if (location.pathname.startsWith("/patient")) {
+            basePath = "/patient"
+            children = patientRouteData
+        } else if (location.pathname.startsWith("/receptionist")) {
+            basePath = "/receptionist"
+            children = receptionistRouteData
+        }
+
         const items: { name: string; url: string; icon: LucideIcon }[] = []
         children.forEach((route) => {
-            const r = route as React.ReactElement<{ path?: string }>
-            const p = r.props.path as string | undefined
-            if (!p) return
-            const top = p.split("/")[0]
+            const { path, title } = route
+            if (!path) return
+            const top = path.split("/")[0]
             if (["logging", "my-schedule"].includes(top)) {
-                const name = top.split("-").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")
-                items.push({ name, url: `${basePath}/${p}`, icon: Folder })
+                const name = title || top.split("-").map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")
+                items.push({ name, url: `${basePath}/${path}`, icon: Folder })
             }
         })
         return items
-    }, [])
+    }, [location.pathname])
 
     const finalProjects = computedProjects
 

@@ -13,7 +13,7 @@
   --radius: 0.5rem;
   --background: oklch(0.95 0.01 196.81);
   --foreground: oklch(0.38 0.06 211.49);
-  --card: oklch(0.97 0.01 196.81);
+  --card: oklch(0.98 0 0);
   --card-foreground: oklch(0.38 0.06 211.49);
   --popover: oklch(0.97 0.01 196.81);
   --popover-foreground: oklch(0.38 0.06 211.49);
@@ -35,6 +35,7 @@
   --chart-4: oklch(0.76 0.11 208.70);
   --chart-5: oklch(0.83 0.10 208.33);
   --sidebar: oklch(0.98 0 0);
+  ;
   --sidebar-foreground: oklch(0.14 0 0);
   --sidebar-primary: oklch(0.72 0.12 210.36);
   --sidebar-primary-foreground: oklch(1.00 0 0);

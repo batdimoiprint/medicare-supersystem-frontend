@@ -1,5 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import SidebarLayout from '@/components/shared/sidebars/Sidebar'
+import { SidebarInset } from '@/components/ui/sidebar'
+import DynamicHeader from '@/components/shared/headers/DynamicHeader'
 
 export default function PatientLayout() {
     // For layout only
@@ -9,7 +11,12 @@ export default function PatientLayout() {
     // Outlet iis ung mga pages
     return (
         <SidebarLayout>
-            <Outlet />
+            <SidebarInset>
+                <DynamicHeader />
+                <section>
+                    <Outlet />
+                </section>
+            </SidebarInset>
         </SidebarLayout>
     )
 }

@@ -1,20 +1,10 @@
 import { Outlet } from 'react-router-dom'
 import SidebarLayout from "@/components/shared/sidebars/Sidebar"
-import { Separator } from "@/components/ui/separator"
-import {
-    SidebarInset,
-    SidebarTrigger,
-} from "@/components/ui/sidebar"
+import { SidebarInset } from "@/components/ui/sidebar"
+import DynamicHeader from "@/components/shared/headers/DynamicHeader"
 
 
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
+// Header is now handled by DynamicHeader
 
 
 
@@ -23,32 +13,12 @@ export default function DentistLayout() {
     return (
         <>
             <SidebarLayout>
-                <SidebarInset className='flex flex-col box-content w-full px-4 gap-4 '>
-                    <header className="flex h-16 shrink-0 items-center gap-2">
-                        <div className="flex items-center gap-2 px-4">
-                            <SidebarTrigger />
-                            <Separator
-                                orientation="vertical"
-                            />
-                            <Breadcrumb>
-                                <BreadcrumbList>
-                                    <BreadcrumbItem className="hidden md:block">
-                                        <BreadcrumbLink href="#">
-                                            Building Your Application
-                                        </BreadcrumbLink>
-                                    </BreadcrumbItem>
-                                    <BreadcrumbSeparator className="hidden md:block" />
-                                    <BreadcrumbItem>
-                                        <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                                    </BreadcrumbItem>
-                                </BreadcrumbList>
-                            </Breadcrumb>
-                        </div>
-                    </header>
-                    <section className='flex flex-col gap-4 '>
-                        <Outlet />
-                    </section>
-                </SidebarInset>
+                    <SidebarInset className='flex flex-col box-content w-full px-4 gap-4 '>
+                        <DynamicHeader />
+                        <section className='flex flex-col gap-4 '>
+                            <Outlet />
+                        </section>
+                    </SidebarInset>
             </SidebarLayout>
 
         </>
