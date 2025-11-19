@@ -1,4 +1,3 @@
-import React from 'react'
 import CashierTable from '@/components/cashier/CashierTable'
 import samplePayments from '@/components/cashier/mockData'
 

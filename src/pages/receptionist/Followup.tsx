@@ -1,4 +1,3 @@
-import React from 'react'
 import ReceptionistTable from '@/components/receptionist/ReceptionistTable'
 import sampleAppointments from '@/components/receptionist/mockData'
 
