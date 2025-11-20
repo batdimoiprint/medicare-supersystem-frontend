@@ -30,9 +30,9 @@ const PublicHeader = () => {
                 </div>
                 <Link to='/login' className='hover:text-primary max-md:hidden'><Button>Log In</Button></Link>
                 <div className='flex items-center gap-6'>
-                    {/* <Button variant='ghost' size='icon' asChild>
+                    <Button variant='ghost' size='icon' asChild>
                         <ModeToggle />
-                    </Button> */}
+                    </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger className='md:hidden' asChild>
                             <Button variant='outline' size='icon'>

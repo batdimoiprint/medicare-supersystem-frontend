@@ -17,9 +17,9 @@ export default function PublicLayout() {
     return (
         <>
             <PublicHeader />
-            <main className="space-y-16 pb-8 pt-8">
-                <Outlet />
-            </main>
+
+            <Outlet />
+
         </>
     )
 }

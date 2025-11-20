@@ -2,7 +2,7 @@ import LandingHero from '@/components/landing/LandingHero'
 import ClinicOverview from '@/components/landing/ClinicOverview'
 import Services from '@/components/landing/Services'
 
-const sectionShell = 'mx-auto w-full max-w-6xl px-4'
+const sectionShell = 'mx-auto w-full max-w-7xl'
 
 export default function LandingPage() {
     return (

@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button'
 import imgDentist from '@/components/assets/img_dentist.png'
 import imgPatient1 from '@/components/assets/img_patient_1.png'
 import imgPatient2 from '@/components/assets/img_patient_2.png'
