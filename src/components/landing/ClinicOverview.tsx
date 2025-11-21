@@ -13,7 +13,7 @@ type ClinicOverviewProps = {
 
 export default function ClinicOverview({ className }: ClinicOverviewProps) {
     return (
-        <section className={cn('rounded-3xl bg-card shadow-sm', className)}>
+        <section className={className}>
             <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 <div className="grid grid-cols-2 gap-4 sm:gap-6">
                     {collagePhotos.map((photo, idx) => (

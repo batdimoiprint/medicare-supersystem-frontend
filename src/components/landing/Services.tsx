@@ -4,7 +4,7 @@ import imgPatient1 from '@/components/assets/img_patient_1.png'
 import imgPatient2 from '@/components/assets/img_patient_2.png'
 import imgPatient3 from '@/components/assets/img_patient_3.png'
 import imgPatient4 from '@/components/assets/img_patient_4.png'
-import { cn } from '@/lib/utils'
+import { Card } from '../ui/card'
 
 const services = [
     { title: 'General Dentistry', image: imgDentist },
@@ -20,7 +20,7 @@ type ServicesProps = {
 
 export default function Services({ className }: ServicesProps) {
     return (
-        <section className={cn('rounded-3xl bg-card shadow-sm', className)}>
+        <section className={className}>
             <div className="space-y-6 text-center">
                 <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.4em] text-primary">Services</p>
@@ -32,18 +32,18 @@ export default function Services({ className }: ServicesProps) {
 
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
                     {services.map(service => (
-                        <article key={service.title} className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-background/60 p-4 text-center shadow-sm">
+                        <Card key={service.title} className="flex flex-col items-center ">
                             <div className="flex size-24 items-center justify-center overflow-hidden rounded-xl bg-muted">
                                 <img src={service.image} alt={service.title} className="h-full w-full object-cover" />
                             </div>
                             <h4 className="text-xs font-semibold uppercase tracking-widest text-foreground md:text-sm">
                                 {service.title}
                             </h4>
-                        </article>
+                        </Card>
                     ))}
                 </div>
 
-                <Button variant="secondary" size="lg" className="mx-auto">
+                <Button variant="default" size="lg" className="mx-auto">
                     See More
                 </Button>
             </div>

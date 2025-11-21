@@ -4,42 +4,72 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
 import { Field, FieldLabel, FieldContent, FieldError } from '@/components/ui/field'
+import { DatePicker } from '@/components/ui/date-picker'
+import { Label } from '@/components/ui/label'
+import { differenceInYears } from 'date-fns'
 
 type RegistrationForm = {
     f_name: string
     l_name: string
-    m_name?: string
+    m_name: string
     suffix?: string
-    birthdate?: string
-    gender?: string
+    birthdate: Date | undefined
+    gender: string
     email: string
     password: string
     confirm_password?: string
-    address?: string
-    blood_type?: string
-    pri_contact_no?: string
+    address: string
+    blood_type: string
+    pri_contact_no: string
     sec_contact_no?: string
-    image?: FileList
-    ec_f_name?: string
-    ec_l_name?: string
-    ec_m_name_init?: string
-    ec_contact_no?: string
-    ec_relationship?: string
-    ec_email?: string
+    ec_f_name: string
+    ec_l_name: string
+    ec_m_name_init: string
+    ec_contact_no: string
+    ec_relationship: string
+    ec_email: string
 }
 
 export default function RegisterPage() {
-    const { register, handleSubmit, control, watch, trigger, formState: { errors, isSubmitting } } = useForm<RegistrationForm>({ mode: 'onBlur' })
+    const { register, handleSubmit, control, watch, trigger, formState: { errors } } = useForm<RegistrationForm>({ mode: 'onBlur' })
     const [step, setStep] = useState<number>(1)
-    const [preview, setPreview] = useState<string | null>(null)
 
-    function onImageChange(files?: FileList) {
-        const file = files && files[0]
-        if (!file) return setPreview(null)
-        setPreview(URL.createObjectURL(file))
+    const birthdate = watch('birthdate')
+    const age = birthdate ? differenceInYears(new Date(), birthdate) : null
+
+    function normalizePhone(raw?: string) {
+        if (!raw) return ''
+        const trimmed = raw.trim()
+
+        // quick-return when already in +63 form (or another +country) — remove whitespace
+        if (trimmed.startsWith('+')) return trimmed.replace(/\s+/g, '')
+
+        // keep only digits
+        let digits = trimmed.replace(/\D/g, '')
+
+        // remove leading zeros
+        digits = digits.replace(/^0+/, '')
+
+        // if it already contains a country prefix (63...), return with +
+        if (digits.startsWith('63')) return `+${digits}`
+
+        // if the user typed the national (10-digit) number starting with 9 (e.g. 9123456789)
+        if (digits.length === 10 && digits.startsWith('9')) return `+63${digits}`
+
+        // if someone typed 11-digit local with leading 0 (e.g. 09123456789) we've stripped zeros above
+        if (digits.length === 10) return `+63${digits}`
+
+        // fallback — prefix with +63
+        return `+63${digits}`
     }
 
     async function onSubmit(data: RegistrationForm) {
+        // normalize primary and secondary contact so final payload always contains +639... form
+        data.pri_contact_no = normalizePhone(data.pri_contact_no)
+        if (data.sec_contact_no) {
+            data.sec_contact_no = normalizePhone(data.sec_contact_no)
+        }
+
         // No server — temporarily store in localStorage for quick testing
         console.log('Registration', data)
         alert('Registration submitted (no backend). Review console for data.')
@@ -47,10 +77,11 @@ export default function RegisterPage() {
 
     async function nextStep() {
         let fieldsToValidate: (keyof RegistrationForm)[] = []
-        if (step === 1) fieldsToValidate = ['f_name', 'l_name', 'pri_contact_no']
-        if (step === 2) fieldsToValidate = ['email', 'password', 'confirm_password']
+        if (step === 1) fieldsToValidate = ['f_name', 'm_name', 'l_name', 'birthdate', 'gender', 'email', 'pri_contact_no', 'address', 'blood_type']
+        if (step === 2) fieldsToValidate = ['password', 'confirm_password']
+
         if (!fieldsToValidate.length) return setStep(s => s + 1)
-        // trigger expects specific keys — allow any here to validate a subset safely
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ok = await trigger(fieldsToValidate as any)
         if (ok) setStep(s => s + 1)
@@ -61,230 +92,294 @@ export default function RegisterPage() {
     }
 
 
-    const genderOptions = ['Female', 'Male', 'LGBTQIA+', 'Prefer Not to Say']
+    const genderOptions = ['Male', 'Female', 'LGBTQIA+', 'Prefer Not to Say']
     const bloodTypes = ['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-', 'Unspecified']
     const relationships = ['Parent', 'Child', 'Relative', 'Spouse', 'Friend', 'Sibling', 'Guardian', 'Others', 'Unspecified']
 
     return (
-        <main className="mx-auto max-w-4xl px-4 py-12">
+        <main className="mx-auto max-w-7xl px-4 ">
             <div className="rounded-2xl bg-card p-8 shadow-lg">
                 <header className="mb-6 text-center">
                     <h1 className="text-2xl font-extrabold text-foreground">Create your account</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">Register as a patient — include emergency contact for faster care.</p>
+
                 </header>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="grid gap-6 md:grid-cols-2">
-                    <section className="space-y-4">
-                        <h2 className="text-lg font-semibold text-foreground">Patient Details</h2>
+                <form onSubmit={handleSubmit(onSubmit)}>
+                    {step === 1 && (
+                        <section className="space-y-6">
+                            <Label className="text-lg font-semibold text-foreground">Patient Details</Label>
 
-                        <Field>
-                            <FieldLabel>First name</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('f_name', { required: 'First name required' })} placeholder="First name" />
-                                <FieldError errors={errors.f_name ? [{ message: errors.f_name.message }] : []} />
-                            </FieldContent>
-                        </Field>
+                            {/* Row 1: Identity */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                <Field className="lg:col-span-1">
+                                    <FieldLabel>First name <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('f_name', { required: 'First name required' })} placeholder="e.g. Juan" className="w-full" />
+                                        <FieldError errors={errors.f_name ? [{ message: errors.f_name.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field className="lg:col-span-1">
+                                    <FieldLabel>Middle name <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('m_name', { required: 'Middle name required' })} placeholder="e.g. Dela" className="w-full" />
+                                        <FieldError errors={errors.m_name ? [{ message: errors.m_name.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field className="lg:col-span-1">
+                                    <FieldLabel>Last name <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('l_name', { required: 'Last name required' })} placeholder="e.g. Cruz" className="w-full" />
+                                        <FieldError errors={errors.l_name ? [{ message: errors.l_name.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field className="lg:col-span-1">
+                                    <FieldLabel>Suffix</FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('suffix')} placeholder="Optional" className="w-full" />
+                                    </FieldContent>
+                                </Field>
+                                <Field className="lg:col-span-1">
+                                    <FieldLabel>
+                                        Birth date <span className="text-red-500">*</span>
+                                        {age !== null && <span className="ml-2 text-xs font-normal text-muted-foreground">({age} yrs)</span>}
+                                    </FieldLabel>
+                                    <FieldContent>
+                                        <Controller
+                                            control={control}
+                                            name="birthdate"
+                                            rules={{ required: 'Birth date required' }}
+                                            render={({ field }) => (
+                                                <DatePicker
+                                                    id="birthdate"
+                                                    value={field.value}
+                                                    onChange={(d) => {
+                                                        // keep the same shape as the previous Calendar onSelect
+                                                        field.onChange(d)
+                                                    }}
+                                                    placeholder="Pick a date"
+                                                    className="w-full"
+                                                />
+                                            )}
+                                        />
+                                        <FieldError errors={errors.birthdate ? [{ message: errors.birthdate.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field className="lg:col-span-1">
+                                    <FieldLabel>Gender <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Controller
+                                            control={control}
+                                            name="gender"
+                                            rules={{ required: 'Gender required' }}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                        <FieldError errors={errors.gender ? [{ message: errors.gender.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                            </div>
 
-                        <div className="flex justify-end">
-                            <Button variant="secondary" onClick={nextStep}>Next</Button>
-                        </div>
+                            {/* Row 2: Contact & Blood Type */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <Field>
+                                    <FieldLabel>Email <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('email', {
+                                            required: 'Email required',
+                                            pattern: {
+                                                value: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
+                                                message: 'Invalid email address',
+                                            },
+                                        })} placeholder="e.g. juan@example.com" className="w-full" />
+                                        <FieldError errors={errors.email ? [{ message: errors.email.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>Primary contact <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <div className="flex items-stretch gap-2">
+                                            <Label >+63</Label>
+                                            <Input
+                                                {...register('pri_contact_no', {
+                                                    required: 'Contact required',
+                                                    pattern: {
+                                                        value: /^\d{10}$/,
+                                                        message: 'Must be exactly 10 digits',
+                                                    },
+                                                })}
+                                                placeholder="e.g. 9123456789"
+                                                className="w-full rounded-l-none"
+                                                maxLength={10}
+                                                inputMode="numeric"
+                                            />
+                                        </div>
+                                        <FieldError errors={errors.pri_contact_no ? [{ message: errors.pri_contact_no.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>Secondary contact</FieldLabel>
+                                    <FieldContent>
+                                        <div className="flex items-stretch gap-2">
+                                            <Label >+63</Label>
+                                            <Input
+                                                {...register('sec_contact_no', {
+                                                    pattern: {
+                                                        value: /^\d{10}$/,
+                                                        message: 'Must be exactly 10 digits',
+                                                    },
+                                                })}
+                                                placeholder="Optional (e.g. 9123456789)"
+                                                className="w-full rounded-l-none"
+                                                maxLength={10}
+                                                inputMode="numeric"
+                                            />
+                                        </div>
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>Blood type <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Controller control={control} name="blood_type" rules={{ required: 'Blood type required' }} render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {bloodTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        )} />
+                                        <FieldError errors={errors.blood_type ? [{ message: errors.blood_type.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                            </div>
 
-                        <Field>
-                            <FieldLabel>Last name</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('l_name', { required: 'Last name required' })} placeholder="Last name" />
-                                <FieldError errors={errors.l_name ? [{ message: errors.l_name.message }] : []} />
-                            </FieldContent>
-                        </Field>
+                            {/* Row 3: Address */}
+                            <Field>
+                                <FieldLabel>Address <span className="text-red-500">*</span></FieldLabel>
+                                <FieldContent>
+                                    <Input {...register('address', { required: 'Address required' })} placeholder="e.g. 123 Rizal St, Brgy. San Jose, Manila" className="w-full" />
+                                    <FieldError errors={errors.address ? [{ message: errors.address.message }] : []} />
+                                </FieldContent>
+                            </Field>
 
-                        <Field>
-                            <FieldLabel>Middle name</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('m_name')} placeholder="Middle name" />
-                            </FieldContent>
-                        </Field>
+                            <Label className="text-lg font-semibold text-foreground">Emergency Contact</Label>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <Field>
+                                    <FieldLabel>Given Name <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('ec_f_name', { required: 'Required' })} placeholder="e.g. Maria" className="w-full" />
+                                        <FieldError errors={errors.ec_f_name ? [{ message: errors.ec_f_name.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>M.I. <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('ec_m_name_init', { required: 'Required' })} placeholder="e.g. A" className="w-full" />
+                                        <FieldError errors={errors.ec_m_name_init ? [{ message: errors.ec_m_name_init.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>Surname <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('ec_l_name', { required: 'Required' })} placeholder="e.g. Santos" className="w-full" />
+                                        <FieldError errors={errors.ec_l_name ? [{ message: errors.ec_l_name.message }] : []} />
+                                    </FieldContent>
+                                </Field>
 
-                        <Field>
-                            <FieldLabel>Suffix</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('suffix')} placeholder="Jr, III, etc." />
-                            </FieldContent>
-                        </Field>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <Field>
+                                    <FieldLabel>Relationship <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Controller control={control} name="ec_relationship" rules={{ required: 'Required' }} render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {relationships.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        )} />
+                                        <FieldError errors={errors.ec_relationship ? [{ message: errors.ec_relationship.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>Contact No. <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <div className="flex items-stretch gap-2">
+                                            <Label >+63</Label>
+                                            <Input
+                                                {...register('ec_contact_no', {
+                                                    required: 'Required',
+                                                    pattern: {
+                                                        value: /^\d{10}$/,
+                                                        message: 'Must be exactly 10 digits',
+                                                    },
+                                                })}
+                                                placeholder="e.g. 9123456789"
+                                                className="w-full rounded-l-none"
+                                                maxLength={10}
+                                                inputMode="numeric"
+                                            />
+                                        </div>
+                                        <FieldError errors={errors.ec_contact_no ? [{ message: errors.ec_contact_no.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>Email <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('ec_email', {
+                                            required: 'Required',
+                                            pattern: {
+                                                value: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
+                                                message: 'Invalid email address',
+                                            },
 
-                        <Field>
-                            <FieldLabel>Birth date</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('birthdate')} type="date" />
-                            </FieldContent>
-                        </Field>
+                                        })} placeholder="e.g. contact@example.com" className="w-full" />
+                                        <FieldError errors={errors.ec_email ? [{ message: errors.ec_email.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                            </div>
 
-                        <Field>
-                            <FieldLabel>Gender</FieldLabel>
-                            <FieldContent>
-                                <Controller
-                                    control={control}
-                                    name="gender"
-                                    render={({ field }) => (
-                                        <Select onValueChange={(v) => field.onChange(v)}>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select gender" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {genderOptions.map(g => (
-                                                    <SelectItem key={g} value={g}>{g}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    )}
-                                />
-                            </FieldContent>
-                        </Field>
-
-                        <Field>
-                            <FieldLabel>Email</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('email', { required: 'Email required' })} placeholder="Email" />
-                                <FieldError errors={errors.email ? [{ message: errors.email.message }] : []} />
-                            </FieldContent>
-                        </Field>
-
-                        <Field>
-                            <FieldLabel>Address</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('address')} placeholder="House no., Street, City" />
-                            </FieldContent>
-                        </Field>
-
-                        <Field>
-                            <FieldLabel>Primary contact</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('pri_contact_no', { pattern: { value: /^\+?\d{7,15}$/, message: 'Invalid phone number' } })} placeholder="+639xxxxxxxxx" />
-                                <FieldError errors={errors.pri_contact_no ? [{ message: errors.pri_contact_no.message }] : []} />
-                            </FieldContent>
-                        </Field>
-
-                        <Field>
-                            <FieldLabel>Secondary contact</FieldLabel>
-                            <FieldContent>
-                                <Input {...register('sec_contact_no')} placeholder="Optional" />
-                            </FieldContent>
-                        </Field>
-
-                        <Field>
-                            <FieldLabel>Blood type</FieldLabel>
-                            <FieldContent>
-                                <Controller control={control} name="blood_type" render={({ field }) => (
-                                    <Select onValueChange={(v) => field.onChange(v)}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select blood type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {bloodTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                )} />
-                            </FieldContent>
-                        </Field>
-
-                        <Field>
-                            <FieldLabel>Profile photo</FieldLabel>
-                            <FieldContent>
-                                <Input type="file" accept="image/*" {...register('image')} onChange={(e) => onImageChange(e.target.files || undefined)} />
-                                {preview && <img src={preview} alt="preview" className="mt-2 h-24 w-24 rounded-full object-cover" />}
-                            </FieldContent>
-                        </Field>
-                    </section>
+                            <div className="flex justify-end">
+                                <Button variant="default" onClick={nextStep}>Next</Button>
+                            </div>
+                        </section>
+                    )}
 
                     {step === 2 && (
-                        <section className="space-y-4">
-                            <h2 className="text-lg font-semibold text-foreground">Account</h2>
-
-                            <Field>
-                                <FieldLabel>Password</FieldLabel>
-                                <FieldContent>
-                                    <Input {...register('password', { required: 'Password required', minLength: { value: 8, message: 'Min length 8' } })} type="password" />
-                                    <FieldError errors={errors.password ? [{ message: errors.password.message }] : []} />
-                                </FieldContent>
-                            </Field>
-
-                            <Field>
-                                <FieldLabel>Confirm password</FieldLabel>
-                                <FieldContent>
-                                    <Input {...register('confirm_password', { validate: (v) => (v === watch('password')) || "Passwords don't match" })} type="password" />
-                                    <FieldError errors={errors.confirm_password ? [{ message: errors.confirm_password.message }] : []} />
-                                </FieldContent>
-                            </Field>
-
-                            {/* removed account_status - the server sets the default account lifecycle state */}
-
+                        <section className="space-y-6">
+                            <Label className="text-lg font-semibold text-foreground">Account Security</Label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Field>
+                                    <FieldLabel>Password <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('password', { required: 'Required', minLength: { value: 8, message: 'Min 8 chars' } })} type="password" placeholder="********" className="w-full" />
+                                        <FieldError errors={errors.password ? [{ message: errors.password.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                                <Field>
+                                    <FieldLabel>Confirm password <span className="text-red-500">*</span></FieldLabel>
+                                    <FieldContent>
+                                        <Input {...register('confirm_password', { validate: v => v === watch('password') || "Mismatch" })} type="password" placeholder="********" className="w-full" />
+                                        <FieldError errors={errors.confirm_password ? [{ message: errors.confirm_password.message }] : []} />
+                                    </FieldContent>
+                                </Field>
+                            </div>
                             <div className="flex justify-between">
-                                <Button variant="ghost" onClick={() => prevStep()}>Back</Button>
-                                <Button onClick={nextStep}>Next</Button>
+                                <Button variant="secondary" onClick={prevStep}>Back</Button>
+                                <Button type="submit">Create Account</Button>
                             </div>
                         </section>
                     )}
 
                     {step === 3 && (
-                        <section className="space-y-4">
-                            <h2 className="text-lg font-semibold text-foreground">Emergency Contact</h2>
+                        <section className="space-y-6">
 
-
-                            <div className="border-t pt-4">
-                                <h3 className="mb-2 text-sm font-medium">Emergency contact</h3>
-                                <Field>
-                                    <FieldLabel>Name (given)</FieldLabel>
-                                    <FieldContent>
-                                        <Input {...register('ec_f_name')} placeholder="Given name" />
-                                    </FieldContent>
-                                </Field>
-                                <Field>
-                                    <FieldLabel>Name (surname)</FieldLabel>
-                                    <FieldContent>
-                                        <Input {...register('ec_l_name')} placeholder="Surname" />
-                                    </FieldContent>
-                                </Field>
-                                <Field>
-                                    <FieldLabel>Middle initial</FieldLabel>
-                                    <FieldContent>
-                                        <Input {...register('ec_m_name_init')} placeholder="M" />
-                                    </FieldContent>
-                                </Field>
-
-                                <Field>
-                                    <FieldLabel>Relationship</FieldLabel>
-                                    <FieldContent>
-                                        <Controller control={control} name="ec_relationship" render={({ field }) => (
-                                            <Select onValueChange={(v) => field.onChange(v)}>
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Pick relationship" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {relationships.map(r => <SelectItem value={r} key={r}>{r}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        )} />
-                                    </FieldContent>
-                                </Field>
-
-                                <Field>
-                                    <FieldLabel>Contact number</FieldLabel>
-                                    <FieldContent>
-                                        <Input {...register('ec_contact_no')} placeholder="Phone" />
-                                    </FieldContent>
-                                </Field>
-
-                                <Field>
-                                    <FieldLabel>Contact email</FieldLabel>
-                                    <FieldContent>
-                                        <Input {...register('ec_email')} placeholder="contact@example.com" />
-                                    </FieldContent>
-                                </Field>
-                            </div>
-
-                            <div className="mt-6 flex justify-between">
-                                <Button variant="ghost" onClick={() => prevStep()}>Back</Button>
-                                <Button type="submit" disabled={isSubmitting}>Create account</Button>
-                            </div>
                         </section>
                     )}
                 </form>
