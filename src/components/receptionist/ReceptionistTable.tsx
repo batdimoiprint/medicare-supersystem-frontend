@@ -47,7 +47,6 @@ export default function ReceptionistTable({
                         <SelectValue placeholder="Filter status" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All</SelectItem>
                         <SelectItem value="confirmed">Confirmed</SelectItem>
                         <SelectItem value="completed">Completed</SelectItem>
                         <SelectItem value="cancelled">Cancelled</SelectItem>

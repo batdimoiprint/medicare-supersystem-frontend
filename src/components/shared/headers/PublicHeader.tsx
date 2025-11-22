@@ -42,9 +42,8 @@ const PublicHeader = () => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent className='w-56' align='end'>
                                 <DropdownMenuGroup>
-                                    <DropdownMenuItem><Link to='/services'>Clinic Overview</Link></DropdownMenuItem>
-                                    <DropdownMenuItem><Link to='/dentist'>Services Offered</Link></DropdownMenuItem>
-                                    <DropdownMenuItem><Link to='/dentist'>Our Dentists</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/services'>Services Offered</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/our-dentist'>Our Dentists</Link></DropdownMenuItem>
                                     <DropdownMenuItem><Link to='/contact'>About Us</Link></DropdownMenuItem>
                                     <DropdownMenuItem><Link to='/contact'>Contact Us</Link></DropdownMenuItem>
                                     <DropdownMenuItem><Link to='/login'>Login</Link></DropdownMenuItem>

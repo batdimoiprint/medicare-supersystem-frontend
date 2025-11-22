@@ -34,7 +34,6 @@ export default function CashierTable({ items, basePath }: { items?: PaymentRow[]
                         <SelectValue placeholder="Payment method" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All</SelectItem>
                         <SelectItem value="card">Card</SelectItem>
                         <SelectItem value="cash">Cash</SelectItem>
                     </SelectContent>
