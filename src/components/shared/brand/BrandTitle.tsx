@@ -1,11 +1,11 @@
 import Logo from '../Logo'
-// import { Label } from '@/components/ui/label'
+import { Label } from '@/components/ui/label'
 
 export default function BrandTitle() {
     return (
-        <div className='flex flex-row justify-center w-full gap-4 p-4'>
+        <div className='flex flex-row justify-center gap-4 cursor-pointer h-fit w-fit'>
             <Logo />
-            {/* <Label >Medicare</Label> */}
+            <Label className='text-xl font-bold cursor-pointer text-foreground'  >Medicare</Label>
         </div>
     )
 }

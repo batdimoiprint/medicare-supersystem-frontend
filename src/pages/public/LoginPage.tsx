@@ -34,13 +34,13 @@ export default function LoginPage() {
     }
 
     return (
-        <main className="mx-auto w-full max-w-7xl px-4 py-12">
-            <LoginForm
-                onSubmit={handleSubmit(onSubmit)}
-                register={register}
-                isSubmitting={isSubmitting}
-                rules={{ email: emailRules, password: passwordRules }}
-            />
-        </main>
+
+        <LoginForm
+            onSubmit={handleSubmit(onSubmit)}
+            register={register}
+            isSubmitting={isSubmitting}
+            rules={{ email: emailRules, password: passwordRules }}
+        />
+
     )
 }

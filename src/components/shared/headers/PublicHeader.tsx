@@ -1,7 +1,6 @@
 
 import { MenuIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import Logo from '../Logo'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -11,24 +10,24 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { ModeToggle } from '@/components/mode-toggle'
-import { Label } from '@radix-ui/react-label'
+
+import BrandTitle from '../brand/BrandTitle'
 
 
 const PublicHeader = () => {
     return (
-        <header className='bg-background sticky top-0 z-50'>
-            <div className='mx-auto flex max-w-7xl items-center justify-between gap-8 px-4 py-7 sm:px-6'>
-                <Link to='/' className='flex flex-row-reverse ml-4 gap-4 items-center'> <Label>Medicare</Label> <Logo /></Link>
-                <div className='text-muted-foreground flex flex-1 items-center gap-8 font-medium md:justify-center lg:gap-16'>
-                    <Link to='/services' className='hover:text-primary max-md:hidden'>Services Offered</Link>
-                    <Link to='/our-dentist' className='hover:text-primary max-md:hidden'>Our Dentists</Link>
-
-                    <Link to='/about-us' className='hover:text-primary max-md:hidden'>About Us</Link>
-                    <Link to='/contact' className='hover:text-primary max-md:hidden'>Contact</Link>
-
-
+        <header className='sticky top-0 z-50 bg-background'>
+            <div className='flex items-center justify-between gap-8 py-7 '>
+                <Link to="/">
+                    <BrandTitle />
+                </Link>
+                <div className='flex items-center flex-1 gap-8 font-medium text-muted-foreground md:justify-center lg:gap-16'>
+                    <Link to='/services' className='text-foreground hover:text-primary max-md:hidden'>Services Offered</Link>
+                    <Link to='/our-dentist' className='text-foreground hover:text-primary max-md:hidden'>Our Dentists</Link>
+                    <Link to='/about-us' className='text-foreground hover:text-primary max-md:hidden'>About Us</Link>
+                    <Link to='/contact' className='text-foreground hover:text-primary max-md:hidden'>Contact</Link>
                 </div>
-                <Link to='/login' className='hover:text-primary max-md:hidden'><Button>Log In</Button></Link>
+                <Link to='/login' className='text-foreground hover:text-primary max-md:hidden'><Button >Log In</Button></Link>
                 <div className='flex items-center gap-6'>
                     <Button variant='ghost' size='icon' asChild>
                         <ModeToggle />
