@@ -54,6 +54,27 @@ export default function PublicFooter() {
                         </div>
                     </nav>
 
+                    {/* Right: newsletter */}
+                    <div className="lg:w-1/3">
+                        <div className="space-y-3 text-right sm:text-left">
+                            <p className="text-sm font-semibold text-foreground">Subscribe to our newsletter</p>
+                            <p className="text-sm text-muted-foreground">Get clinic updates, offers, and helpful oral care tips.</p>
+
+                            <form className="mt-2 flex w-full max-w-sm items-center gap-2 mx-auto sm:mx-0">
+                                <Label className="sr-only" htmlFor="footer-email">Email</Label>
+                                <Input id="footer-email" type="email" placeholder="you@company.com" />
+                                <Button size="sm" type="submit">Subscribe</Button>
+                            </form>
+
+                            <div className="flex items-center justify-end gap-3 mt-4 sm:justify-start">
+                                <a href="#" aria-label="Twitter" className="text-muted-foreground hover:text-primary"><Twitter className="size-5" /></a>
+                                <a href="#" aria-label="Instagram" className="text-muted-foreground hover:text-primary"><Instagram className="size-5" /></a>
+                                <a href="#" aria-label="LinkedIn" className="text-muted-foreground hover:text-primary"><Linkedin className="size-5" /></a>
+                                <a href="#" aria-label="Github" className="text-muted-foreground hover:text-primary"><Github className="size-5" /></a>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div className="mt-8">

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils"
+// removed cn usage — keep component simple and explicit
 import type { UseFormRegister, Path, RegisterOptions } from 'react-hook-form'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -32,16 +32,22 @@ export function LoginForm<TFormValues extends Record<string, unknown> = Record<s
     isSubmitting,
     ...props
 }: LoginFormProps<TFormValues>) {
+    // The login form should span the viewport (minus the header). Use a min height
+    // that approximates full screen minus header height. The inner card is centered
+    // and constrained to max-w-7xl for large screens.
+    const wrapperClass = `w-full min-h-[calc(80vh-72px)] flex items-center justify-center ${className ?? ''}`
+
     return (
-        <div className={cn("flex flex-col gap-6", className)} {...props}>
-            <Card className="p-0 overflow-hidden">
-                <CardContent className="grid p-0 md:grid-cols-2">
-                    <form onSubmit={onSubmit} className="p-6 md:p-8">
+        <div className={wrapperClass} {...props}>
+            {/* card fills width, constrained by max-w-7xl, and stretches vertically */}
+            <Card className="my-16 p-0 overflow-hidden w-full max-w-7xl">
+                <CardContent className="grid p-0 md:grid-cols-2 h-[min(76vh,880px)] w-full">
+                    <form onSubmit={onSubmit} className="p-6 md:p-8 flex flex-col justify-center h-full">
                         <FieldGroup>
                             <div className="flex flex-col items-center gap-2 text-center">
                                 <h1 className="text-2xl font-bold">Welcome back</h1>
                                 <p className="text-muted-foreground text-balance">
-                                    Login to your Acme Inc account
+                                    Login to your Medicare account
                                 </p>
                             </div>
                             <Field>
@@ -55,12 +61,12 @@ export function LoginForm<TFormValues extends Record<string, unknown> = Record<s
                             <Field>
                                 <div className="flex items-center">
                                     <FieldLabel htmlFor="password">Password</FieldLabel>
-                                    <a
+                                    {/* <a
                                         href="#"
                                         className="ml-auto text-sm underline-offset-2 hover:underline"
                                     >
                                         Forgot your password?
-                                    </a>
+                                    </a> */}
                                 </div>
                                 <Input id="password" type="password" {...(register ? register('password' as Path<TFormValues>, rules?.password as unknown as RegisterOptions<TFormValues, Path<TFormValues>>) : { required: true })} />
                             </Field>
@@ -76,11 +82,11 @@ export function LoginForm<TFormValues extends Record<string, unknown> = Record<s
 
                         </FieldGroup>
                     </form>
-                    <div className="relative hidden bg-muted md:block">
+                    <div className="hidden bg-background md:flex h-full items-center justify-center">
                         <img
                             src={imgDentist}
                             alt="Image"
-                            className="absolute inset-0 object-contain w-full h-full"
+                            className="object-contain w-128 h-128"
                         />
                     </div>
                 </CardContent>
