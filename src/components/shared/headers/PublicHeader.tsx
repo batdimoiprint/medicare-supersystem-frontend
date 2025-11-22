@@ -27,30 +27,32 @@ const PublicHeader = () => {
                     <Link to='/about-us' className='text-foreground hover:text-primary max-md:hidden'>About Us</Link>
                     <Link to='/contact' className='text-foreground hover:text-primary max-md:hidden'>Contact</Link>
                 </div>
-                <Link to='/login' className='text-foreground hover:text-primary max-md:hidden'><Button >Log In</Button></Link>
-                <div className='flex items-center gap-6'>
-                    <Button variant='ghost' size='icon' asChild>
-                        <ModeToggle />
-                    </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger className='md:hidden' asChild>
-                            <Button variant='outline' size='icon'>
-                                <MenuIcon />
-                                <span className='sr-only'>Menu</span>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className='w-56' align='end'>
-                            <DropdownMenuGroup>
-                                <DropdownMenuItem><Link to='/services'>Clinic Overview</Link></DropdownMenuItem>
-                                <DropdownMenuItem><Link to='/dentist'>Services Offered</Link></DropdownMenuItem>
-                                <DropdownMenuItem><Link to='/dentist'>Our Dentists</Link></DropdownMenuItem>
-                                <DropdownMenuItem><Link to='/contact'>About Us</Link></DropdownMenuItem>
-                                <DropdownMenuItem><Link to='/contact'>Contact Us</Link></DropdownMenuItem>
-                                <DropdownMenuItem><Link to='/login'>Login</Link></DropdownMenuItem>
-                                <DropdownMenuItem><Link to='/register'>Register</Link></DropdownMenuItem>
-                            </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                <div className='flex gap-8'>
+                    <Link to='/login' className='text-foreground hover:text-primary max-md:hidden'><Button >Log In</Button></Link>
+                    <div className='flex items-center gap-6'>
+                        <Button variant='ghost' size='icon' asChild>
+                            <ModeToggle />
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger className='md:hidden' asChild>
+                                <Button variant='outline' size='icon'>
+                                    <MenuIcon />
+                                    <span className='sr-only'>Menu</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className='w-56' align='end'>
+                                <DropdownMenuGroup>
+                                    <DropdownMenuItem><Link to='/services'>Clinic Overview</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/dentist'>Services Offered</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/dentist'>Our Dentists</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/contact'>About Us</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/contact'>Contact Us</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/login'>Login</Link></DropdownMenuItem>
+                                    <DropdownMenuItem><Link to='/register'>Register</Link></DropdownMenuItem>
+                                </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
             </div>
         </header>

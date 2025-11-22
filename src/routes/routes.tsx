@@ -2,6 +2,10 @@ import AdminLayout from '@/layout/AdminLayout';
 import PublicLayout from '@/layout/PublicLayout';
 import AdminPage from '@/pages/admin/AdminPage';
 import AboutUs from '@/pages/public/AboutUs';
+import Terms from '@/pages/public/Terms';
+import Privacy from '@/pages/public/Privacy';
+import Careers from '@/pages/public/Careers';
+import Support from '@/pages/public/Support';
 import ContactPage from '@/pages/public/ContactPage';
 import LandingPage from '@/pages/public/LandingPage';
 import LoginPage from '@/pages/public/LoginPage';
@@ -24,6 +28,10 @@ export default function AppRoutes() {
                 <Route path='services' element={<ServicesPage />} />
                 <Route path='our-dentist' element={<OurDentistPage />} />
                 <Route path='about-us' element={<AboutUs />} />
+                <Route path='careers' element={<Careers />} />
+                <Route path='privacy' element={<Privacy />} />
+                <Route path='terms' element={<Terms />} />
+                <Route path='support' element={<Support />} />
                 <Route path='contact' element={<ContactPage />} />
                 <Route path='login' element={<LoginPage />} />
                 <Route path='register' element={<RegisterPage />} />
