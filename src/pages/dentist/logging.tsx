@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
+import { formatCurrency } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -240,7 +241,7 @@ const MaterialsLogging = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Cost</p>
-                <p className="text-2xl font-bold text-primary">₱{totalCost.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-primary">{formatCurrency(totalCost)}</p>
               </div>
               <TrendingUp className="w-8 h-8 text-muted-foreground" />
             </div>
@@ -259,7 +260,7 @@ const MaterialsLogging = () => {
                   }).length}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  ₱{thisMonthCost.toLocaleString()}
+                  {formatCurrency(thisMonthCost)}
                 </p>
               </div>
               <Calendar className="w-8 h-8 text-muted-foreground" />
@@ -292,7 +293,7 @@ const MaterialsLogging = () => {
                 .map(([category, cost]) => (
                   <div key={category} className="p-4 bg-muted rounded-lg">
                     <p className="text-sm font-semibold mb-1">{category}</p>
-                    <p className="text-lg font-bold text-primary">₱{cost.toLocaleString()}</p>
+                    <p className="text-lg font-bold text-primary">{formatCurrency(cost)}</p>
                   </div>
                 ))}
             </div>
@@ -516,11 +517,11 @@ const MaterialsLogging = () => {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Cost</p>
-                    <p className="font-semibold text-primary">₱{log.cost.toLocaleString()}</p>
+                    <p className="font-semibold text-primary">{formatCurrency(log.cost)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total Cost</p>
-                    <p className="font-semibold text-primary">₱{(log.quantity * log.cost).toLocaleString()}</p>
+                    <p className="font-semibold text-primary">{formatCurrency(log.quantity * log.cost)}</p>
                   </div>
                   <div className="md:col-span-4 pt-2">
                     <Link to={`/dentist/patient/records?patient=${log.patientName}`}>

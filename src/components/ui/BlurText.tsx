@@ -107,10 +107,8 @@ const BlurText: React.FC<BlurTextProps> = ({
                         animate={inView ? animateKeyframes : fromSnapshot}
                         transition={spanTransition}
                         onAnimationComplete={index === elements.length - 1 ? onAnimationComplete : undefined}
-                        style={{
-                            display: 'inline-block',
-                            willChange: 'transform, filter, opacity'
-                        }}
+                        className="inline-block"
+                        style={{ willChange: 'transform, filter, opacity' }}
                     >
                         {segment === ' ' ? '\u00A0' : segment}
                         {animateBy === 'words' && index < elements.length - 1 && '\u00A0'}

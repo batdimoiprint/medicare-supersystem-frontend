@@ -160,6 +160,22 @@
   border-radius: 4px;
 }
 
+@keyframes float-up-down {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.animate-float {
+  animation: float-up-down 3s ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
