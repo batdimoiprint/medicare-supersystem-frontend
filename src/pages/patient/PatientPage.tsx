@@ -16,7 +16,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useState } from 'react'; // Ensure useState is imported
+import { useState } from 'react'; 
+import { useNavigate } from 'react-router-dom'; 
 import BookAppointmentModal from '@/components/patient/BookAppointmentModal';
 
 // --- Mock Data (Simulating Backend) ---
@@ -80,7 +81,9 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 export default function PatientPage() {
+    const navigate = useNavigate(); // Initialize navigation hook
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500 p-6">
             
@@ -216,7 +219,7 @@ export default function PatientPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Prescriptions Summary (Mobile/Tablet view might stack this) */}
+                    {/* Prescriptions Summary */}
                     <Card className="border-none shadow-md">
                         <CardHeader>
                             <CardTitle className="text-xl flex items-center gap-2">
@@ -260,7 +263,11 @@ export default function PatientPage() {
                                 <h3 className="text-xl font-bold">{PATIENT_NAME}</h3>
                                 <p className="text-sm text-muted-foreground mb-4">Member since 2024</p>
                                 <div className="w-full space-y-2">
-                                    <Button variant="outline" className="w-full justify-between bg-background">
+                                    <Button 
+                                        variant="outline" 
+                                        className="w-full justify-between bg-background"
+                                        onClick={() => navigate('/patient/profile')}
+                                    >
                                         View Profile <ChevronRight className="w-4 h-4" />
                                     </Button>
                                     <Button variant="outline" className="w-full justify-between bg-background">
@@ -294,7 +301,11 @@ export default function PatientPage() {
                                     </div>
                                 ))}
                             </div>
-                            <Button variant="ghost" className="w-full mt-4 text-primary">
+                            <Button 
+                                variant="ghost" 
+                                className="w-full mt-4 text-primary"
+                                onClick={() => navigate('/patient/transactions')}
+                            >
                                 View All Transactions
                             </Button>
                         </CardContent>
