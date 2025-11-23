@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -20,8 +20,6 @@ import {
 } from "@/components/ui/select";
 import { Calendar, Clock, AlertCircle, ArrowRight, Loader2, CheckCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from '@/components/ui/separator';
-
 // --- Types ---
 interface Appointment {
     id: number;
