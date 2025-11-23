@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Bell, MessageSquare, List, MoreHorizontal } from 'lucide-react'
 import { X, CheckCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { cn, formatCurrency } from '@/lib/utils'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
 import { Field, FieldLabel, FieldContent } from '@/components/ui/field'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu'
@@ -14,19 +15,19 @@ import { useEffect } from 'react';
 
 const inventoryData = {
     Consumables: [
-        { id: 'SUP001', name: 'Latex Gloves (Medium)', quantity: '45 boxes', exp: '12/15/2024', supplier: 'MedSupply Co.', unitCost: '$2.50', status: 'Critical' },
-        { id: 'SUP002', name: 'Dental Masks', quantity: '78 boxes', exp: '03/20/2025', supplier: 'DentalCare Ltd.', unitCost: '$1.80', status: 'Low Stock' },
-        { id: 'SUP003', name: 'Disposable Syringes', quantity: '22 packs', exp: '06/10/2025', supplier: 'SafeMed Inc', unitCost: '$0.85', status: 'In Stock' },
+        { id: 'SUP001', name: 'Latex Gloves (Medium)', quantity: '45 boxes', exp: '12/15/2024', supplier: 'MedSupply Co.', unitCost: 2.5, status: 'Critical' },
+        { id: 'SUP002', name: 'Dental Masks', quantity: '78 boxes', exp: '03/20/2025', supplier: 'DentalCare Ltd.', unitCost: 1.8, status: 'Low Stock' },
+        { id: 'SUP003', name: 'Disposable Syringes', quantity: '22 packs', exp: '06/10/2025', supplier: 'SafeMed Inc', unitCost: 0.85, status: 'In Stock' },
     ],
     Medicines: [
-        { id: 'MED001', name: 'Ibuprofen 200mg', quantity: '120 tablets', exp: '09/01/2026', supplier: 'PharmaDirect', unitCost: '$6.00', status: 'In Stock' },
-        { id: 'MED002', name: 'Amoxicillin 500mg', quantity: '60 capsules', exp: '02/14/2026', supplier: 'Medico Supplies', unitCost: '$12.50', status: 'Low Stock' },
-        { id: 'MED003', name: 'Paracetamol Syrup', quantity: '15 bottles', exp: '07/30/2025', supplier: 'HealthFirst', unitCost: '$3.20', status: 'Critical' },
+        { id: 'MED001', name: 'Ibuprofen 200mg', quantity: '120 tablets', exp: '09/01/2026', supplier: 'PharmaDirect', unitCost: 6.0, status: 'In Stock' },
+        { id: 'MED002', name: 'Amoxicillin 500mg', quantity: '60 capsules', exp: '02/14/2026', supplier: 'Medico Supplies', unitCost: 12.5, status: 'Low Stock' },
+        { id: 'MED003', name: 'Paracetamol Syrup', quantity: '15 bottles', exp: '07/30/2025', supplier: 'HealthFirst', unitCost: 3.2, status: 'Critical' },
     ],
     Equipment: [
-        { id: 'EQ001', name: 'Dental Drill', quantity: '2 units', exp: 'N/A', supplier: 'DentalTech', unitCost: '$450.00', status: 'In Stock' },
-        { id: 'EQ002', name: 'X-Ray Film', quantity: '50 sheets', exp: '11/11/2026', supplier: 'RadiologyPro', unitCost: '$35.00', status: 'Low Stock' },
-        { id: 'EQ003', name: 'Sterilizer', quantity: '1 unit', exp: 'N/A', supplier: 'CleanMed', unitCost: '$800.00', status: 'Critical' },
+        { id: 'EQ001', name: 'Dental Drill', quantity: '2 units', exp: 'N/A', supplier: 'DentalTech', unitCost: 450.0, status: 'In Stock' },
+        { id: 'EQ002', name: 'X-Ray Film', quantity: '50 sheets', exp: '11/11/2026', supplier: 'RadiologyPro', unitCost: 35.0, status: 'Low Stock' },
+        { id: 'EQ003', name: 'Sterilizer', quantity: '1 unit', exp: 'N/A', supplier: 'CleanMed', unitCost: 800.0, status: 'Critical' },
     ],
 };
 
@@ -53,10 +54,10 @@ export default function InventoryTable() {
     const renderStatusBadge = (status: string) => {
         const base = 'inline-flex items-center rounded-full px-3 h-6 text-xs font-semibold tracking-wide';
         const cls = status === 'Critical'
-            ? 'bg-red-100 text-red-600'
+            ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-200'
             : status === 'Low Stock'
-                ? 'bg-amber-100 text-amber-600'
-                : 'bg-emerald-100 text-emerald-600';
+                ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200'
+                : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200';
         return <span className={`${base} ${cls}`}>{status}</span>;
     };
 
@@ -115,19 +116,19 @@ export default function InventoryTable() {
     return (
         <div className="space-y-6 px-6 pb-8">
             {/* Header */}
-            <Card className="rounded-3xl border border-slate-800 bg-gradient-to-b from-[#04282a] to-[#072a2d] shadow-lg">
+            <Card className="rounded-3xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-gradient-to-b dark:from-[#04282a] dark:to-[#072a2d] shadow-lg">
                 <CardHeader className="px-6 py-3">
                     <div className="flex w-full items-start justify-between gap-6">
                         <div className="space-y-0.5">
-                            <CardTitle className="text-3xl tracking-widest text-cyan-300 flex items-center gap-3">
-                                <List className="w-7 h-7 text-cyan-300" />
+                            <CardTitle className="text-3xl tracking-widest text-cyan-700 dark:text-cyan-300 flex items-center gap-3">
+                                <List className="w-7 h-7 text-cyan-700 dark:text-cyan-300" />
                                 Inventory Table
                             </CardTitle>
-                            <CardDescription className="text-sm text-slate-300 leading-relaxed">Manage your dental supplies and item inventory</CardDescription>
+                            <CardDescription className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">Manage your dental supplies and item inventory</CardDescription>
                         </div>
                             <div className="flex items-center gap-1.5">
                             <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v)}>
-                                <SelectTrigger size="sm" className="rounded-3xl border border-slate-700 bg-[#0a4748] px-3 font-semibold text-cyan-100 shadow-sm">
+                                <SelectTrigger size="sm" className="rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0a4748] px-3 font-semibold text-cyan-700 dark:text-cyan-100 shadow-sm">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -138,9 +139,9 @@ export default function InventoryTable() {
                                 </SelectContent>
                             </Select>
 
-                            <DropdownMenu>
+                                <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="rounded-3xl border border-slate-700 bg-[#0a4748] px-3 font-semibold text-cyan-100 shadow-sm">Quick Actions</Button>
+                                    <Button variant="ghost" size="sm" className="rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0a4748] px-3 font-semibold text-cyan-700 dark:text-cyan-100 shadow-sm">Quick Actions</Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent>
                                     <DropdownMenuRadioGroup value={actionMode} onValueChange={(v) => setActionMode(v as 'edit' | 'select')}>
@@ -150,7 +151,7 @@ export default function InventoryTable() {
                                 </DropdownMenuContent>
                             </DropdownMenu>
                             <Button variant="ghost" size="sm" className="p-2" aria-label="Notifications">
-                                <Bell className="text-slate-300" size={20} />
+                                <Bell className="text-slate-700 dark:text-slate-300" size={20} />
                             </Button>
                         </div>
                     </div>
@@ -158,22 +159,22 @@ export default function InventoryTable() {
             </Card>
 
             {/* Table + Tabs */}
-            <Card className="rounded-3xl border border-slate-800 bg-[#071a1b] shadow-lg">
+            <Card className="rounded-3xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#071a1b] shadow-lg">
                 <CardContent className="p-0">
                     <div className="overflow-hidden rounded-t-3xl">
                         <div className="px-10 pt-8">
                             {/* Tabs */}
-                            <div className="mb-5 rounded-2xl bg-[#063338]/60 px-8 py-4 text-sm font-semibold uppercase tracking-[0.35em] text-slate-300">
+                            <div className="mb-5 rounded-2xl bg-slate-100 dark:bg-[#063338]/60 px-8 py-4 text-sm font-semibold uppercase tracking-[0.35em] text-slate-600 dark:text-slate-300">
                                 <div className="flex items-center justify-center gap-14">
                                     {tabList.map(tab => (
                                         <button
                                             key={tab}
-                                            className={
+                                            className={cn(
                                                 activeTab === tab
                                                     ? 'text-cyan-300 font-bold underline underline-offset-4'
-                                                    : 'text-slate-300/80 hover:text-cyan-200'
-                                            }
-                                            style={{ letterSpacing: '0.35em' }}
+                                                    : 'text-slate-700/80 dark:text-slate-300 hover:text-cyan-700 dark:hover:text-cyan-200',
+                                                'tracking-[0.35em]'
+                                            )}
                                             onClick={() => setActiveTab(tab)}
                                             tabIndex={0}
                                             aria-current={activeTab === tab ? 'page' : undefined}
@@ -183,17 +184,16 @@ export default function InventoryTable() {
                                     ))}
                                 </div>
                             </div>
-                            <div className="mb-2 border-b border-slate-700 pb-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
-                                Overview ({filteredItems.length} items)
-                            </div>
                         </div>
+                        
+                        
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm text-slate-200">
-                                <thead className="bg-[#041017] text-[11px] uppercase tracking-[0.35em] text-slate-400">
+                            <table className="w-full text-left text-sm text-slate-800 dark:text-slate-200">
+                                <thead className="bg-slate-50 dark:bg-[#041017] text-[11px] uppercase tracking-[0.35em] text-slate-600 dark:text-slate-400">
                                     <tr className="align-middle">
                                         <th scope="col" className="px-4 py-4 text-left">
                                             {actionMode === 'select' ? (
-                                                <input
+                                                    <input
                                                     type="checkbox"
                                                     aria-label="select-all"
                                                     checked={allFilteredSelected}
@@ -201,7 +201,7 @@ export default function InventoryTable() {
                                                         if (allFilteredSelected) setSelectedIds(prev => prev.filter(id => !filteredItems.some((f:any) => f.id === id)))
                                                         else setSelectedIds(prev => Array.from(new Set([...prev, ...filteredItems.map((it:any) => it.id)])))
                                                     }}
-                                                    className="rounded border-slate-600 bg-transparent text-cyan-400"
+                                                    className="rounded border-slate-200 dark:border-slate-600 bg-transparent text-cyan-700 dark:text-cyan-400"
                                                 />
                                             ) : null}
                                         </th>
@@ -218,7 +218,7 @@ export default function InventoryTable() {
                                     {filteredItems.map((item) => (
                                         <tr
                                             key={item.id}
-                                            className={`border-b border-slate-800 bg-[#071a1b] text-slate-200 transition-colors ${selectedIds.includes(item.id) ? 'ring-2 ring-cyan-600 bg-[#0b2f31]' : 'hover:bg-[#092325]'}`}
+                                            className={`border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#071a1b] text-slate-800 dark:text-slate-200 transition-colors ${selectedIds.includes(item.id) ? 'ring-2 ring-cyan-600 dark:bg-[#0b2f31]' : 'hover:bg-slate-50 dark:hover:bg-[#092325]'}`}
                                         >
                                             <td className="px-8 py-5 font-semibold align-middle">
                                                 {actionMode === 'select' && (
@@ -227,23 +227,23 @@ export default function InventoryTable() {
                                                         aria-label={`select-${item.id}`}
                                                         checked={selectedIds.includes(item.id)}
                                                         onChange={() => toggleSelectId(item.id)}
-                                                        className="mr-3 align-middle rounded border-slate-600 bg-transparent text-cyan-400"
+                                                        className="mr-3 align-middle rounded border-slate-200 dark:border-slate-600 bg-transparent text-cyan-700 dark:text-cyan-400"
                                                     />
                                                 )}
-                                                <div className="text-slate-100 leading-snug">{item.name}</div>
-                                                <div className="mt-1 text-xs tracking-wide text-slate-400">{item.id}</div>
+                                                <div className="text-slate-900 dark:text-slate-100 leading-snug">{item.name}</div>
+                                                <div className="mt-1 text-xs tracking-wide text-slate-500 dark:text-slate-400">{item.id}</div>
                                             </td>
-                                            <td className="px-6 py-5 align-middle text-slate-300 whitespace-nowrap">{item.quantity}</td>
-                                            <td className="px-6 py-5 align-middle text-slate-300 whitespace-nowrap">{item.exp}</td>
-                                            <td className="px-6 py-5 align-middle text-slate-300">{item.supplier}</td>
-                                            <td className="px-6 py-5 align-middle text-slate-300 whitespace-nowrap">{item.unitCost}</td>
+                                            <td className="px-6 py-5 align-middle text-slate-700 dark:text-slate-300 whitespace-nowrap">{item.quantity}</td>
+                                            <td className="px-6 py-5 align-middle text-slate-700 dark:text-slate-300 whitespace-nowrap">{item.exp}</td>
+                                            <td className="px-6 py-5 align-middle text-slate-700 dark:text-slate-300">{item.supplier}</td>
+                                            <td className="px-6 py-5 align-middle text-slate-700 dark:text-slate-300 whitespace-nowrap">{formatCurrency(item.unitCost)}</td>
                                             <td className="px-6 py-5 align-middle">{renderStatusBadge(item.status)}</td>
-                                            <td className="px-6 py-5 align-middle text-slate-400">
+                                            <td className="px-6 py-5 align-middle text-slate-500 dark:text-slate-400">
                                                 <div className="flex items-center gap-3">
-                                                    <MessageSquare size={16} />
+                                                    <MessageSquare size={16} className="text-slate-700 dark:text-slate-300" />
                                                     <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button size="sm" variant="ghost" className="p-1 text-slate-300"><MoreHorizontal size={16} /></Button>
+                                                            <DropdownMenuTrigger asChild>
+                                                            <Button size="sm" variant="ghost" className="p-1 text-slate-700 dark:text-slate-300"><MoreHorizontal size={16} /></Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent>
                                                             <DropdownMenuRadioGroup value={actionMode} onValueChange={(v) => {
@@ -266,20 +266,20 @@ export default function InventoryTable() {
                         </div>
                     </div>
                     {/* Footer legend + actions */}
-                    <div className="flex flex-col gap-5 rounded-b-3xl bg-[#071a1b] px-10 py-8">
-                        <div className="flex flex-wrap items-center gap-7 text-xs text-slate-300">
+                    <div className="flex flex-col gap-5 rounded-b-3xl bg-white dark:bg-[#071a1b] px-10 py-8">
+                        <div className="flex flex-wrap items-center gap-7 text-xs text-slate-700 dark:text-slate-300">
                             <button onClick={() => setSelectedStatus('Critical')} className="flex items-center gap-2"><span className="inline-flex h-2 w-2 rounded-full bg-red-500" />Critical</button>
                             <button onClick={() => setSelectedStatus('Low Stock')} className="flex items-center gap-2"><span className="inline-flex h-2 w-2 rounded-full bg-amber-500" />Low Stock</button>
                             <button onClick={() => setSelectedStatus('In Stock')} className="flex items-center gap-2"><span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />In Stock</button>
                         </div>
                         <div className="flex flex-wrap items-center gap-4">
-                            <Button variant="ghost" size="sm" className="rounded-full border border-slate-700 bg-[#0b4f50] px-5 text-cyan-100 shadow-sm" onClick={() => setIsNewOrderOpen(true)}>New Order</Button>
+                            <Button variant="ghost" size="sm" className="rounded-full border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0b4f50] px-5 text-cyan-700 dark:text-cyan-100 shadow-sm" onClick={() => setIsNewOrderOpen(true)}>New Order</Button>
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 className={selectedIds.length === 0 || actionMode !== 'select'
-                                    ? 'rounded-full border-slate-700 px-5 text-slate-500 cursor-not-allowed'
-                                    : 'rounded-full border border-slate-700 bg-[#0b4f50] px-5 text-cyan-100 shadow-sm'}
+                                    ? 'rounded-full border border-slate-200 dark:border-slate-700 px-5 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                                    : 'rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0b4f50] px-5 text-cyan-700 dark:text-cyan-100 shadow-sm'}
                                 onClick={() => { if (selectedIds.length > 0 && actionMode === 'select') openStockOut() }}
                                 disabled={selectedIds.length === 0 || actionMode !== 'select'}
                             >Stock out</Button>
@@ -287,8 +287,8 @@ export default function InventoryTable() {
                                 variant="ghost"
                                 size="sm"
                                 className={selectedIds.length === 0 || actionMode !== 'select'
-                                    ? 'rounded-full border-slate-700 px-5 text-slate-500 cursor-not-allowed'
-                                    : 'rounded-full border border-slate-700 bg-[#0b4f50] px-5 text-cyan-100 shadow-sm'}
+                                    ? 'rounded-full border border-slate-200 dark:border-slate-700 px-5 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                                    : 'rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0b4f50] px-5 text-cyan-700 dark:text-cyan-100 shadow-sm'}
                                 onClick={() => { if (selectedIds.length > 0 && actionMode === 'select') openRestock() }}
                                 disabled={selectedIds.length === 0 || actionMode !== 'select'}
                             >Restock</Button>
@@ -342,8 +342,8 @@ export default function InventoryTable() {
                 <div className="fixed inset-0 z-60 flex items-start justify-center pt-20 px-4 bg-black/50" onClick={() => setIsStockSuccessOpen(false)}>
                     <Card className="rounded-2xl w-full max-w-md text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <CardContent className="pt-8 pb-8">
-                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
-                                <CheckCircle className="w-12 h-12 text-emerald-500" />
+                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                                <CheckCircle className="w-12 h-12 text-emerald-500 dark:text-emerald-200" />
                             </div>
                             <h3 className="mt-4 text-xl font-bold">Items Successfully Stocked Out!</h3>
                             <p className="text-sm text-muted-foreground mt-2">The items you selected have been recorded successfully.</p>
@@ -421,7 +421,7 @@ export default function InventoryTable() {
                                 <Field orientation="vertical">
                                     <FieldLabel>Unit Cost</FieldLabel>
                                     <FieldContent>
-                                        <Input placeholder="$ 2.98" value={newOrder.unitCost} onChange={(e) => setNewOrder({ ...newOrder, unitCost: e.target.value })} />
+                                        <Input placeholder={formatCurrency(2.98)} value={newOrder.unitCost} onChange={(e) => setNewOrder({ ...newOrder, unitCost: e.target.value })} />
                                     </FieldContent>
                                 </Field>
                             </div>
@@ -442,8 +442,8 @@ export default function InventoryTable() {
                 <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/50" onClick={() => setIsSuccessOpen(false)}>
                     <Card className="rounded-2xl w-full max-w-md text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <CardContent className="pt-8 pb-8">
-                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
-                                <CheckCircle className="w-12 h-12 text-emerald-500" />
+                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                                <CheckCircle className="w-12 h-12 text-emerald-500 dark:text-emerald-200" />
                             </div>
                             <h3 className="mt-4 text-xl font-bold">New Order Successful!</h3>
                             <p className="text-sm text-muted-foreground mt-2">The item you inputted has been successfully saved.</p>
@@ -480,7 +480,7 @@ export default function InventoryTable() {
                                                     <div className="text-xs text-slate-400">{it.id}</div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-600">{it.status}</div>
+                                                    <div className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200">{it.status}</div>
                                                     <Input type="number" value={stockQuantities[it.id] ?? 1} onChange={(e) => setStockQuantities(prev => ({ ...prev, [it.id]: Number(e.target.value) }))} className="w-20" />
                                                 </div>
                                             </div>
@@ -495,8 +495,8 @@ export default function InventoryTable() {
                             {stockStage === 'summary' && (
                                 <div>
                                     <h4 className="font-semibold mb-2">Summary</h4>
-                                    <table className="w-full text-sm text-slate-200">
-                                        <thead className="text-xs text-slate-400">
+                                    <table className="w-full text-sm text-slate-800 dark:text-slate-200">
+                                        <thead className="text-xs text-slate-600 dark:text-slate-400">
                                             <tr>
                                                 <th>Item Name</th>
                                                 <th className="text-right">Remaining</th>
@@ -557,7 +557,7 @@ export default function InventoryTable() {
                                                     <div className="text-xs text-slate-400">{it.id}</div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-600">{it.status}</div>
+                                                    <div className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200">{it.status}</div>
                                                     <Input type="number" value={restockQuantities[it.id] ?? 1} onChange={(e) => setRestockQuantities(prev => ({ ...prev, [it.id]: Number(e.target.value) }))} className="w-20" />
                                                 </div>
                                             </div>
@@ -581,8 +581,8 @@ export default function InventoryTable() {
                 <div className="fixed inset-0 z-60 flex items-start justify-center pt-20 px-4 bg-black/50" onClick={() => setIsRestockSuccessOpen(false)}>
                     <Card className="rounded-2xl w-full max-w-md text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <CardContent className="pt-8 pb-8">
-                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
-                                <CheckCircle className="w-12 h-12 text-emerald-500" />
+                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                                <CheckCircle className="w-12 h-12 text-emerald-500 dark:text-emerald-200" />
                             </div>
                             <h3 className="mt-4 text-xl font-bold">Items Successfully Restocked!</h3>
                             <p className="text-sm text-muted-foreground mt-2">The items you selected have been restocked.</p>

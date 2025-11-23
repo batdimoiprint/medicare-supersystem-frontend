@@ -208,7 +208,7 @@ function InventoryDashboard() {
                                                             <div className="text-xs text-muted-foreground">{item.current} / {item.minimum}</div>
                                                         </div>
                                                         <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                                                            <div className={cn('h-2 rounded-full transition-all', barColor)} style={{ width: `${pct}%` }} />
+                                                            <div className={cn('h-2 rounded-full transition-all', barColor, 'w-[var(--w)]')} style={{ ['--w' as any]: `${pct}%` }} />
                                                         </div>
                                                     </div>
                                                 );

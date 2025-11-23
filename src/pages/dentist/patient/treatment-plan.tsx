@@ -6,7 +6,7 @@ import {
   Save,
   X,
   Calendar,
-  DollarSign,
+  Coins,
   CheckCircle,
   Printer,
   Briefcase,
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
+import { formatCurrency } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -296,9 +297,9 @@ const TreatmentPlanPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Cost</p>
-                  <p className="text-2xl font-bold">₱{totalPlannedCost.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(totalPlannedCost)}</p>
                 </div>
-                <DollarSign className="w-8 h-8 text-muted-foreground" />
+                    <Coins className="w-8 h-8 text-muted-foreground" />
               </div>
             </CardContent>
           </Card>
@@ -342,7 +343,7 @@ const TreatmentPlanPage = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-primary">
-                          ₱{plan.totalCost.toLocaleString()}
+                          {formatCurrency(plan.totalCost)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {plan.items.length} procedure{plan.items.length !== 1 ? 's' : ''}
@@ -547,7 +548,7 @@ const TreatmentPlanPage = () => {
                           <p className="text-sm text-muted-foreground mb-2">{item.description}</p>
                           <div className="flex items-center gap-4">
                             <span className="text-sm font-semibold text-primary">
-                              ₱{item.estimatedCost.toLocaleString()}
+                              {formatCurrency(item.estimatedCost)}
                             </span>
                             {!isAdding && (
                               <Select
@@ -600,12 +601,12 @@ const TreatmentPlanPage = () => {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-primary" />
+                    <Coins className="w-5 h-5 text-primary" />
                     <span className="text-lg font-semibold">Total Estimated Cost</span>
                   </div>
-                  <span className="text-3xl font-bold text-primary">
-                    ₱{displayPlan.totalCost?.toLocaleString() || 0}
-                  </span>
+                    <span className="text-3xl font-bold text-primary">
+                      {formatCurrency(displayPlan.totalCost || 0)}
+                    </span>
                 </div>
               </CardContent>
             </Card>
