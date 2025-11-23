@@ -4,15 +4,11 @@ import {
     ArrowLeft, 
     CreditCard, 
     Download, 
-    Filter, 
     Search,
-    FileText,
-    CheckCircle,
-    Clock,
-    AlertCircle
+    FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -22,17 +18,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Separator } from '@/components/ui/separator';
+import PaymentModal from '@/components/patient/PaymentModal'; // Imported PaymentModal
 
 // --- Mock Data based on Billing_tbl & Payment_status_tbl ---
 interface Transaction {
     bill_id: number;
-    reference_no: string; // e.g., INV-001
-    date: string; // created_at
-    description: string; // inferred from linked services
+    reference_no: string; 
+    date: string; 
+    description: string; 
     total_amount: number;
-    payment_option: 'Cash' | 'PayMongo QR' | 'Insurance';
-    payment_status: 'Pending' | 'Paid' | 'Overdue' | 'Refunded'; // payment_status_name
+    payment_option: 'Cash' | 'PayMongo QR' | 'Insurance' | 'Pending'; 
+    payment_status: 'Pending' | 'Paid' | 'Overdue' | 'Refunded'; 
     paymongo_id?: string;
 }
 
@@ -43,7 +39,7 @@ const MOCK_TRANSACTIONS: Transaction[] = [
         date: "2025-11-24",
         description: "Dental Cleaning (Prophylaxis)",
         total_amount: 500.00,
-        payment_option: "Cash",
+        payment_option: "Pending", // Set to pending for demo
         payment_status: "Pending"
     },
     {
@@ -80,6 +76,25 @@ export default function PatientTransactionsPage() {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
+
+    // Payment Modal State
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [selectedBill, setSelectedBill] = useState<any>(null);
+
+    // Handler to open Payment Modal
+    const handlePayClick = (bill: Transaction) => {
+        // Adapt Transaction to BillDetails interface used by PaymentModal
+        const billDetails = {
+            bill_id: bill.bill_id,
+            reference_no: bill.reference_no,
+            description: bill.description,
+            total_amount: bill.total_amount,
+            due_date: bill.date, 
+            status: bill.payment_status as 'Pending' | 'Overdue'
+        };
+        setSelectedBill(billDetails);
+        setIsPaymentModalOpen(true);
+    };
 
     // Filter Logic
     const filteredTransactions = MOCK_TRANSACTIONS.filter(t => {
@@ -154,7 +169,7 @@ export default function PatientTransactionsPage() {
             {/* Transactions List */}
             <Card className="border-none shadow-md">
                 <CardHeader className="bg-muted/30 border-b">
-                    <div className="grid grid-cols-12 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <div className="grid grid-cols-12 text-xs font-semibold text-muted-foreground uppercase tracking-wider items-center">
                         <div className="col-span-2">Date</div>
                         <div className="col-span-3">Description</div>
                         <div className="col-span-2">Reference</div>
@@ -180,15 +195,29 @@ export default function PatientTransactionsPage() {
                                     {t.reference_no}
                                 </div>
                                 <div className="col-span-2 flex items-center gap-2">
-                                    <CreditCard className="w-3 h-3 text-muted-foreground" /> {t.payment_option}
+                                    {t.payment_status === 'Pending' ? (
+                                        <span className="text-xs italic text-muted-foreground">Unpaid</span>
+                                    ) : (
+                                        <><CreditCard className="w-3 h-3 text-muted-foreground" /> {t.payment_option}</>
+                                    )}
                                 </div>
                                 <div className="col-span-2 font-bold">
                                     ₱{t.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </div>
                                 <div className="col-span-1 flex justify-end">
-                                    <Badge variant="outline" className={getStatusColor(t.payment_status)}>
-                                        {t.payment_status}
-                                    </Badge>
+                                    {t.payment_status === 'Pending' ? (
+                                        <Button 
+                                            size="sm" 
+                                            className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                            onClick={() => handlePayClick(t)}
+                                        >
+                                            Pay Now
+                                        </Button>
+                                    ) : (
+                                        <Badge variant="outline" className={getStatusColor(t.payment_status)}>
+                                            {t.payment_status}
+                                        </Badge>
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -200,6 +229,13 @@ export default function PatientTransactionsPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Payment Modal Integration */}
+            <PaymentModal 
+                isOpen={isPaymentModalOpen}
+                onClose={() => setIsPaymentModalOpen(false)}
+                bill={selectedBill}
+            />
         </div>
     );
 }

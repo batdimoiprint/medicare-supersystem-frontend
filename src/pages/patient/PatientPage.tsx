@@ -9,36 +9,77 @@ import {
     ChevronRight,
     CheckCircle,
     AlertCircle,
-    User
+    User,
+    CalendarClock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useState } from 'react'; 
+import { useState, useMemo } from 'react'; 
 import { useNavigate } from 'react-router-dom'; 
-import BookAppointmentModal from '@/components/patient/BookAppointmentModal';
 
-// --- Mock Data (Simulating Backend) ---
+// Import Modals
+import BookAppointmentModal from '@/components/patient/BookAppointmentModal';
+import RescheduleAppointmentModal from '@/components/patient/RescheduleAppointmentModal';
+import AppointmentCalendarModal from '@/components/patient/AppointmentCalendarModal';
+
+// --- Mock Data ---
 const PATIENT_NAME = "John Doe";
 
-const UPCOMING_APPOINTMENTS = [
+const ALL_APPOINTMENTS = [
     {
         id: 1,
-        treatment: "Dental Cleaning",
+        treatment: "Metallic Braces Initial Placement", 
         doctor: "Dr. Evelyn Reyes",
-        date: "2025-11-24",
-        time: "09:00 AM",
+        date: "2025-11-24", 
+        time: "09:00 AM", 
         location: "Room 302",
-        status: "Confirmed"
-    }
-];
-
-const PAST_APPOINTMENTS = [
-    { id: 101, treatment: "Root Canal", doctor: "Dr. Mark Santos", date: "2025-10-15", status: "Completed" },
-    { id: 102, treatment: "Consultation", doctor: "Dr. Evelyn Reyes", date: "2025-09-01", status: "Completed" },
-    { id: 103, treatment: "X-Ray", doctor: "Dr. Mark Santos", date: "2025-08-20", status: "Completed" },
+        status: "Confirmed",
+        type: "upcoming"
+    },
+    {
+        id: 2,
+        treatment: "General Consultation",
+        doctor: "Dr. Evelyn Reyes",
+        date: "2025-12-05",
+        time: "02:00 PM",
+        location: "Room 302",
+        status: "Pending",
+        type: "upcoming"
+    },
+    // --- FIXED: Added time and location to history items below ---
+    { 
+        id: 101, 
+        treatment: "Root Canal", 
+        doctor: "Dr. Mark Santos", 
+        date: "2025-10-15", 
+        time: "10:00 AM", // Added
+        location: "Room 101", // Added
+        status: "Completed",
+        type: "history"
+    },
+    { 
+        id: 102, 
+        treatment: "Consultation", 
+        doctor: "Dr. Evelyn Reyes", 
+        date: "2025-09-01", 
+        time: "11:00 AM", // Added
+        location: "Room 102", // Added
+        status: "Completed",
+        type: "history"
+    },
+    { 
+        id: 103, 
+        treatment: "Panoramic X-ray", 
+        doctor: "Dr. Mark Santos", 
+        date: "2025-08-20", 
+        time: "02:30 PM", // Added
+        location: "Imaging Room", // Added
+        status: "Completed",
+        type: "history" 
+    },
 ];
 
 const ACTIVE_PRESCRIPTIONS = [
@@ -81,13 +122,37 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 export default function PatientPage() {
-    const navigate = useNavigate(); // Initialize navigation hook
+    const navigate = useNavigate(); 
+    
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+    const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+    const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
+    const handleRescheduleClick = (apt: any) => {
+        setSelectedAppointment(apt);
+        setIsRescheduleModalOpen(true);
+    };
+
+    const upcomingAppointments = ALL_APPOINTMENTS.filter(a => a.type === 'upcoming');
+    const pastAppointments = ALL_APPOINTMENTS.filter(a => a.type === 'history');
+
+    const nextVisit = useMemo(() => {
+        if (upcomingAppointments.length === 0) return null;
+        const sorted = [...upcomingAppointments].sort((a, b) => {
+            return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+        return sorted[0];
+    }, [upcomingAppointments]);
+
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 p-6">
             
-            {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
@@ -111,18 +176,33 @@ export default function PatientPage() {
                 </Button>
             </div>
 
-            {/* Quick Stats Cards */}
             <div className="grid gap-4 md:grid-cols-3">
-                <Card>
+                <Card 
+                    className="cursor-pointer hover:bg-accent/40 transition-all hover:shadow-md relative overflow-hidden"
+                    onClick={() => setIsCalendarOpen(true)}
+                    title="Click to view full calendar"
+                >
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Next Visit</CardTitle>
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">Nov 24</div>
-                        <p className="text-xs text-muted-foreground">09:00 AM - Cleaning</p>
+                        {nextVisit ? (
+                            <>
+                                <div className="text-2xl font-bold text-primary">{formatDate(nextVisit.date)}</div>
+                                <p className="text-xs text-muted-foreground">
+                                    {nextVisit.time} - {nextVisit.treatment}
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-lg font-medium text-gray-500">No Upcoming</div>
+                                <p className="text-xs text-muted-foreground">Book a new appointment</p>
+                            </>
+                        )}
                     </CardContent>
                 </Card>
+
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Active Prescriptions</CardTitle>
@@ -146,11 +226,7 @@ export default function PatientPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
-                {/* Left Column (Appointments) - Spans 2 columns */}
                 <div className="lg:col-span-2 space-y-8">
-                    
-                    {/* Appointments Section */}
                     <Card className="border-none shadow-md">
                         <CardHeader>
                             <CardTitle className="text-xl flex items-center gap-2">
@@ -167,25 +243,37 @@ export default function PatientPage() {
                                 </TabsList>
                                 
                                 <TabsContent value="upcoming" className="space-y-4">
-                                    {UPCOMING_APPOINTMENTS.length > 0 ? (
-                                        UPCOMING_APPOINTMENTS.map((apt) => (
+                                    {upcomingAppointments.length > 0 ? (
+                                        upcomingAppointments.map((apt) => (
                                             <div key={apt.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
                                                 <div className="flex gap-4">
                                                     <div className="flex flex-col items-center justify-center bg-primary/10 text-primary rounded-md h-16 w-16 min-w-[4rem]">
-                                                        <span className="text-xs font-semibold uppercase">{apt.date.split('-')[1] === '11' ? 'NOV' : 'DEC'}</span>
-                                                        <span className="text-xl font-bold">{apt.date.split('-')[2]}</span>
+                                                        <span className="text-xs font-semibold uppercase">
+                                                            {new Date(apt.date).toLocaleString('en-US', { month: 'short' }).toUpperCase()}
+                                                        </span>
+                                                        <span className="text-xl font-bold">
+                                                            {new Date(apt.date).getDate()}
+                                                        </span>
                                                     </div>
                                                     <div className="space-y-1">
                                                         <h4 className="font-semibold text-lg">{apt.treatment}</h4>
                                                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                                             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {apt.time}</span>
                                                             <span className="flex items-center gap-1"><User className="w-3 h-3" /> {apt.doctor}</span>
-                                                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {apt.location}</span>
+                                                            {apt.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {apt.location}</span>}
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div className="mt-4 sm:mt-0 flex gap-2 self-end sm:self-center">
-                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Confirmed</Badge>
+                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">{apt.status}</Badge>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="ghost" 
+                                                        className="h-7 text-xs"
+                                                        onClick={() => handleRescheduleClick(apt)}
+                                                    >
+                                                        <CalendarClock className="w-3 h-3 mr-1" /> Reschedule
+                                                    </Button>
                                                 </div>
                                             </div>
                                         ))
@@ -199,7 +287,7 @@ export default function PatientPage() {
                                 
                                 <TabsContent value="history">
                                     <div className="space-y-4">
-                                        {PAST_APPOINTMENTS.map((apt) => (
+                                        {pastAppointments.map((apt) => (
                                             <div key={apt.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                                                 <div className="flex items-center gap-4">
                                                     <div className="bg-muted p-2 rounded-full">
@@ -219,7 +307,6 @@ export default function PatientPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Prescriptions Summary */}
                     <Card className="border-none shadow-md">
                         <CardHeader>
                             <CardTitle className="text-xl flex items-center gap-2">
@@ -249,10 +336,7 @@ export default function PatientPage() {
                     </Card>
                 </div>
 
-                {/* Right Column (Sidebar) */}
                 <div className="space-y-8">
-                    
-                    {/* Patient Profile Summary */}
                     <Card className="bg-primary/5 border-none">
                         <CardContent className="pt-6">
                             <div className="flex flex-col items-center text-center">
@@ -270,7 +354,12 @@ export default function PatientPage() {
                                     >
                                         View Profile <ChevronRight className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="outline" className="w-full justify-between bg-background">
+                                    
+                                    <Button 
+                                        variant="outline" 
+                                        className="w-full justify-between bg-background"
+                                        onClick={() => navigate('/patient/records')}
+                                    >
                                         Medical Records <FileText className="w-4 h-4" />
                                     </Button>
                                 </div>
@@ -278,7 +367,6 @@ export default function PatientPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Recent Payments */}
                     <Card className="border-none shadow-md">
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
@@ -316,6 +404,18 @@ export default function PatientPage() {
             <BookAppointmentModal 
                 isOpen={isBookingModalOpen} 
                 onClose={() => setIsBookingModalOpen(false)} 
+            />
+            
+            <RescheduleAppointmentModal 
+                isOpen={isRescheduleModalOpen}
+                onClose={() => setIsRescheduleModalOpen(false)}
+                appointment={selectedAppointment}
+            />
+
+            <AppointmentCalendarModal 
+                isOpen={isCalendarOpen}
+                onClose={() => setIsCalendarOpen(false)}
+                appointments={ALL_APPOINTMENTS}
             />
         </div>
     );
