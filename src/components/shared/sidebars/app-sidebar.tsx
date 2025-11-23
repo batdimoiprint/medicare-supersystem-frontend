@@ -10,7 +10,6 @@ import {
     SidebarRail,
 } from "@/components/ui/sidebar"
 import { NavMain } from "./nav-main"
-import { NavProjects } from "./nav-projects"
 import { NavUser } from "./nav-user"
 import BrandTitle from "../brand/BrandTitle"
 import { Separator } from "@/components/ui/separator"
@@ -21,6 +20,7 @@ const data = {
         name: "shadcn",
         email: "m@example.com",
         avatar: "/avatars/shadcn.jpg",
+        role: "cashier"
     }
 }
 
@@ -29,11 +29,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Sidebar collapsible="icon" {...props}>
             <SidebarHeader>
                 <BrandTitle />
+
             </SidebarHeader>
             <Separator />
             <SidebarContent>
-                <NavProjects />
-                <Separator />
                 <NavMain />
             </SidebarContent>
             <Separator />
