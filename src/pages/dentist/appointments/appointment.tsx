@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon,
   CheckCircle,
   User,
-  DollarSign,
+  Coins,
   ClipboardCheck,
   Zap,
   Check,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -177,7 +178,7 @@ const AppointmentStepper = ({ appointment }: AppointmentStepperProps) => {
   const steps = [
     { id: '1', label: 'Service & Schedule Selected (Patient)', icon: CalendarIcon },
     { id: '2', label: 'Dentist Availability Confirmed (System)', icon: CheckCircle },
-    { id: '3', label: 'PayMongo Payment Initiated (Patient)', icon: DollarSign },
+    { id: '3', label: 'PayMongo Payment Initiated (Patient)', icon: Coins },
     { id: '4', label: 'Payment Confirmed / Record Created (Webhook)', icon: Zap },
     { id: '5', label: 'Front Desk Approval (Group 1)', icon: ClipboardCheck },
     { id: '6', label: 'Status Synced (Core & Group 3)', icon: List },
@@ -409,7 +410,7 @@ const PatientDashboard = ({ appointments, dispatch }: PatientDashboardProps) => 
               <SelectContent>
                 {SERVICES.map(s => (
                   <SelectItem key={s.id} value={s.id}>
-                    {s.name} (Fee: ₱{s.fee})
+                    {s.name} (Fee: {formatCurrency(s.fee)})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -487,7 +488,7 @@ const PatientDashboard = ({ appointments, dispatch }: PatientDashboardProps) => 
             <div>
               <p className="text-sm text-muted-foreground mb-1">Total Reservation Fee</p>
               <p className="text-2xl font-bold">
-                <span className="text-primary">₱{fee.toLocaleString()}</span>
+                <span className="text-primary">{formatCurrency(fee)}</span>
               </p>
             </div>
             <Button
@@ -503,7 +504,7 @@ const PatientDashboard = ({ appointments, dispatch }: PatientDashboardProps) => 
                 </>
               ) : (
                 <>
-                  <DollarSign className="w-4 h-4 mr-2" />
+                  <Coins className="w-4 h-4 mr-2" />
                   Proceed to PayMongo
                 </>
               )}
@@ -625,7 +626,7 @@ const FrontDeskView = ({ appointments, dispatch }: FrontDeskViewProps) => {
                         <span className="font-medium">Date:</span> {app.date} at {app.time}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        <span className="font-medium">Fee:</span> ₱{app.fee.toLocaleString()}
+                        <span className="font-medium">Fee:</span> {formatCurrency(app.fee)}
                       </p>
                     </div>
                   </div>
