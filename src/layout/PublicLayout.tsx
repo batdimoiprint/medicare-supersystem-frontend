@@ -1,3 +1,4 @@
+import PublicFooter from '@/components/shared/footer/PublicFooter'
 import PublicHeader from '@/components/shared/headers/PublicHeader'
 import { Outlet } from 'react-router-dom'
 
@@ -15,9 +16,14 @@ export default function PublicLayout() {
 
 
     return (
-        <>
+        <main
+            className={
+                'flex flex-col   min-h-screen px-4 sm:px-8 md:px-16 lg:px-32 xl:px-72 bg-background'
+            }
+        >
             <PublicHeader />
             <Outlet />
-        </>
+            <PublicFooter />
+        </main>
     )
 }

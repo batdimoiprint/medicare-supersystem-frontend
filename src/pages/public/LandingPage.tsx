@@ -1,14 +1,15 @@
-import CTA from '@/components/landing/CTA'
-
-// Import only functional components on this page
+import LandingHero from '@/components/landing/LandingHero'
+import ClinicOverview from '@/components/landing/ClinicOverview'
+import Services from '@/components/landing/Services'
 
 
 
 export default function LandingPage() {
     return (
-        <div>
-            <CTA />
-
-        </div>
+        <>
+            <LandingHero />
+            <ClinicOverview />
+            <Services />
+        </>
     )
 }
