@@ -1,14 +1,34 @@
 "use client"
 
-import { ChevronRight, type LucideIcon, Home, Calendar, Users, FileText, Clock, List, Settings } from "lucide-react"
-import React from "react"
-import { useLocation } from "react-router-dom"
-import { dentistRouteData } from "@/routes/dentistRoutes"
+import {
+    ChevronRight,
+    type LucideIcon,
+    Home,
+    Calendar,
+    Users,
+    FileText,
+    DollarSign,
+    RotateCcw,
+    Stethoscope,
+    ClipboardList,
+    Pill,
+    UserCircle,
+    Receipt,
+    FolderOpen,
+    Bell,
+    Activity,
+    ClipboardCheck,
+    Truck,
+    BarChart3,
+    FileStack
+} from "lucide-react"
+import { receptionistRouteData } from "@/routes/receptionistRoutes"
 import { adminRouteData } from "@/routes/adminRoutes"
 import { cashierRouteData } from "@/routes/cashierRoutes"
 import { inventoryRouteData } from "@/routes/inventoryRoutes"
 import { patientRouteData } from "@/routes/patientRoutes"
-import { receptionistRouteData } from "@/routes/receptionistRoutes"
+import { dentistRouteData } from "@/routes/dentistRoutes"
+import { useLocation, Link } from "react-router-dom"
 
 import {
     Collapsible,
@@ -27,93 +47,84 @@ import {
 } from "@/components/ui/sidebar"
 
 export function NavMain() {
-    // location is not required here; keep the computation deterministic
-
-    // If items are provided via props, use them; otherwise derive from dentistRoutes
     const location = useLocation()
 
-    const computedItems = React.useMemo(() => {
-        let basePath = "/dentist"
-        let children: any[] = dentistRouteData
+    type RouteData = { index?: boolean; path?: string; element: React.ReactElement; title: string }
 
-        if (location.pathname.startsWith("/admin")) {
-            basePath = "/admin"
-            children = adminRouteData
-        } else if (location.pathname.startsWith("/cashier")) {
-            basePath = "/cashier"
-            children = cashierRouteData
-        } else if (location.pathname.startsWith("/inventory")) {
-            basePath = "/inventory"
-            children = inventoryRouteData
-        } else if (location.pathname.startsWith("/patient")) {
-            basePath = "/patient"
-            children = patientRouteData
-        } else if (location.pathname.startsWith("/receptionist")) {
-            basePath = "/receptionist"
-            children = receptionistRouteData
-        }
+    // Select the appropriate route data and base path based on the current path
+    let selectedRouteData: RouteData[] = receptionistRouteData
+    let basePath = "/receptionist"
+    if (location.pathname.startsWith("/admin")) {
+        selectedRouteData = adminRouteData
+        basePath = "/admin"
+    } else if (location.pathname.startsWith("/cashier")) {
+        selectedRouteData = cashierRouteData
+        basePath = "/cashier"
+    } else if (location.pathname.startsWith("/inventory")) {
+        selectedRouteData = inventoryRouteData
+        basePath = "/inventory"
+    } else if (location.pathname.startsWith("/patient")) {
+        selectedRouteData = patientRouteData
+        basePath = "/patient"
+    } else if (location.pathname.startsWith("/dentist")) {
+        selectedRouteData = dentistRouteData
+        basePath = "/dentist"
+    } else if (location.pathname.startsWith("/receptionist")) {
+        selectedRouteData = receptionistRouteData
+        basePath = "/receptionist"
+    }
 
-        type SubItem = { title: string; url: string }
-        type MainItem = { title: string; url: string; items?: SubItem[]; icon?: LucideIcon }
+    type SubItem = { title: string; url: string }
+    type MainItem = { title: string; url: string; items?: SubItem[]; icon?: LucideIcon }
 
-        const ICONS: LucideIcon[] = [Home, Calendar, Users, FileText, Clock, List, Settings]
+    // Icon mapping based on route title/purpose
+    const getIconForRoute = (title: string): LucideIcon => {
+        const titleLower = title.toLowerCase()
 
-        const mainMap = new Map<string, MainItem>()
+        // Dashboard icons
+        if (titleLower.includes('dashboard')) return Home
 
-        function humanize(seg: string) {
-            return seg
-                .split("-")
-                .map(s => s.charAt(0).toUpperCase() + s.slice(1))
-                .join(" ")
-        }
+        // Appointment related
+        if (titleLower.includes('appointment')) return Calendar
+        if (titleLower.includes('followup') || titleLower.includes('follow')) return Users
+        if (titleLower.includes('cancel')) return RotateCcw
 
-        children.forEach((route) => {
-            const { path, index, title: routeTitle } = route
-            if (index) {
-                // Dashboard index route
-                const title = routeTitle || "Dashboard"
-                mainMap.set("__index__", { title, url: basePath, icon: ICONS[Math.floor(Math.random() * ICONS.length)] })
-                return
-            }
+        // Payment/Financial
+        if (titleLower.includes('payment')) return DollarSign
+        if (titleLower.includes('refund')) return RotateCcw
+        if (titleLower.includes('transaction')) return Receipt
 
-            if (!path) return
+        // Patient/Medical
+        if (titleLower.includes('charting')) return Stethoscope
+        if (titleLower.includes('patient record') || titleLower.includes('medical record')) return FolderOpen
+        if (titleLower.includes('treatment plan')) return ClipboardList
+        if (titleLower.includes('prescription')) return Pill
+        if (titleLower.includes('profile')) return UserCircle
 
-            const fullPath = `${basePath}${path.startsWith("/") ? path : `/${path}`}`
-            const segments = path.split("/")
-            const top = segments[0]
+        // Inventory
+        if (titleLower.includes('inventory table')) return FileStack
+        if (titleLower.includes('stock')) return Activity
+        if (titleLower.includes('supplier')) return Truck
+        if (titleLower.includes('report') || titleLower.includes('reports')) return BarChart3
 
-            // Skip projects (logging and my-schedule) here
-            if (["logging", "my-schedule"].includes(top)) {
-                return
-            }
+        // Schedule & Logging
+        if (titleLower.includes('schedule')) return Calendar
+        if (titleLower.includes('logging')) return ClipboardCheck
 
-            if (segments.length === 1) {
-                // top level route, e.g., appointments
-                mainMap.set(top, { title: routeTitle || humanize(top), url: fullPath, icon: ICONS[Math.floor(Math.random() * ICONS.length)] })
-            } else {
-                // nested route - group under top (e.g., patient/charting or appointments/followup)
-                const parent = mainMap.get(top) || { title: humanize(top), url: `${basePath}/${top}`, items: [], icon: ICONS[Math.floor(Math.random() * ICONS.length)] }
-                const subPath = segments.slice(1).join("/")
-                parent.items = parent.items || []
-                parent.items.push({ title: routeTitle || humanize(subPath.replace(/\//g, " ")), url: fullPath })
-                mainMap.set(top, parent)
-            }
-        })
+        // Notifications
+        if (titleLower.includes('notification')) return Bell
 
-        // Convert map to array
-        const result: MainItem[] = []
-        if (mainMap.has("__index__")) {
-            const idx = mainMap.get("__index__")
-            if (idx) result.push(idx)
-        }
-        for (const [key, value] of mainMap.entries()) {
-            if (key === "__index__") continue
-            result.push(value)
-        }
-        return result
-    }, [])
+        // Default
+        return FileText
+    }
 
-    const finalItems = computedItems
+    const finalItems: MainItem[] = selectedRouteData
+        .filter(route => !route.path?.includes(':') && !route.title?.includes('Details'))
+        .map((route) => ({
+            title: route.title || 'Untitled',
+            url: route.index ? basePath : `${basePath}/${route.path}`,
+            icon: getIconForRoute(route.title || ''),
+        }))
 
     return (
         <SidebarGroup>
@@ -124,7 +135,7 @@ export function NavMain() {
                         <Collapsible
                             key={item.title}
                             asChild
-                            defaultOpen={Boolean(location.pathname.startsWith(item.url))}
+                            defaultOpen={false}
                             className="group/collapsible"
                         >
                             <SidebarMenuItem>
@@ -143,9 +154,9 @@ export function NavMain() {
                                         {item.items.map((subItem) => (
                                             <SidebarMenuSubItem key={subItem.title}>
                                                 <SidebarMenuSubButton asChild>
-                                                    <a href={subItem.url}>
+                                                    <Link to={subItem.url}>
                                                         <span>{subItem.title}</span>
-                                                    </a>
+                                                    </Link>
                                                 </SidebarMenuSubButton>
                                             </SidebarMenuSubItem>
                                         ))}
@@ -156,13 +167,13 @@ export function NavMain() {
                     ) : (
                         <SidebarMenuItem key={item.title}>
                             <SidebarMenuButton tooltip={item.title} asChild>
-                                <a href={item.url} className="flex items-center">
+                                <Link to={item.url} className="flex items-center">
                                     {item.icon && (() => {
                                         const Icon = item.icon as LucideIcon
                                         return <Icon className="mr-2 h-4 w-4" />
                                     })()}
                                     <span>{item.title}</span>
-                                </a>
+                                </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     )

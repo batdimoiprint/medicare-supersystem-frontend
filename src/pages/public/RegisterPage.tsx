@@ -5,33 +5,43 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@
 import { Field, FieldLabel, FieldContent, FieldError } from '@/components/ui/field'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
-import { differenceInYears } from 'date-fns'
-import { Link } from 'react-router-dom'
+import { differenceInYears, format } from 'date-fns'
+import { Link, useNavigate } from 'react-router-dom'
+import supabase from '@/utils/supabase'
+import { useState } from 'react'
+import bcrypt from 'bcryptjs'
 
 type RegistrationForm = {
     f_name: string
     l_name: string
-    m_name: string
+    m_name?: string
     suffix?: string
     birthdate: Date | undefined
     gender: string
-    email: string
+    email?: string
     password: string
     confirm_password?: string
-    address: string
-    blood_type: string
+    house_no?: string
+    street: string
+    barangay?: string
+    city: string
+    country?: string
+    blood_type?: string
     pri_contact_no: string
     sec_contact_no?: string
     ec_f_name: string
     ec_l_name: string
-    ec_m_name_init: string
+    ec_m_name?: string
     ec_contact_no: string
     ec_relationship: string
-    ec_email: string
+    ec_email?: string
 }
 
 export default function RegisterPage() {
     const { register, handleSubmit, control, watch, formState: { errors } } = useForm<RegistrationForm>({ mode: 'onBlur' })
+    const navigate = useNavigate()
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState<string | null>(null)
 
     const birthdate = watch('birthdate')
     const password = watch('password')
@@ -64,15 +74,85 @@ export default function RegisterPage() {
     }
 
     async function onSubmit(data: RegistrationForm) {
-        // normalize primary and secondary contact so final payload always contains +639... form
-        data.pri_contact_no = normalizePhone(data.pri_contact_no)
-        if (data.sec_contact_no) {
-            data.sec_contact_no = normalizePhone(data.sec_contact_no)
-        }
+        setIsSubmitting(true)
+        setSubmitError(null)
 
-        // No server — temporarily store in localStorage for quick testing
-        console.log('Registration', data)
-        alert('Registration submitted (no backend). Review console for data.')
+        try {
+            // Normalize phone numbers
+            data.pri_contact_no = normalizePhone(data.pri_contact_no)
+            if (data.sec_contact_no) {
+                data.sec_contact_no = normalizePhone(data.sec_contact_no)
+            }
+            const ecContactNo = normalizePhone(data.ec_contact_no)
+
+            // Format birthdate as YYYY-MM-DD for Supabase date column
+            const formattedBirthdate = data.birthdate ? format(data.birthdate, 'yyyy-MM-dd') : null
+
+            // Hash password with bcrypt
+            const saltRounds = 10
+            const hashedPassword = await bcrypt.hash(data.password, saltRounds)
+
+            // Insert into patient_tbl (schema: patient_record)
+            const { data: patientData, error: patientError } = await supabase
+                .schema('patient_record')
+                .from('patient_tbl')
+                .insert({
+                    f_name: data.f_name,
+                    l_name: data.l_name,
+                    m_name: data.m_name || null,
+                    suffix: data.suffix || null,
+                    birthdate: formattedBirthdate,
+                    gender: data.gender,
+                    email: data.email || null,
+                    password: hashedPassword,
+                    house_no: data.house_no || null,
+                    street: data.street,
+                    barangay: data.barangay || null,
+                    city: data.city,
+                    country: data.country || null,
+                    blood_type: data.blood_type || null,
+                    pri_contact_no: data.pri_contact_no,
+                    sec_contact_no: data.sec_contact_no || null,
+                    account_status: 'Pending',
+                    created_at: new Date().toISOString(),
+                })
+                .select('patient_id')
+                .single()
+
+            if (patientError) {
+                console.error('Patient insert error:', patientError)
+                throw new Error(`Failed to create patient account: ${patientError.message}`)
+            }
+
+            // Insert into emergency_contact_tbl
+            const { error: emergencyError } = await supabase
+                .schema('patient_record')
+                .from('emergency_contact_tbl')
+                .insert({
+                    patient_id: patientData.patient_id,
+                    ec_f_name: data.ec_f_name,
+                    ec_l_name: data.ec_l_name,
+                    ec_m_name: data.ec_m_name || null,
+                    ec_contact_no: ecContactNo,
+                    ec_relationship: data.ec_relationship,
+                    ec_email: data.ec_email || null,
+                    created_at: new Date().toISOString(),
+                })
+
+            if (emergencyError) {
+                console.error('Emergency contact insert error:', emergencyError)
+                // Note: Patient record is already created. In production, handle this with transactions.
+                throw new Error(`Failed to save emergency contact: ${emergencyError.message}`)
+            }
+
+            alert('Registration successful! Your account is pending approval.')
+            navigate('/login')
+        } catch (error) {
+            console.error('Registration error:', error)
+            setSubmitError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     // Password strength logic
@@ -108,6 +188,12 @@ export default function RegisterPage() {
                 </header>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+                    {submitError && (
+                        <div className="rounded-lg bg-destructive/10 border border-destructive text-destructive px-4 py-3 text-sm">
+                            {submitError}
+                        </div>
+                    )}
+
                     <section className="space-y-6">
                         <Label className="text-lg font-semibold text-foreground">Patient Details</Label>
 
@@ -121,10 +207,9 @@ export default function RegisterPage() {
                                 </FieldContent>
                             </Field>
                             <Field className="lg:col-span-1">
-                                <FieldLabel>Middle name <span className="text-red-500">*</span></FieldLabel>
+                                <FieldLabel>Middle name</FieldLabel>
                                 <FieldContent>
-                                    <Input {...register('m_name', { required: 'Middle name required' })} placeholder="e.g. Dela" className="w-full" />
-                                    <FieldError errors={errors.m_name ? [{ message: errors.m_name.message }] : []} />
+                                    <Input {...register('m_name')} placeholder="e.g. Dela (Optional)" className="w-full" />
                                 </FieldContent>
                             </Field>
                             <Field className="lg:col-span-1">
@@ -190,15 +275,14 @@ export default function RegisterPage() {
                         {/* Row 2: Contact & Blood Type */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <Field>
-                                <FieldLabel>Email <span className="text-red-500">*</span></FieldLabel>
+                                <FieldLabel>Email</FieldLabel>
                                 <FieldContent>
                                     <Input {...register('email', {
-                                        required: 'Email required',
                                         pattern: {
                                             value: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
                                             message: 'Invalid email address',
                                         },
-                                    })} placeholder="e.g. juan@example.com" className="w-full" />
+                                    })} placeholder="e.g. juan@example.com (Optional)" className="w-full" />
                                     <FieldError errors={errors.email ? [{ message: errors.email.message }] : []} />
                                 </FieldContent>
                             </Field>
@@ -245,27 +329,53 @@ export default function RegisterPage() {
                                 </FieldContent>
                             </Field>
                             <Field>
-                                <FieldLabel>Blood type <span className="text-red-500">*</span></FieldLabel>
+                                <FieldLabel>Blood type</FieldLabel>
                                 <FieldContent>
-                                    <Controller control={control} name="blood_type" rules={{ required: 'Blood type required' }} render={({ field }) => (
+                                    <Controller control={control} name="blood_type" render={({ field }) => (
                                         <Select onValueChange={field.onChange} value={field.value}>
-                                            <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                                            <SelectTrigger className="w-full"><SelectValue placeholder="Optional" /></SelectTrigger>
                                             <SelectContent>
                                                 {bloodTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     )} />
-                                    <FieldError errors={errors.blood_type ? [{ message: errors.blood_type.message }] : []} />
                                 </FieldContent>
                             </Field>
                         </div>
 
-                        {/* Row 3: Address */}
+                        {/* Row 3: Address (Composite) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                            <Field>
+                                <FieldLabel>House No.</FieldLabel>
+                                <FieldContent>
+                                    <Input {...register('house_no')} placeholder="e.g. 123 (Optional)" className="w-full" />
+                                </FieldContent>
+                            </Field>
+                            <Field className="lg:col-span-2">
+                                <FieldLabel>Street <span className="text-red-500">*</span></FieldLabel>
+                                <FieldContent>
+                                    <Input {...register('street', { required: 'Street required' })} placeholder="e.g. Rizal St." className="w-full" />
+                                    <FieldError errors={errors.street ? [{ message: errors.street.message }] : []} />
+                                </FieldContent>
+                            </Field>
+                            <Field>
+                                <FieldLabel>Barangay</FieldLabel>
+                                <FieldContent>
+                                    <Input {...register('barangay')} placeholder="e.g. San Jose (Optional)" className="w-full" />
+                                </FieldContent>
+                            </Field>
+                            <Field>
+                                <FieldLabel>City <span className="text-red-500">*</span></FieldLabel>
+                                <FieldContent>
+                                    <Input {...register('city', { required: 'City required' })} placeholder="e.g. Manila" className="w-full" />
+                                    <FieldError errors={errors.city ? [{ message: errors.city.message }] : []} />
+                                </FieldContent>
+                            </Field>
+                        </div>
                         <Field>
-                            <FieldLabel>Address <span className="text-red-500">*</span></FieldLabel>
+                            <FieldLabel>Country</FieldLabel>
                             <FieldContent>
-                                <Input {...register('address', { required: 'Address required' })} placeholder="e.g. 123 Rizal St, Brgy. San Jose, Manila" className="w-full" />
-                                <FieldError errors={errors.address ? [{ message: errors.address.message }] : []} />
+                                <Input {...register('country')} placeholder="e.g. Philippines (Optional)" className="w-full" />
                             </FieldContent>
                         </Field>
                     </section>
@@ -281,10 +391,9 @@ export default function RegisterPage() {
                                 </FieldContent>
                             </Field>
                             <Field>
-                                <FieldLabel>M.I. <span className="text-red-500">*</span></FieldLabel>
+                                <FieldLabel>Middle name</FieldLabel>
                                 <FieldContent>
-                                    <Input {...register('ec_m_name_init', { required: 'Required' })} placeholder="e.g. A" className="w-full" />
-                                    <FieldError errors={errors.ec_m_name_init ? [{ message: errors.ec_m_name_init.message }] : []} />
+                                    <Input {...register('ec_m_name')} placeholder="e.g. Agustin (Optional)" className="w-full" />
                                 </FieldContent>
                             </Field>
                             <Field>
@@ -334,16 +443,14 @@ export default function RegisterPage() {
                                 </FieldContent>
                             </Field>
                             <Field>
-                                <FieldLabel>Email <span className="text-red-500">*</span></FieldLabel>
+                                <FieldLabel>Email</FieldLabel>
                                 <FieldContent>
                                     <Input {...register('ec_email', {
-                                        required: 'Required',
                                         pattern: {
                                             value: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
                                             message: 'Invalid email address',
                                         },
-
-                                    })} placeholder="e.g. contact@example.com" className="w-full" />
+                                    })} placeholder="e.g. contact@example.com (Optional)" className="w-full" />
                                     <FieldError errors={errors.ec_email ? [{ message: errors.ec_email.message }] : []} />
                                 </FieldContent>
                             </Field>
@@ -377,7 +484,9 @@ export default function RegisterPage() {
                     </section>
 
                     <div className="flex justify-end">
-                        <Button type="submit" size="lg" className="w-full md:w-auto">Create Account</Button>
+                        <Button type="submit" size="lg" className="w-full md:w-auto" disabled={isSubmitting}>
+                            {isSubmitting ? 'Creating Account...' : 'Create Account'}
+                        </Button>
                     </div>
                 </form>
             </div>
