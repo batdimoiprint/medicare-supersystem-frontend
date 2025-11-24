@@ -22,6 +22,7 @@ type LoginFormProps<TFormValues extends Record<string, unknown> = Record<string,
             password?: RegisterOptions
         }
         isSubmitting?: boolean
+        error?: string | null
     }
 
 export function LoginForm<TFormValues extends Record<string, unknown> = Record<string, unknown>>({
@@ -30,6 +31,7 @@ export function LoginForm<TFormValues extends Record<string, unknown> = Record<s
     register,
     rules,
     isSubmitting,
+    error,
     ...props
 }: LoginFormProps<TFormValues>) {
     // The login form should span the viewport (minus the header). Use a min height
@@ -49,6 +51,11 @@ export function LoginForm<TFormValues extends Record<string, unknown> = Record<s
                                 <p className="text-muted-foreground text-balance">
                                     Login to your Medicare account
                                 </p>
+                                {error && (
+                                    <div className="w-full px-4 py-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md dark:bg-red-950 dark:text-red-400 dark:border-red-900">
+                                        {error}
+                                    </div>
+                                )}
                             </div>
                             <Field>
                                 <FieldLabel htmlFor="email">Email</FieldLabel>
