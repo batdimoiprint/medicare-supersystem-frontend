@@ -74,86 +74,60 @@ export default function RegisterPage() {
     }
 
     async function onSubmit(data: RegistrationForm) {
-        setIsSubmitting(true)
-        setSubmitError(null)
+    setIsSubmitting(true)
+    setSubmitError(null)
 
-        try {
-            // Normalize phone numbers
-            data.pri_contact_no = normalizePhone(data.pri_contact_no)
-            if (data.sec_contact_no) {
-                data.sec_contact_no = normalizePhone(data.sec_contact_no)
-            }
-            const ecContactNo = normalizePhone(data.ec_contact_no)
-
-            // Format birthdate as YYYY-MM-DD for Supabase date column
-            const formattedBirthdate = data.birthdate ? format(data.birthdate, 'yyyy-MM-dd') : null
-
-            // Hash password with bcrypt
-            const saltRounds = 10
-            const hashedPassword = await bcrypt.hash(data.password, saltRounds)
-
-            // Insert into patient_tbl (schema: patient_record)
-            const { data: patientData, error: patientError } = await supabase
-                .schema('patient_record')
-                .from('patient_tbl')
-                .insert({
-                    f_name: data.f_name,
-                    l_name: data.l_name,
-                    m_name: data.m_name || null,
-                    suffix: data.suffix || null,
-                    birthdate: formattedBirthdate,
-                    gender: data.gender,
-                    email: data.email || null,
-                    password: hashedPassword,
-                    house_no: data.house_no || null,
-                    street: data.street,
-                    barangay: data.barangay || null,
-                    city: data.city,
-                    country: data.country || null,
-                    blood_type: data.blood_type || null,
-                    pri_contact_no: data.pri_contact_no,
-                    sec_contact_no: data.sec_contact_no || null,
-                    account_status: 'Pending',
-                    created_at: new Date().toISOString(),
-                })
-                .select('patient_id')
-                .single()
-
-            if (patientError) {
-                console.error('Patient insert error:', patientError)
-                throw new Error(`Failed to create patient account: ${patientError.message}`)
-            }
-
-            // Insert into emergency_contact_tbl
-            const { error: emergencyError } = await supabase
-                .schema('patient_record')
-                .from('emergency_contact_tbl')
-                .insert({
-                    patient_id: patientData.patient_id,
-                    ec_f_name: data.ec_f_name,
-                    ec_l_name: data.ec_l_name,
-                    ec_m_name: data.ec_m_name || null,
-                    ec_contact_no: ecContactNo,
-                    ec_relationship: data.ec_relationship,
-                    ec_email: data.ec_email || null,
-                    created_at: new Date().toISOString(),
-                })
-
-            if (emergencyError) {
-                console.error('Emergency contact insert error:', emergencyError)
-                // Note: Patient record is already created. In production, handle this with transactions.
-                throw new Error(`Failed to save emergency contact: ${emergencyError.message}`)
-            }
-
-            alert('Registration successful! Your account is pending approval.')
-            navigate('/login')
-        } catch (error) {
-            console.error('Registration error:', error)
-            setSubmitError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
-        } finally {
-            setIsSubmitting(false)
+    try {
+        // Normalize phone numbers
+        data.pri_contact_no = normalizePhone(data.pri_contact_no)
+        if (data.sec_contact_no) {
+            data.sec_contact_no = normalizePhone(data.sec_contact_no)
         }
+        const ecContactNo = normalizePhone(data.ec_contact_no)
+
+        // Format birthdate as YYYY-MM-DD
+        const formattedBirthdate = data.birthdate ? format(data.birthdate, 'yyyy-MM-dd') : null
+
+        // Hash password
+        const saltRounds = 10
+        const hashedPassword = await bcrypt.hash(data.password, saltRounds)
+
+        // Store everything (patient + hashed password + contacts)
+        const tempData = {
+            ...data,
+            pri_contact_no: data.pri_contact_no,
+            sec_contact_no: data.sec_contact_no,
+            ec_contact_no: ecContactNo,
+            birthdate: formattedBirthdate,
+            password: hashedPassword
+        };
+
+        localStorage.setItem("pending_registration", JSON.stringify(tempData));
+
+        // 🔵 Create Supabase Auth user
+        const { error: authError } = await supabase.auth.signUp({
+            email: data.email!,
+            password: data.password,
+            options: {
+                emailRedirectTo: `${window.location.origin}/verify`
+            }
+        });
+
+        if (authError) {
+            throw new Error(authError.message);
+        }
+
+        alert("A verification email has been sent! Please check your inbox.");
+        navigate('/login');
+
+    } catch (error) {
+        console.error('Registration error:', error)
+        setSubmitError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
+    } finally {
+        setIsSubmitting(false)
     }
+}
+
 
     // Password strength logic
     const getStrength = (pass: string) => {
