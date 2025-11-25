@@ -17,16 +17,19 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useState, useMemo } from 'react'; 
+
 import { useNavigate } from 'react-router-dom'; 
 
 // Import Modals
 import BookAppointmentModal from '@/components/patient/BookAppointmentModal';
 import RescheduleAppointmentModal from '@/components/patient/RescheduleAppointmentModal';
 import AppointmentCalendarModal from '@/components/patient/AppointmentCalendarModal';
+import { useState, useEffect, useMemo } from 'react';
+
+import supabase from '@/utils/supabase';
 
 // --- Mock Data ---
-const PATIENT_NAME = "John Doe";
+
 
 const ALL_APPOINTMENTS = [
     {
@@ -123,7 +126,44 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export default function PatientPage() {
     const navigate = useNavigate(); 
-    
+
+    const [currentPatient, setCurrentPatient] = useState<any>(null);
+
+   useEffect(() => {
+  const fetchPatient = async () => {
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      // Redirect if not logged in
+      if (userError || !user) {
+        console.error('No user logged in', userError);
+        navigate('/login'); // redirect to login page
+        return;
+      }
+
+      // Fetch patient data from Supabase
+      const { data: patientData, error: patientError } = await supabase
+        .schema('patient_record')
+        .from('patient_tbl')
+        .select('patient_id, email, password, account_status, f_name, l_name')
+        .eq('email', user.email)
+        .single();
+
+      if (patientError) {
+        console.error('Error fetching patient:', patientError);
+        return;
+      }
+
+      setCurrentPatient(patientData);
+    } catch (err) {
+      console.error('Unexpected error fetching patient:', err);
+    }
+  };
+
+  fetchPatient();
+}, [navigate]); // <-- add navigate as dependency
+
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
@@ -148,25 +188,28 @@ export default function PatientPage() {
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        
     };
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 p-6">
-            
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                         <span className="text-muted-foreground text-sm">Overview</span>
-                    </div>
-                    <BlurText 
-                        text={`Welcome back, ${PATIENT_NAME}`} 
-                        delay={100} 
-                        className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100" 
-                    />
-                    <p className="text-muted-foreground mt-2">
-                        Here's what's happening with your dental health today.
-                    </p>
-                </div>
+<div className="space-y-8 animate-in fade-in duration-500 p-6">
+    
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <div className="flex items-center gap-2 mb-1">
+                 <span className="text-muted-foreground text-sm">Overview</span>
+            </div>
+         <BlurText 
+    text={`Welcome back, ${currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}`} 
+    delay={100} 
+    className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100" 
+/>
+
+            <p className="text-muted-foreground mt-2">
+                Here's what's happening with your dental health today.
+            </p>
+        </div>
                 <Button 
                     size="lg" 
                     className="shadow-lg" 
@@ -344,7 +387,12 @@ export default function PatientPage() {
                                     <AvatarImage src="/placeholder-avatar.jpg" />
                                     <AvatarFallback className="bg-primary text-primary-foreground text-xl">JD</AvatarFallback>
                                 </Avatar>
-                                <h3 className="text-xl font-bold">{PATIENT_NAME}</h3>
+                                <h3 className="text-xl font-bold">
+                                {currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}
+                                </h3>
+
+
+
                                 <p className="text-sm text-muted-foreground mb-4">Member since 2024</p>
                                 <div className="w-full space-y-2">
                                     <Button 
