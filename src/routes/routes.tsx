@@ -17,6 +17,7 @@ import { dentistRoutes } from './dentistRoutes';
 import { inventoryRoutes } from './inventoryRoutes';
 import { patientRoutes } from './patientRoutes';
 import { receptionistRoutes } from './receptionistRoutes';
+import VerifyPage from "@/pages/public/VerifyPage";
 
 export default function AppRoutes() {
     return (
@@ -33,6 +34,7 @@ export default function AppRoutes() {
                 <Route path='contact' element={<ContactPage />} />
                 <Route path='login' element={<LoginPage />} />
                 <Route path='register' element={<RegisterPage />} />
+                <Route path='verify' element={<VerifyPage />} /> 
 
             </Route>
 
