@@ -37,6 +37,13 @@ export default function LoginPage() {
         try {
             setError(null)
 
+            // Static Admin Login
+            if (data.email === 'admin@medicare.com' && data.password === 'admin123') {
+                localStorage.setItem('user_role', 'admin')
+                navigate('/admin')
+                return
+            }
+
             // Query patient_tbl for user with matching email
             const { data: patientData, error: queryError } = await supabase
                 .schema('patient_record')
