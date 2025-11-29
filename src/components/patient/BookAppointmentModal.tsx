@@ -89,6 +89,8 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
       try {
         // Fetch patient
         const { data: { user } } = await supabase.auth.getUser();
+        console.log("AUTH USER:", user);
+
         if (user?.email) {
           const { data: patient, error } = await supabase
             .schema("patient_record")
