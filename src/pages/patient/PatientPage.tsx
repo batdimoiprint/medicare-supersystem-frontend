@@ -29,6 +29,8 @@ import { useState, useEffect, useMemo } from 'react';
 
 import supabase from '@/utils/supabase';
 
+
+
 // Status Badge Component
 const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
@@ -45,6 +47,8 @@ const StatusBadge = ({ status }: { status: string }) => {
     );
 };
 
+
+
 export default function PatientPage() {
     const navigate = useNavigate();
     const [currentPatient, setCurrentPatient] = useState<any>(null);
@@ -58,16 +62,22 @@ export default function PatientPage() {
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-    useEffect(() => {
-        const fetchPatientData = async () => {
-            try {
-                // Get current user
-                const { data: { user }, error: userError } = await supabase.auth.getUser();
-                if (userError || !user) {
-                    console.error('No user logged in', userError);
-                    navigate('/login');
-                    return;
-                }
+   
+
+  useEffect(() => {
+    const fetchPatientData = async () => {
+        try {
+            // Get current user
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            
+            console.log('User object:', user); // Add this line
+            console.log('User error:', userError); // Add this line
+            
+            if (userError || !user) {
+                console.error('No user logged in', userError);
+                navigate('/login');
+                return;
+            }
 
                 // Fetch patient data
                 const { data: patientData, error: patientError } = await supabase
