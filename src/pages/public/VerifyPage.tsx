@@ -193,8 +193,4 @@ export default function VerifyPage() {
       )}
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> cc0e3de (wag nyo pull dipa to tapos hehe)
