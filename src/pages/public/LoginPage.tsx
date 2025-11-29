@@ -11,16 +11,6 @@ type LoginFormValues = {
   remember?: boolean
 }
 
-type Personnel = {
-  personnel_id: string
-  email: string
-  password: string
-  role_id: number
-  f_name: string
-  l_name: string
-  account_status: string
-}
-
 export default function LoginPage() {
   const {
     register,
@@ -53,6 +43,7 @@ export default function LoginPage() {
     try {
       setError(null)
 
+      // 1️⃣ PATIENT LOGIN CHECK
       const { data: patientData } = await supabase
         .schema('patient_record')
         .from('patient_tbl')
@@ -83,6 +74,7 @@ export default function LoginPage() {
         return
       }
 
+      // 2️⃣ PERSONNEL LOGIN CHECK
       const { data: personnelData } = await supabase
         .from('personnel_tbl')
         .select(
@@ -102,7 +94,6 @@ export default function LoginPage() {
       }
 
       const normalizedPersonnelHash = normalizeHash(personnelData.password)
-
       const hashedMatchPersonnel = await bcrypt.compare(
         formData.password,
         normalizedPersonnelHash
@@ -114,6 +105,7 @@ export default function LoginPage() {
         return
       }
 
+      // Save session
       localStorage.setItem('user_role', personnelData.role_id.toString())
       localStorage.setItem(
         'user_name',
@@ -121,6 +113,7 @@ export default function LoginPage() {
       )
       localStorage.setItem('user_id', personnelData.personnel_id)
 
+      // 3️⃣ REDIRECT BY ROLE
       switch (personnelData.role_id) {
         case 1:
           navigate('/dentist')
@@ -141,7 +134,7 @@ export default function LoginPage() {
           setError('Unauthorized role.')
           break
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred.')
     }
   }
