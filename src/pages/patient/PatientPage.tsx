@@ -10,7 +10,8 @@ import {
     CheckCircle,
     AlertCircle,
     User,
-    CalendarClock
+    CalendarClock,
+    Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -28,87 +29,7 @@ import { useState, useEffect, useMemo } from 'react';
 
 import supabase from '@/utils/supabase';
 
-// --- Mock Data ---
-
-
-const ALL_APPOINTMENTS = [
-    {
-        id: 1,
-        treatment: "Metallic Braces Initial Placement", 
-        doctor: "Dr. Evelyn Reyes",
-        date: "2025-11-24", 
-        time: "09:00 AM", 
-        location: "Room 302",
-        status: "Confirmed",
-        type: "upcoming"
-    },
-    {
-        id: 2,
-        treatment: "General Consultation",
-        doctor: "Dr. Evelyn Reyes",
-        date: "2025-12-05",
-        time: "02:00 PM",
-        location: "Room 302",
-        status: "Pending",
-        type: "upcoming"
-    },
-    // --- FIXED: Added time and location to history items below ---
-    { 
-        id: 101, 
-        treatment: "Root Canal", 
-        doctor: "Dr. Mark Santos", 
-        date: "2025-10-15", 
-        time: "10:00 AM", // Added
-        location: "Room 101", // Added
-        status: "Completed",
-        type: "history"
-    },
-    { 
-        id: 102, 
-        treatment: "Consultation", 
-        doctor: "Dr. Evelyn Reyes", 
-        date: "2025-09-01", 
-        time: "11:00 AM", // Added
-        location: "Room 102", // Added
-        status: "Completed",
-        type: "history"
-    },
-    { 
-        id: 103, 
-        treatment: "Panoramic X-ray", 
-        doctor: "Dr. Mark Santos", 
-        date: "2025-08-20", 
-        time: "02:30 PM", // Added
-        location: "Imaging Room", // Added
-        status: "Completed",
-        type: "history" 
-    },
-];
-
-const ACTIVE_PRESCRIPTIONS = [
-    {
-        id: 1,
-        medication: "Amoxicillin",
-        dosage: "500mg",
-        instructions: "Take 1 tablet every 8 hours for 7 days",
-        remaining: "5 days left"
-    },
-    {
-        id: 2,
-        medication: "Ibuprofen",
-        dosage: "400mg",
-        instructions: "Take as needed for pain",
-        remaining: "As needed"
-    }
-];
-
-const RECENT_PAYMENTS = [
-    { id: 'INV-001', description: "Dental Cleaning Fee", date: "2025-11-24", amount: 500, status: "Pending" },
-    { id: 'INV-002', description: "Root Canal Treatment", date: "2025-10-15", amount: 5000, status: "Paid" },
-    { id: 'INV-003', description: "Consultation Fee", date: "2025-09-01", amount: 500, status: "Paid" },
-];
-
-// --- Helper Components ---
+// Status Badge Component
 const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
         Confirmed: "bg-green-100 text-green-700 border-green-200",
@@ -125,58 +46,221 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 export default function PatientPage() {
-    const navigate = useNavigate(); 
-
+    const navigate = useNavigate();
     const [currentPatient, setCurrentPatient] = useState<any>(null);
-
-   useEffect(() => {
-  const fetchPatient = async () => {
-    try {
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      // Redirect if not logged in
-      if (userError || !user) {
-        console.error('No user logged in', userError);
-        navigate('/login'); // redirect to login page
-        return;
-      }
-
-      // Fetch patient data from Supabase
-      const { data: patientData, error: patientError } = await supabase
-        .schema('patient_record')
-        .from('patient_tbl')
-        .select('patient_id, email, password, account_status, f_name, l_name')
-        .eq('email', user.email)
-        .single();
-
-      if (patientError) {
-        console.error('Error fetching patient:', patientError);
-        return;
-      }
-
-      setCurrentPatient(patientData);
-    } catch (err) {
-      console.error('Unexpected error fetching patient:', err);
-    }
-  };
-
-  fetchPatient();
-}, [navigate]); // <-- add navigate as dependency
+    const [appointments, setAppointments] = useState<any[]>([]);
+    const [prescriptions, setPrescriptions] = useState<any[]>([]);
+    const [payments, setPayments] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-    const handleRescheduleClick = (apt: any) => {
-        setSelectedAppointment(apt);
-        setIsRescheduleModalOpen(true);
+    useEffect(() => {
+        const fetchPatientData = async () => {
+            try {
+                // Get current user
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                if (userError || !user) {
+                    console.error('No user logged in', userError);
+                    navigate('/login');
+                    return;
+                }
+
+                // Fetch patient data
+                const { data: patientData, error: patientError } = await supabase
+                    .schema('patient_record')
+                    .from('patient_tbl')
+                    .select('patient_id, email, f_name, l_name, pri_contact_no, house_no, street, barangay, city, account_status')
+                    .eq('email', user.email)
+                    .single();
+
+                if (patientError) {
+                    console.error('Error fetching patient:', patientError);
+                    return;
+                }
+
+                setCurrentPatient(patientData);
+
+                // Fetch appointments from frontdesk schema
+                const { data: appointmentsData, error: appointmentsError } = await supabase
+                    .schema('frontdesk')
+                    .from('appointment_tbl')
+                    .select(`
+                        appointment_id,
+                        appointment_date,
+                        appointment_time,
+                        appointment_status_id,
+                        services_tbl(service_name, service_fee),
+                        personnel_tbl(first_name, last_name)
+                    `)
+                    .eq('patient_id', patientData.patient_id)
+                    .order('appointment_date', { ascending: true });
+
+                if (appointmentsError) {
+                    console.error('Error fetching appointments:', appointmentsError);
+                } else {
+                    setAppointments(appointmentsData || []);
+                }
+
+                // Fetch prescriptions through history_records_tbl
+                const { data: prescriptionsData, error: prescriptionsError } = await supabase
+                    .schema('patient_record')
+                    .from('history_records_tbl')
+                    .select(`
+                        prescription_tbl(
+                            prescription_id,
+                            instructions,
+                            dosage,
+                            created_at,
+                            medicine_tbl(medicine_name)
+                        )
+                    `)
+                    .eq('patient_id', patientData.patient_id)
+                    .not('prescription_id', 'is', null);
+
+                if (prescriptionsError) {
+                    console.error('Error fetching prescriptions:', prescriptionsError);
+                } else {
+                    // Flatten the prescription data
+                    const flattenedPrescriptions = prescriptionsData
+                        ?.filter(record => record.prescription_tbl)
+                        .map(record => record.prescription_tbl) || [];
+                    setPrescriptions(flattenedPrescriptions);
+                }
+
+                // Fetch payments/billing information
+                const { data: paymentsData, error: paymentsError } = await supabase
+                    .schema('frontdesk')
+                    .from('billing_tbl')
+                    .select(`
+                        bill_id,
+                        total_amount,
+                        payment_status_id,
+                        created_at,
+                        appointment_tbl(appointment_id),
+                        bill_service_id(
+                            service_id,
+                            billed_quantity,
+                            billed_unit_price,
+                            sub_total,
+                            services_tbl(service_name)
+                        )
+                    `)
+                    .eq('patient_id', patientData.patient_id)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
+
+                if (paymentsError) {
+                    console.error('Error fetching payments:', paymentsError);
+                } else {
+                    setPayments(paymentsData || []);
+                }
+
+            } catch (err) {
+                console.error('Unexpected error:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPatientData();
+    }, [navigate]);
+
+    // Helper functions
+    const formatTimeToAMPM = (timeStr: string) => {
+        if (!timeStr) return '';
+        const [hours, minutes] = timeStr.split(':');
+        const hour = parseInt(hours);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        return `${hour12}:${minutes} ${period}`;
     };
 
-    const upcomingAppointments = ALL_APPOINTMENTS.filter(a => a.type === 'upcoming');
-    const pastAppointments = ALL_APPOINTMENTS.filter(a => a.type === 'history');
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        return new Date(dateStr).toISOString().split('T')[0];
+    };
 
+    const calculateRemainingDays = (createdAt: string) => {
+        if (!createdAt) return 'As needed';
+        const created = new Date(createdAt);
+        const today = new Date();
+        const diffTime = today.getTime() - created.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Assuming prescription is valid for 30 days from creation
+        const remaining = 30 - diffDays;
+        if (remaining <= 0) return 'Expired';
+        if (remaining === 1) return '1 day left';
+        return `${remaining} days left`;
+    };
+
+    const getAppointmentStatus = (statusId: number) => {
+        const statusMap: Record<number, string> = {
+            1: 'Pending',
+            2: 'Confirmed', 
+            3: 'Completed',
+            4: 'Cancelled'
+        };
+        return statusMap[statusId] || 'Pending';
+    };
+
+    const getPaymentStatus = (statusId: number) => {
+        const statusMap: Record<number, string> = {
+            1: 'Pending',
+            2: 'Paid',
+            3: 'Overdue'
+        };
+        return statusMap[statusId] || 'Pending';
+    };
+
+    // Transform data
+    const transformedAppointments = useMemo(() => {
+        return appointments.map(apt => ({
+            id: apt.appointment_id,
+            treatment: apt.services_tbl?.service_name || 'Dental Service',
+            doctor: apt.personnel_tbl ? `Dr. ${apt.personnel_tbl.first_name} ${apt.personnel_tbl.last_name}` : 'Dentist',
+            date: apt.appointment_date,
+            time: formatTimeToAMPM(apt.appointment_time),
+            location: "Clinic Room",
+            status: getAppointmentStatus(apt.appointment_status_id),
+            type: new Date(apt.appointment_date) >= new Date() ? 'upcoming' : 'history'
+        }));
+    }, [appointments]);
+
+    const transformedPrescriptions = useMemo(() => {
+        return prescriptions.map(rx => ({
+            id: rx.prescription_id,
+            medication: rx.medicine_tbl?.medicine_name || 'Medication',
+            dosage: rx.dosage || 'N/A',
+            instructions: rx.instructions || 'Take as directed',
+            remaining: calculateRemainingDays(rx.created_at)
+        }));
+    }, [prescriptions]);
+
+    const transformedPayments = useMemo(() => {
+        return payments.map(payment => ({
+            id: `INV-${payment.bill_id}`,
+            description: payment.bill_service_id?.services_tbl?.service_name || 'Dental Service',
+            date: formatDate(payment.created_at),
+            amount: payment.total_amount || 0,
+            status: getPaymentStatus(payment.payment_status_id)
+        }));
+    }, [payments]);
+
+    // Calculate outstanding balance
+    const outstandingBalance = useMemo(() => {
+        return payments
+            .filter(payment => getPaymentStatus(payment.payment_status_id) === 'Pending')
+            .reduce((total, payment) => total + (payment.total_amount || 0), 0);
+    }, [payments]);
+
+    // Use transformed data
+    const upcomingAppointments = transformedAppointments.filter(a => a.type === 'upcoming');
+    const pastAppointments = transformedAppointments.filter(a => a.type === 'history');
     const nextVisit = useMemo(() => {
         if (upcomingAppointments.length === 0) return null;
         const sorted = [...upcomingAppointments].sort((a, b) => {
@@ -185,31 +269,43 @@ export default function PatientPage() {
         return sorted[0];
     }, [upcomingAppointments]);
 
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-        
+    const handleRescheduleClick = (apt: any) => {
+        setSelectedAppointment(apt);
+        setIsRescheduleModalOpen(true);
     };
 
-    return (
-<div className="space-y-8 animate-in fade-in duration-500 p-6">
-    
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-            <div className="flex items-center gap-2 mb-1">
-                 <span className="text-muted-foreground text-sm">Overview</span>
-            </div>
-         <BlurText 
-    text={`Welcome back, ${currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}`} 
-    delay={100} 
-    className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100" 
-/>
+    const formatDisplayDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
 
-            <p className="text-muted-foreground mt-2">
-                Here's what's happening with your dental health today.
-            </p>
-        </div>
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                    <p>Loading patient data...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-8 animate-in fade-in duration-500 p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-muted-foreground text-sm">Overview</span>
+                    </div>
+                    <BlurText 
+                        text={`Welcome back, ${currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}`} 
+                        delay={100} 
+                        className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100" 
+                    />
+                    <p className="text-muted-foreground mt-2">
+                        Here's what's happening with your dental health today.
+                    </p>
+                </div>
                 <Button 
                     size="lg" 
                     className="shadow-lg" 
@@ -218,7 +314,7 @@ export default function PatientPage() {
                     <Calendar className="mr-2 h-4 w-4" /> Book Appointment
                 </Button>
             </div>
-
+        
             <div className="grid gap-4 md:grid-cols-3">
                 <Card 
                     className="cursor-pointer hover:bg-accent/40 transition-all hover:shadow-md relative overflow-hidden"
@@ -232,7 +328,7 @@ export default function PatientPage() {
                     <CardContent>
                         {nextVisit ? (
                             <>
-                                <div className="text-2xl font-bold text-primary">{formatDate(nextVisit.date)}</div>
+                                <div className="text-2xl font-bold text-primary">{formatDisplayDate(nextVisit.date)}</div>
                                 <p className="text-xs text-muted-foreground">
                                     {nextVisit.time} - {nextVisit.treatment}
                                 </p>
@@ -252,18 +348,23 @@ export default function PatientPage() {
                         <Pill className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{ACTIVE_PRESCRIPTIONS.length}</div>
+                        <div className="text-2xl font-bold">{transformedPrescriptions.length}</div>
                         <p className="text-xs text-muted-foreground">Medications on file</p>
                     </CardContent>
                 </Card>
+
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Outstanding Balance</CardTitle>
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-orange-600">₱500.00</div>
-                        <p className="text-xs text-muted-foreground">Due on Nov 24</p>
+                        <div className="text-2xl font-bold text-orange-600">
+                            ₱{outstandingBalance.toLocaleString()}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            {outstandingBalance > 0 ? 'Payment due' : 'No outstanding balance'}
+                        </p>
                     </CardContent>
                 </Card>
             </div>
@@ -308,7 +409,7 @@ export default function PatientPage() {
                                                     </div>
                                                 </div>
                                                 <div className="mt-4 sm:mt-0 flex gap-2 self-end sm:self-center">
-                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">{apt.status}</Badge>
+                                                    <StatusBadge status={apt.status} />
                                                     <Button 
                                                         size="sm" 
                                                         variant="ghost" 
@@ -359,7 +460,7 @@ export default function PatientPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                {ACTIVE_PRESCRIPTIONS.map((rx) => (
+                                {transformedPrescriptions.map((rx) => (
                                     <div key={rx.id} className="p-4 rounded-lg border bg-card flex flex-col justify-between gap-2">
                                         <div>
                                             <div className="flex justify-between items-start mb-1">
@@ -385,14 +486,13 @@ export default function PatientPage() {
                             <div className="flex flex-col items-center text-center">
                                 <Avatar className="h-20 w-20 mb-4 ring-2 ring-primary ring-offset-2">
                                     <AvatarImage src="/placeholder-avatar.jpg" />
-                                    <AvatarFallback className="bg-primary text-primary-foreground text-xl">JD</AvatarFallback>
+                                    <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                                        {currentPatient ? `${currentPatient.f_name[0]}${currentPatient.l_name[0]}` : 'JD'}
+                                    </AvatarFallback>
                                 </Avatar>
                                 <h3 className="text-xl font-bold">
-                                {currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}
+                                    {currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}
                                 </h3>
-
-
-
                                 <p className="text-sm text-muted-foreground mb-4">Member since 2024</p>
                                 <div className="w-full space-y-2">
                                     <Button 
@@ -424,7 +524,7 @@ export default function PatientPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
-                                {RECENT_PAYMENTS.map((payment) => (
+                                {transformedPayments.map((payment) => (
                                     <div key={payment.id} className="flex items-center justify-between pb-4 border-b last:border-0 last:pb-0">
                                         <div className="space-y-1">
                                             <p className="text-sm font-medium">{payment.description}</p>
@@ -463,7 +563,7 @@ export default function PatientPage() {
             <AppointmentCalendarModal 
                 isOpen={isCalendarOpen}
                 onClose={() => setIsCalendarOpen(false)}
-                appointments={ALL_APPOINTMENTS}
+                appointments={transformedAppointments}
             />
         </div>
     );

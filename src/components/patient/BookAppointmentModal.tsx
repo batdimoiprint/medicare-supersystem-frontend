@@ -8,10 +8,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
-import { User, Loader2 } from "lucide-react";
+import { User, Loader2, Info, CheckCircle, Clock } from "lucide-react";
 import supabase from "@/utils/supabase";
 import {
   Select,
@@ -56,6 +57,91 @@ interface Service {
   service_duration: string;
 }
 
+// Utility functions for duration conversion
+const formatDurationToTime = (minutes: string | number) => {
+  const mins = typeof minutes === 'string' ? parseInt(minutes) : minutes;
+  if (isNaN(mins)) return '00:30:00';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+};
+
+const parseTimeToDuration = (timeStr: string) => {
+  if (!timeStr) return 30;
+  try {
+    const [h, m] = timeStr.split(':').map(Number);
+    return (h * 60) + m;
+  } catch (e) {
+    return 30;
+  }
+};
+
+const formatDurationDisplay = (minutes: number) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  
+  if (h > 0 && m > 0) return `${h} hr${h > 1 ? 's' : ''} ${m} mins`;
+  if (h > 0) return `${h} hr${h > 1 ? 's' : ''}`;
+  return `${m} mins`;
+};
+
+/**
+ * Generate appointment slots based on service duration for 24-hour availability
+ * @param durationMinutes - service duration in minutes
+ * @param start - clinic start time "HH:MM" (default 00:00 for 24 hours)
+ * @param end - clinic end time "HH:MM" (default 23:59 for 24 hours)
+ */
+const generateTimeSlots = (
+  durationMinutes: number,
+  start = "00:00",
+  end = "23:59"
+) => {
+  const slots: { start: string; end: string; display: string }[] = [];
+
+  if (durationMinutes <= 0) {
+    console.error("Invalid duration:", durationMinutes);
+    durationMinutes = 30; // Default to 30 minutes
+  }
+
+  const [startHour, startMin] = start.split(":").map(Number);
+  const [endHour, endMin] = end.split(":").map(Number);
+
+  let current = new Date();
+  current.setHours(startHour, startMin, 0, 0);
+
+  const clinicEnd = new Date();
+  clinicEnd.setHours(endHour, endMin, 0, 0);
+
+  // Helper function to convert 24-hour time to 12-hour AM/PM format
+  const formatTimeTo12Hour = (time24: string) => {
+    const [hours, minutes] = time24.split(":").map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
+  while (current.getTime() + durationMinutes * 60 * 1000 <= clinicEnd.getTime()) {
+    const slotStart = current.toTimeString().slice(0, 5); // "HH:MM"
+    const slotEndDate = new Date(current.getTime() + durationMinutes * 60 * 1000);
+    const slotEnd = slotEndDate.toTimeString().slice(0, 5); // "HH:MM"
+    
+    // Create display format with AM/PM
+    const display = `${formatTimeTo12Hour(slotStart)} - ${formatTimeTo12Hour(slotEnd)}`;
+
+    slots.push({ 
+      start: slotStart, 
+      end: slotEnd,
+      display 
+    });
+
+    // Move to next slot
+    current.setMinutes(current.getMinutes() + durationMinutes);
+  }
+
+  console.log(`Generated ${slots.length} slots for ${durationMinutes}min duration`);
+  return slots;
+};
+
 export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmentModalProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -79,6 +165,16 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
   const filteredServices = services.filter(
     (s) => s.service_category_id === formData.service_category_id
   );
+
+  // Calculate selected service fee and duration
+  const selectedService = formData.service_id 
+    ? filteredServices.find(s => s.service_id === formData.service_id)
+    : null;
+  
+  const selectedServiceFee = selectedService?.service_fee || 0;
+  const selectedServiceDuration = selectedService 
+    ? parseTimeToDuration(selectedService.service_duration)
+    : 0;
 
   // Fetch patient data & service data when modal opens
   useEffect(() => {
@@ -156,6 +252,14 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
       notes: "",
     });
     onClose();
+  };
+
+  const handleSubmit = async () => {
+    setStep(2);
+    // Simulate processing
+    setTimeout(() => {
+      setStep(3);
+    }, 2000);
   };
 
   return (
@@ -237,25 +341,138 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
                           <SelectValue placeholder="Select service" />
                         </SelectTrigger>
                         <SelectContent>
-                          {filteredServices.map((s) => (
-                            <SelectItem key={s.service_id} value={s.service_id}>
-                              {s.service_name} (₱{s.service_fee})
-                            </SelectItem>
-                          ))}
+                          {filteredServices.map((s) => {
+                            const durationMinutes = parseTimeToDuration(s.service_duration);
+                            const durationDisplay = formatDurationDisplay(durationMinutes);
+                            return (
+                              <SelectItem key={s.service_id} value={s.service_id}>
+                                <div className="flex flex-col">
+                                  <span>{s.service_name}</span>
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Clock className="w-3 h-3" />
+                                    <span>₱{s.service_fee} • {durationDisplay}</span>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
+
+                  {/* SECTION 3: Scheduling */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        min={new Date().toISOString().split("T")[0]}
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Time</Label>
+                      <Select
+                        value={formData.time}
+                        onValueChange={(val) => setFormData({ ...formData, time: val })}
+                        disabled={!formData.service_id}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {formData.service_id && selectedServiceDuration > 0 &&
+                            (() => {
+                              const slots = generateTimeSlots(selectedServiceDuration);
+                              return slots.map((slot) => (
+                                <SelectItem key={slot.start} value={`${slot.start}-${slot.end}`}>
+                                  {slot.display}
+                                </SelectItem>
+                              ));
+                            })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Service Duration Info */}
+                  {selectedServiceDuration > 0 && (
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <Clock className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm text-blue-700">
+                        Service duration: <strong>{formatDurationDisplay(selectedServiceDuration)}</strong>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* SECTION 4: Notes */}
+                  <div className="grid gap-2">
+                    <Label htmlFor="notes">Additional Notes</Label>
+                    <Textarea 
+                      id="notes" 
+                      placeholder="Any special requests or symptoms?" 
+                      value={formData.notes}
+                      className='resize-none'
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({...formData, notes: e.target.value})}
+                    />
+                  </div>
+
+                  {/* Fee Summary */}
+                  {selectedServiceFee > 0 && (
+                    <div className="flex justify-between items-center p-3 bg-primary/10 rounded-lg border border-primary/20">
+                      <span className="text-sm font-medium text-primary flex items-center gap-2">
+                        <Info className="w-4 h-4" /> Estimated Fee
+                      </span>
+                      <span className="text-lg font-bold text-primary">₱{selectedServiceFee.toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )
           )}
+
+          {step === 2 && (
+            <div className="h-[300px] flex flex-col items-center justify-center text-center space-y-4">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <div>
+                <h3 className="font-semibold text-lg">Processing Booking...</h3>
+                <p className="text-sm text-muted-foreground">Saving appointment details...</p>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="h-[300px] flex flex-col items-center justify-center text-center space-y-4">
+              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">Success!</h3>
+                <p className="text-sm text-muted-foreground max-w-[300px]">
+                  Your appointment has been successfully recorded.
+                </p>
+              </div>
+            </div>
+          )}
         </ScrollArea>
 
         <DialogFooter className="p-6 pt-2">
-          <Button variant="outline" onClick={resetAndClose}>
-            Close
-          </Button>
+          {step === 1 && (
+            <>
+              <Button variant="outline" onClick={resetAndClose}>Cancel</Button>
+              <Button 
+                onClick={handleSubmit} 
+                disabled={!formData.service_id || !formData.date || !formData.time || !formData.full_name}
+              >
+                Confirm Booking
+              </Button>
+            </>
+          )}
+          {step === 3 && (
+            <Button onClick={resetAndClose} className="w-full">Done</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
