@@ -33,9 +33,16 @@ export default function LoginPage() {
     minLength: { value: 8, message: 'Password must be at least 8 characters' },
   }
 
-  async function onSubmit(data: LoginFormValues) {
-    try {
-      setError(null)
+    async function onSubmit(data: LoginFormValues) {
+        try {
+            setError(null)
+
+            // Static Admin Login
+            if (data.email === 'admin@medicare.com' && data.password === 'admin123') {
+                localStorage.setItem('user_role', 'admin')
+                navigate('/admin')
+                return
+            }
 
       // Sign in using Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({

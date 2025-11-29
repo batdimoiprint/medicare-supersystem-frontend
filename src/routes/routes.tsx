@@ -1,6 +1,4 @@
-import AdminLayout from '@/layout/AdminLayout';
 import PublicLayout from '@/layout/PublicLayout';
-import AdminPage from '@/pages/admin/AdminPage';
 import AboutUs from '@/pages/public/AboutUs';
 import ContactPage from '@/pages/public/ContactPage';
 import LandingPage from '@/pages/public/LandingPage';
@@ -12,6 +10,7 @@ import ServicesPage from '@/pages/public/ServicesPage';
 import Support from '@/pages/public/Support';
 import Terms from '@/pages/public/Terms';
 import { Route, Routes } from 'react-router-dom';
+import { adminRoutes } from './adminRoutes';
 import { cashierRoutes } from './cashierRoutes';
 import { dentistRoutes } from './dentistRoutes';
 import { inventoryRoutes } from './inventoryRoutes';
@@ -54,9 +53,7 @@ export default function AppRoutes() {
             {dentistRoutes}
 
             {/* Admin Dashboard */}
-            <Route path='/admin' element={<AdminLayout />}>
-                <Route index element={<AdminPage />} />
-            </Route>
+            {adminRoutes}
         </Routes>
     );
 }
