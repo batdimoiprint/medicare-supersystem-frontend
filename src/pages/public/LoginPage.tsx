@@ -3,11 +3,22 @@ import { LoginForm } from '@/components/auth/login-form'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import supabase from '@/utils/supabase'
+import bcrypt from 'bcryptjs'
 
 type LoginFormValues = {
   email: string
   password: string
   remember?: boolean
+}
+
+type Personnel = {
+  personnel_id: string
+  email: string
+  password: string
+  role_id: number
+  f_name: string
+  l_name: string
+  account_status: string
 }
 
 export default function LoginPage() {
@@ -16,7 +27,7 @@ export default function LoginPage() {
     handleSubmit,
     formState: { isSubmitting },
   } = useForm<LoginFormValues>({ mode: 'onBlur' })
-  
+
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
 
@@ -33,74 +44,105 @@ export default function LoginPage() {
     minLength: { value: 8, message: 'Password must be at least 8 characters' },
   }
 
-    async function onSubmit(data: LoginFormValues) {
-        try {
-            setError(null)
+  // Normalize bcrypt hash ($2y$ → $2a$)
+  function normalizeHash(hash: string) {
+    return hash.replace(/^\$2y\$/, '$2a$')
+  }
 
-            // Static Admin Login
-            if (data.email === 'admin@medicare.com' && data.password === 'admin123') {
-                localStorage.setItem('user_role', 'admin')
-                navigate('/admin')
-                return
-            }
+  async function onSubmit(formData: LoginFormValues) {
+    try {
+      setError(null)
 
-      // Sign in using Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
-      })
+      const { data: patientData } = await supabase
+        .schema('patient_record')
+        .from('patient_tbl')
+        .select('patient_id, email, password, account_status, f_name, l_name')
+        .eq('email', formData.email)
+        .maybeSingle()
 
-      if (authError) {
-        setError(authError.message)
+      if (patientData) {
+        if (['Suspended', 'Inactive', 'Pending'].includes(patientData.account_status)) {
+          setError(`Patient account status: ${patientData.account_status}`)
+          return
+        }
+
+        const normalizedHash = normalizeHash(patientData.password)
+        const hashedMatch = await bcrypt.compare(formData.password, normalizedHash)
+        const plainMatch = formData.password === patientData.password
+
+        if (!hashedMatch && !plainMatch) {
+          setError('Invalid email or password')
+          return
+        }
+
+        localStorage.setItem('user_role', '6')
+        localStorage.setItem('user_name', `${patientData.f_name} ${patientData.l_name}`)
+        localStorage.setItem('user_id', patientData.patient_id)
+
+        navigate('/patient')
         return
       }
 
-      // Check if email is confirmed
-      if (!authData.user?.email_confirmed_at) {
-        setError('Please verify your email before logging in.')
+      const { data: personnelData } = await supabase
+        .from('personnel_tbl')
+        .select(
+          'personnel_id, email, password, role_id, f_name, l_name, account_status'
+        )
+        .eq('email', formData.email)
+        .maybeSingle()
+
+      if (!personnelData) {
+        setError('Invalid email or password')
         return
       }
 
-      // Optional: fetch patient profile from patient_tbl after login
-     const { data: patientData, error: patientError } = await supabase
-  .schema('patient_record')
-  .from('patient_tbl')
-  .select('patient_id, email, f_name, l_name, account_status')
-  .eq('email', data.email)
-  .single()
-
-
-      if (patientError || !patientData) {
-        setError('Failed to fetch patient profile.')
+      if (personnelData.account_status === 'Suspended') {
+        setError('Your account has been suspended.')
         return
       }
 
-      // Check account status in patient_tbl
-      if (patientData.account_status === 'Suspended') {
-        setError('Your account has been suspended. Please contact support.')
+      const normalizedPersonnelHash = normalizeHash(personnelData.password)
+
+      const hashedMatchPersonnel = await bcrypt.compare(
+        formData.password,
+        normalizedPersonnelHash
+      )
+      const plainMatchPersonnel = formData.password === personnelData.password
+
+      if (!hashedMatchPersonnel && !plainMatchPersonnel) {
+        setError('Invalid email or password')
         return
       }
 
-      if (patientData.account_status === 'Inactive') {
-        setError('Your account is inactive. Please contact support.')
-        return
+      localStorage.setItem('user_role', personnelData.role_id.toString())
+      localStorage.setItem(
+        'user_name',
+        `${personnelData.f_name} ${personnelData.l_name}`
+      )
+      localStorage.setItem('user_id', personnelData.personnel_id)
+
+      switch (personnelData.role_id) {
+        case 1:
+          navigate('/dentist')
+          break
+        case 2:
+          navigate('/receptionist')
+          break
+        case 3:
+          navigate('/cashier')
+          break
+        case 4:
+          navigate('/inventory')
+          break
+        case 5:
+          navigate('/admin')
+          break
+        default:
+          setError('Unauthorized role.')
+          break
       }
-
-      if (patientData.account_status === 'Pending') {
-        setError('Your account is pending approval. Please wait for administrator approval.')
-        return
-      }
-
-      // Store user info in localStorage or context
-      localStorage.setItem('patient_id', patientData.patient_id.toString())
-      localStorage.setItem('patient_email', patientData.email || '')
-      localStorage.setItem('patient_name', `${patientData.f_name} ${patientData.l_name}`)
-
-      console.log('Patient logged in:', patientData)
-      navigate('/patient')
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.')
-      console.error('Login error:', err)
+      setError('An unexpected error occurred.')
     }
   }
 
@@ -114,4 +156,3 @@ export default function LoginPage() {
     />
   )
 }
-
