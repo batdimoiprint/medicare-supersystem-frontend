@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
-import { User, Loader2, Info, CheckCircle, Clock } from "lucide-react";
+import { User, Loader2, Info, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import supabase from "@/utils/supabase";
 import {
   Select,
@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AppointmentFormData {
   full_name: string;
@@ -40,7 +41,6 @@ interface BookAppointmentModalProps {
   onClose: () => void;
 }
 
-// Map service category and service tables properly
 interface ServiceCategory {
   service_category_id: string;
   category_name: string;
@@ -57,15 +57,7 @@ interface Service {
   service_duration: string;
 }
 
-// Utility functions for duration conversion
-const formatDurationToTime = (minutes: string | number) => {
-  const mins = typeof minutes === 'string' ? parseInt(minutes) : minutes;
-  if (isNaN(mins)) return '00:30:00';
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
-};
-
+// Utility functions
 const parseTimeToDuration = (timeStr: string) => {
   if (!timeStr) return 30;
   try {
@@ -85,12 +77,6 @@ const formatDurationDisplay = (minutes: number) => {
   return `${m} mins`;
 };
 
-/**
- * Generate appointment slots based on service duration for 24-hour availability
- * @param durationMinutes - service duration in minutes
- * @param start - clinic start time "HH:MM" (default 00:00 for 24 hours)
- * @param end - clinic end time "HH:MM" (default 23:59 for 24 hours)
- */
 const generateTimeSlots = (
   durationMinutes: number,
   start = "00:00",
@@ -99,8 +85,7 @@ const generateTimeSlots = (
   const slots: { start: string; end: string; display: string }[] = [];
 
   if (durationMinutes <= 0) {
-    console.error("Invalid duration:", durationMinutes);
-    durationMinutes = 30; // Default to 30 minutes
+    durationMinutes = 30;
   }
 
   const [startHour, startMin] = start.split(":").map(Number);
@@ -112,7 +97,6 @@ const generateTimeSlots = (
   const clinicEnd = new Date();
   clinicEnd.setHours(endHour, endMin, 0, 0);
 
-  // Helper function to convert 24-hour time to 12-hour AM/PM format
   const formatTimeTo12Hour = (time24: string) => {
     const [hours, minutes] = time24.split(":").map(Number);
     const period = hours >= 12 ? 'PM' : 'AM';
@@ -121,11 +105,10 @@ const generateTimeSlots = (
   };
 
   while (current.getTime() + durationMinutes * 60 * 1000 <= clinicEnd.getTime()) {
-    const slotStart = current.toTimeString().slice(0, 5); // "HH:MM"
+    const slotStart = current.toTimeString().slice(0, 5);
     const slotEndDate = new Date(current.getTime() + durationMinutes * 60 * 1000);
-    const slotEnd = slotEndDate.toTimeString().slice(0, 5); // "HH:MM"
+    const slotEnd = slotEndDate.toTimeString().slice(0, 5);
     
-    // Create display format with AM/PM
     const display = `${formatTimeTo12Hour(slotStart)} - ${formatTimeTo12Hour(slotEnd)}`;
 
     slots.push({ 
@@ -134,17 +117,16 @@ const generateTimeSlots = (
       display 
     });
 
-    // Move to next slot
     current.setMinutes(current.getMinutes() + durationMinutes);
   }
 
-  console.log(`Generated ${slots.length} slots for ${durationMinutes}min duration`);
   return slots;
 };
 
 export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmentModalProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState<AppointmentFormData>({
     full_name: "",
     contact_number: "",
@@ -161,12 +143,10 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<Service[]>([]);
 
-  // Filter services based on selected category
   const filteredServices = services.filter(
     (s) => s.service_category_id === formData.service_category_id
   );
 
-  // Calculate selected service fee and duration
   const selectedService = formData.service_id 
     ? filteredServices.find(s => s.service_id === formData.service_id)
     : null;
@@ -185,7 +165,6 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
       try {
         // Fetch patient
         const { data: { user } } = await supabase.auth.getUser();
-        console.log("AUTH USER:", user);
 
         if (user?.email) {
           const { data: patient, error } = await supabase
@@ -195,43 +174,43 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
             .eq("email", user.email)
             .single();
 
-          if (error) console.error("Error fetching patient:", error.message);
-          else if (patient) {
+          if (!error && patient) {
             const addressParts = [patient.house_no, patient.street, patient.barangay, patient.city].filter(Boolean);
-            setFormData({
+            setFormData(prev => ({
+              ...prev,
               full_name: `${patient.f_name || ""} ${patient.l_name || ""}`.trim(),
               contact_number: patient.pri_contact_no || "",
               address: addressParts.join(" "),
               email: patient.email || "",
-              service_category_id: "",
-              service_id: "",
-              dentist_id: "",
-              date: "",
-              time: "",
-              notes: "",
-            });
+            }));
           }
         }
 
-        // Fetch service categories from dentist schema
+        // Fetch service categories
         const { data: categories, error: catErr } = await supabase
           .schema("dentist")
           .from("service_category_tbl")
           .select("*");
-        if (catErr) console.error("Error fetching categories:", catErr.message);
-        else setServiceCategories(categories || []);
+        
+        if (!catErr) {
+          setServiceCategories(categories || []);
+        }
 
-        // Fetch services from dentist schema
+        // Fetch services
         const { data: serviceData, error: servErr } = await supabase
           .schema("dentist")
           .from("services_tbl")
           .select("*");
-        if (servErr) console.error("Error fetching services:", servErr.message);
-        else setServices(serviceData || []);
+        
+        if (!servErr) {
+          setServices(serviceData || []);
+        }
       } catch (err) {
-        console.error("Unexpected error:", err);
+        // Silent error handling for production
+        setSubmitError("Failed to load data. Please try again.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchData();
@@ -239,6 +218,7 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
 
   const resetAndClose = () => {
     setStep(1);
+    setSubmitError(null);
     setFormData({
       full_name: "",
       contact_number: "",
@@ -255,11 +235,91 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
   };
 
   const handleSubmit = async () => {
+    setLoading(true);
+    setSubmitError(null);
     setStep(2);
-    // Simulate processing
-    setTimeout(() => {
+    
+    try {
+      // Get the current authenticated user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        throw new Error("Authentication error. Please log in again.");
+      }
+      
+      if (!user?.email) {
+        throw new Error("User not authenticated. Please log in again.");
+      }
+
+      // Fetch patient details to get patient_id
+      const { data: patient, error: patientError } = await supabase
+        .schema("patient_record")
+        .from("patient_tbl")
+        .select("patient_id")
+        .eq("email", user.email)
+        .single();
+
+      if (patientError || !patient) {
+        throw new Error("Patient record not found. Please complete your profile.");
+      }
+
+      // Parse the time slot
+      const [startTime] = formData.time?.split('-') || [];
+      
+      if (!startTime) {
+        throw new Error("Invalid time slot selected.");
+      }
+
+      // Validate service exists
+      if (!selectedService) {
+        throw new Error("Selected service not found. Please select a valid service.");
+      }
+
+      // Prepare appointment data
+      const appointmentData = {
+        patient_id: patient.patient_id,
+        service_id: formData.service_id,
+        appointment_date: formData.date,
+        appointment_time: startTime + ":00",
+        appointment_status_id: 1,
+        created_at: new Date().toISOString(),
+        personnel_id: null,
+      };
+
+      // Insert into frontdesk.appointment_tbl
+      const { data, error } = await supabase
+        .schema("frontdesk")
+        .from("appointment_tbl")
+        .insert([appointmentData])
+        .select();
+
+      if (error) {
+        // Handle specific error cases with user-friendly messages
+        if (error.code === '42501') {
+          throw new Error("Permission denied. Please contact support.");
+        } else if (error.code === '23503') {
+          throw new Error("Invalid service reference. Please select a different service.");
+        } else if (error.code === '23505') {
+          throw new Error("Appointment conflict. This time slot may already be booked.");
+        } else {
+          throw new Error("Booking failed. Please try again.");
+        }
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error("Appointment creation failed. Please try again.");
+      }
+
+      // Move to success step
       setStep(3);
-    }, 2000);
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred. Please try again.";
+      setSubmitError(errorMessage);
+      setStep(1);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -273,7 +333,7 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
         </DialogHeader>
 
         <ScrollArea className="flex-1 px-6 py-2">
-          {loading ? (
+          {loading && step === 1 ? (
             <div className="h-[300px] flex flex-col items-center justify-center text-center space-y-4">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Loading patient details...</p>
@@ -281,10 +341,20 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
           ) : (
             step === 1 && (
               <div className="space-y-6 pb-6">
-                {/* SECTION 1: Patient Snapshot */}
+                {/* Error Alert */}
+                {submitError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-sm">
+                      {submitError}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Patient Details */}
                 <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
                   <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                    <User className="w-4 h-4" /> Patient Details (Snapshot)
+                    <User className="w-4 h-4" /> Patient Details
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
@@ -306,7 +376,7 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
                   </div>
                 </div>
 
-                {/* SECTION 2: Service Details */}
+                {/* Service Details */}
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
@@ -361,7 +431,7 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
                     </div>
                   </div>
 
-                  {/* SECTION 3: Scheduling */}
+                  {/* Scheduling */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label>Date</Label>
@@ -407,7 +477,7 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
                     </div>
                   )}
 
-                  {/* SECTION 4: Notes */}
+                  {/* Notes */}
                   <div className="grid gap-2">
                     <Label htmlFor="notes">Additional Notes</Label>
                     <Textarea 
@@ -449,9 +519,9 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">Success!</h3>
+                <h3 className="font-semibold text-lg">Appointment Booked!</h3>
                 <p className="text-sm text-muted-foreground max-w-[300px]">
-                  Your appointment has been successfully recorded.
+                  Your appointment has been successfully scheduled.
                 </p>
               </div>
             </div>
@@ -461,17 +531,22 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
         <DialogFooter className="p-6 pt-2">
           {step === 1 && (
             <>
-              <Button variant="outline" onClick={resetAndClose}>Cancel</Button>
+              <Button variant="outline" onClick={resetAndClose} disabled={loading}>
+                Cancel
+              </Button>
               <Button 
                 onClick={handleSubmit} 
-                disabled={!formData.service_id || !formData.date || !formData.time || !formData.full_name}
+                disabled={!formData.service_id || !formData.date || !formData.time || !formData.full_name || loading}
               >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Confirm Booking
               </Button>
             </>
           )}
           {step === 3 && (
-            <Button onClick={resetAndClose} className="w-full">Done</Button>
+            <Button onClick={resetAndClose} className="w-full">
+              Close
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

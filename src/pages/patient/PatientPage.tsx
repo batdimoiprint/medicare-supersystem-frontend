@@ -29,8 +29,6 @@ import { useState, useEffect, useMemo } from 'react';
 
 import supabase from '@/utils/supabase';
 
-
-
 // Status Badge Component
 const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
@@ -47,12 +45,11 @@ const StatusBadge = ({ status }: { status: string }) => {
     );
 };
 
-
-
 export default function PatientPage() {
     const navigate = useNavigate();
     const [currentPatient, setCurrentPatient] = useState<any>(null);
     const [appointments, setAppointments] = useState<any[]>([]);
+    const [appointmentHistory, setAppointmentHistory] = useState<any[]>([]);
     const [prescriptions, setPrescriptions] = useState<any[]>([]);
     const [payments, setPayments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -62,22 +59,19 @@ export default function PatientPage() {
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-   
-
-  useEffect(() => {
-    const fetchPatientData = async () => {
-        try {
-            // Get current user
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-            
-            console.log('User object:', user); // Add this line
-            console.log('User error:', userError); // Add this line
-            
-            if (userError || !user) {
-                console.error('No user logged in', userError);
-                navigate('/login');
-                return;
-            }
+    useEffect(() => {
+        const fetchPatientData = async () => {
+            try {
+                // Get current user
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                
+                console.log('User object:', user);
+                
+                if (userError || !user) {
+                    console.error('No user logged in', userError);
+                    navigate('/login');
+                    return;
+                }
 
                 // Fetch patient data
                 const { data: patientData, error: patientError } = await supabase
@@ -94,85 +88,148 @@ export default function PatientPage() {
 
                 setCurrentPatient(patientData);
 
-                // Fetch appointments from frontdesk schema
-                const { data: appointmentsData, error: appointmentsError } = await supabase
-                    .schema('frontdesk')
-                    .from('appointment_tbl')
-                    .select(`
-                        appointment_id,
-                        appointment_date,
-                        appointment_time,
-                        appointment_status_id,
-                        services_tbl(service_name, service_fee),
-                        personnel_tbl(first_name, last_name)
-                    `)
-                    .eq('patient_id', patientData.patient_id)
-                    .order('appointment_date', { ascending: true });
-
-                if (appointmentsError) {
-                    console.error('Error fetching appointments:', appointmentsError);
-                } else {
-                    setAppointments(appointmentsData || []);
-                }
-
-                // Fetch prescriptions through history_records_tbl
-                const { data: prescriptionsData, error: prescriptionsError } = await supabase
-                    .schema('patient_record')
-                    .from('history_records_tbl')
-                    .select(`
-                        prescription_tbl(
-                            prescription_id,
-                            instructions,
-                            dosage,
-                            created_at,
-                            medicine_tbl(medicine_name)
-                        )
-                    `)
-                    .eq('patient_id', patientData.patient_id)
-                    .not('prescription_id', 'is', null);
-
-                if (prescriptionsError) {
-                    console.error('Error fetching prescriptions:', prescriptionsError);
-                } else {
-                    // Flatten the prescription data
-                    const flattenedPrescriptions = prescriptionsData
-                        ?.filter(record => record.prescription_tbl)
-                        .map(record => record.prescription_tbl) || [];
-                    setPrescriptions(flattenedPrescriptions);
-                }
-
-                // Fetch payments/billing information
-                const { data: paymentsData, error: paymentsError } = await supabase
-                    .schema('frontdesk')
-                    .from('billing_tbl')
-                    .select(`
-                        bill_id,
-                        total_amount,
-                        payment_status_id,
-                        created_at,
-                        appointment_tbl(appointment_id),
-                        bill_service_id(
-                            service_id,
-                            billed_quantity,
-                            billed_unit_price,
-                            sub_total,
-                            services_tbl(service_name)
-                        )
-                    `)
-                    .eq('patient_id', patientData.patient_id)
-                    .order('created_at', { ascending: false })
-                    .limit(5);
-
-                if (paymentsError) {
-                    console.error('Error fetching payments:', paymentsError);
-                } else {
-                    setPayments(paymentsData || []);
-                }
+                // Fetch data from both schemas
+                await fetchAppointments(patientData.patient_id);
+                await fetchAppointmentHistory(patientData.patient_id);
+                await fetchPrescriptions(patientData.patient_id);
+                await fetchPayments(patientData.patient_id);
 
             } catch (err) {
                 console.error('Unexpected error:', err);
             } finally {
                 setLoading(false);
+            }
+        };
+
+       const fetchAppointments = async (patientId: string) => {
+    try {
+        // First get appointments
+        const { data: appointmentsData, error: appointmentsError } = await supabase
+            .schema('frontdesk')
+            .from('appointment_tbl')
+            .select('*')
+            .eq('patient_id', patientId)
+            .order('appointment_date', { ascending: true });
+
+        if (appointmentsError) throw appointmentsError;
+
+        // Then get all services
+        const { data: servicesData, error: servicesError } = await supabase
+            .schema('dentist')
+            .from('services_tbl')
+            .select('service_id, service_name');
+
+        if (servicesError) throw servicesError;
+
+        // Get all personnel
+        const { data: personnelData, error: personnelError } = await supabase
+            .schema('public')
+            .from('personnel_tbl')
+            .select('personnel_id, f_name, l_name');
+
+        if (personnelError) throw personnelError;
+
+        // Create a map of service_id to service_name
+        const servicesMap = servicesData.reduce((acc, service) => {
+            acc[service.service_id] = service.service_name;
+            return acc;
+        }, {});
+
+        // Create a map of personnel_id to personnel name
+        const personnelMap = personnelData.reduce((acc, person) => {
+            acc[person.personnel_id] = `${person.f_name} ${person.l_name}`;
+            return acc;
+        }, {});
+
+        // Combine the data
+        const appointmentsWithServiceNames = appointmentsData.map(apt => ({
+    ...apt,
+    service_name: servicesMap[apt.service_id] || 'Dental Service',
+    personnel_name: apt.personnel_id ? personnelMap[apt.personnel_id] : null
+}));
+        setAppointments(appointmentsWithServiceNames);
+        
+    } catch (error) {
+        console.error('Error fetching appointments:', error);
+        setAppointments([]);
+    }
+};
+
+        const fetchAppointmentHistory = async (patientId: string) => {
+            try {
+                const { data: historyData, error: historyError } = await supabase
+                    .schema('patient_record')
+                    .from('appointment_history_tbl')
+                    .select(`
+                        appointment_history_id,
+                        patient_id,
+                        appointment_id,
+                        appointment_tbl (
+                            appointment_date,
+                            appointment_time,
+                            appointment_status_id,
+                            service_id,
+                            personnel_id,
+                            services_tbl(service_name, service_fee),
+                            personnel_tbl(first_name, last_name, specialization)
+                        )
+                    `)
+                    .eq('patient_id', patientId)
+                    .order('appointment_history_id', { ascending: false });
+
+                if (historyError) {
+                    console.error('Error fetching appointment history:', historyError);
+                    setAppointmentHistory([]);
+                } else {
+                    console.log('Fetched appointment history:', historyData);
+                    setAppointmentHistory(historyData || []);
+                }
+            } catch (error) {
+                console.error('Error in fetchAppointmentHistory:', error);
+                setAppointmentHistory([]);
+            }
+        };
+
+        const fetchPrescriptions = async (patientId: string) => {
+            try {
+                // Try direct prescription table query
+                const { data: prescriptionsData, error: prescriptionsError } = await supabase
+                    .schema('patient_record')
+                    .from('prescription_tbl')
+                    .select('*')
+                    .eq('patient_id', patientId);
+
+                if (prescriptionsError) {
+                    console.error('Error fetching prescriptions:', prescriptionsError);
+                    setPrescriptions([]);
+                } else {
+                    setPrescriptions(prescriptionsData || []);
+                }
+            } catch (error) {
+                console.error('Error in fetchPrescriptions:', error);
+                setPrescriptions([]);
+            }
+        };
+
+        const fetchPayments = async (patientId: string) => {
+            try {
+                const { data: paymentsData, error: paymentsError } = await supabase
+                    .schema('frontdesk')
+                    .from('billing_tbl')
+                    .select('*')
+                    .eq('patient_id', patientId)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
+
+                if (paymentsError) {
+                    console.error('Error fetching payments:', paymentsError);
+                    setPayments([]);
+                } else {
+                    setPayments(paymentsData || []);
+                }
+            } catch (error) {
+                console.error('Error in fetchPayments:', error);
+                setPayments([]);
             }
         };
 
@@ -227,24 +284,60 @@ export default function PatientPage() {
         return statusMap[statusId] || 'Pending';
     };
 
-    // Transform data
+    // Transform appointment data for upcoming appointments
     const transformedAppointments = useMemo(() => {
-        return appointments.map(apt => ({
-            id: apt.appointment_id,
-            treatment: apt.services_tbl?.service_name || 'Dental Service',
-            doctor: apt.personnel_tbl ? `Dr. ${apt.personnel_tbl.first_name} ${apt.personnel_tbl.last_name}` : 'Dentist',
-            date: apt.appointment_date,
-            time: formatTimeToAMPM(apt.appointment_time),
-            location: "Clinic Room",
-            status: getAppointmentStatus(apt.appointment_status_id),
-            type: new Date(apt.appointment_date) >= new Date() ? 'upcoming' : 'history'
-        }));
+        if (!appointments || appointments.length === 0) return [];
+
+        return appointments.map(apt => {
+            const appointmentDate = apt.appointment_date;
+            const isUpcoming = new Date(appointmentDate) >= new Date();
+
+            return {
+                id: apt.appointment_id,
+    treatment: apt.service_name || 'Dental Service', // Default since we can't join services_tbl
+               doctor: apt.personnel_name ? `Dr. ${apt.personnel_name}` : 'No assigned Dentist', // Default since we can't join personnel_tbl
+                date: appointmentDate,
+                time: formatTimeToAMPM(apt.appointment_time),
+                location: "Clinic Room",
+                status: getAppointmentStatus(apt.appointment_status_id),
+                type: isUpcoming ? 'upcoming' : 'history',
+                rawData: apt
+            };
+        });
     }, [appointments]);
+
+    // Transform appointment history data
+    const transformedAppointmentHistory = useMemo(() => {
+        if (!appointmentHistory || appointmentHistory.length === 0) return [];
+
+        return appointmentHistory.map(history => {
+            const apt = history.appointment_tbl;
+            if (!apt) return null;
+
+            const serviceName = apt.services_tbl?.service_name || 'Dental Service';
+            const personnel = apt.personnel_tbl;
+            const doctorName = personnel 
+                ? `Dr. ${personnel.first_name || ''} ${personnel.last_name || ''}`.trim()
+                : 'Dentist';
+
+            return {
+                id: history.appointment_history_id,
+                appointmentId: history.appointment_id,
+                treatment: serviceName,
+                doctor: doctorName,
+                date: apt.appointment_date,
+                time: formatTimeToAMPM(apt.appointment_time),
+                location: "Clinic Room",
+                status: getAppointmentStatus(apt.appointment_status_id),
+                type: 'history'
+            };
+        }).filter(Boolean); // Remove any null entries
+    }, [appointmentHistory]);
 
     const transformedPrescriptions = useMemo(() => {
         return prescriptions.map(rx => ({
             id: rx.prescription_id,
-            medication: rx.medicine_tbl?.medicine_name || 'Medication',
+            medication: 'Medication', // Default since we can't join medicine_tbl
             dosage: rx.dosage || 'N/A',
             instructions: rx.instructions || 'Take as directed',
             remaining: calculateRemainingDays(rx.created_at)
@@ -254,7 +347,7 @@ export default function PatientPage() {
     const transformedPayments = useMemo(() => {
         return payments.map(payment => ({
             id: `INV-${payment.bill_id}`,
-            description: payment.bill_service_id?.services_tbl?.service_name || 'Dental Service',
+            description: 'Dental Service', // Default since we can't join services_tbl
             date: formatDate(payment.created_at),
             amount: payment.total_amount || 0,
             status: getPaymentStatus(payment.payment_status_id)
@@ -268,15 +361,22 @@ export default function PatientPage() {
             .reduce((total, payment) => total + (payment.total_amount || 0), 0);
     }, [payments]);
 
-    // Use transformed data
-    const upcomingAppointments = transformedAppointments.filter(a => a.type === 'upcoming');
-    const pastAppointments = transformedAppointments.filter(a => a.type === 'history');
+    // Filter appointments
+    const upcomingAppointments = useMemo(() => {
+        return transformedAppointments
+            .filter(a => a.type === 'upcoming')
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [transformedAppointments]);
+
+    const pastAppointments = useMemo(() => {
+        // Combine both current appointments marked as history and appointment history
+        const currentHistory = transformedAppointments.filter(a => a.type === 'history');
+        return [...currentHistory, ...transformedAppointmentHistory]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [transformedAppointments, transformedAppointmentHistory]);
+
     const nextVisit = useMemo(() => {
-        if (upcomingAppointments.length === 0) return null;
-        const sorted = [...upcomingAppointments].sort((a, b) => {
-            return new Date(a.date).getTime() - new Date(b.date).getTime();
-        });
-        return sorted[0];
+        return upcomingAppointments.length > 0 ? upcomingAppointments[0] : null;
     }, [upcomingAppointments]);
 
     const handleRescheduleClick = (apt: any) => {
@@ -387,7 +487,12 @@ export default function PatientPage() {
                                 <Calendar className="w-5 h-5 text-primary" />
                                 Appointments
                             </CardTitle>
-                            <CardDescription>Manage your upcoming visits and view history.</CardDescription>
+                            <CardDescription>
+                                {upcomingAppointments.length > 0 
+                                    ? `You have ${upcomingAppointments.length} upcoming appointment${upcomingAppointments.length > 1 ? 's' : ''}`
+                                    : 'No upcoming appointments'
+                                }
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Tabs defaultValue="upcoming" className="w-full">
@@ -435,26 +540,40 @@ export default function PatientPage() {
                                         <div className="text-center py-8 text-muted-foreground">
                                             <Calendar className="w-12 h-12 mx-auto mb-2 opacity-20" />
                                             <p>No upcoming appointments.</p>
+                                            <Button 
+                                                variant="outline" 
+                                                className="mt-2"
+                                                onClick={() => setIsBookingModalOpen(true)}
+                                            >
+                                                Book Your First Appointment
+                                            </Button>
                                         </div>
                                     )}
                                 </TabsContent>
                                 
                                 <TabsContent value="history">
                                     <div className="space-y-4">
-                                        {pastAppointments.map((apt) => (
-                                            <div key={apt.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="bg-muted p-2 rounded-full">
-                                                        <CheckCircle className="w-4 h-4 text-muted-foreground" />
+                                        {pastAppointments.length > 0 ? (
+                                            pastAppointments.map((apt) => (
+                                                <div key={apt.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="bg-muted p-2 rounded-full">
+                                                            <CheckCircle className="w-4 h-4 text-muted-foreground" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-medium">{apt.treatment}</p>
+                                                            <p className="text-xs text-muted-foreground">{apt.date} • {apt.doctor}</p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="font-medium">{apt.treatment}</p>
-                                                        <p className="text-xs text-muted-foreground">{apt.date} • {apt.doctor}</p>
-                                                    </div>
+                                                    <StatusBadge status={apt.status} />
                                                 </div>
-                                                <StatusBadge status={apt.status} />
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-8 text-muted-foreground">
+                                                <FileText className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                                                <p>No appointment history.</p>
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
                                 </TabsContent>
                             </Tabs>
