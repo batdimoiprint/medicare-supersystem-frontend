@@ -57,7 +57,7 @@ export default function LoginPage() {
                 return
             }
 
-            // Check account status
+            // Check account status 
             if (patientData.account_status === 'Suspended') {
                 setError('Your account has been suspended. Please contact support.')
                 return
