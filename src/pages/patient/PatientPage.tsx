@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate } from 'react-router-dom';
 
 // Import Modals
 import BookAppointmentModal from '@/components/patient/BookAppointmentModal';
@@ -64,9 +64,9 @@ export default function PatientPage() {
             try {
                 // Get current user
                 const { data: { user }, error: userError } = await supabase.auth.getUser();
-                
+
                 console.log('User object:', user);
-                
+
                 if (userError || !user) {
                     console.error('No user logged in', userError);
                     navigate('/login');
@@ -101,59 +101,59 @@ export default function PatientPage() {
             }
         };
 
-       const fetchAppointments = async (patientId: string) => {
-    try {
-        // First get appointments
-        const { data: appointmentsData, error: appointmentsError } = await supabase
-            .schema('frontdesk')
-            .from('appointment_tbl')
-            .select('*')
-            .eq('patient_id', patientId)
-            .order('appointment_date', { ascending: true });
+        const fetchAppointments = async (patientId: string) => {
+            try {
+                // First get appointments
+                const { data: appointmentsData, error: appointmentsError } = await supabase
+                    .schema('frontdesk')
+                    .from('appointment_tbl')
+                    .select('*')
+                    .eq('patient_id', patientId)
+                    .order('appointment_date', { ascending: true });
 
-        if (appointmentsError) throw appointmentsError;
+                if (appointmentsError) throw appointmentsError;
 
-        // Then get all services
-        const { data: servicesData, error: servicesError } = await supabase
-            .schema('dentist')
-            .from('services_tbl')
-            .select('service_id, service_name');
+                // Then get all services
+                const { data: servicesData, error: servicesError } = await supabase
+                    .schema('dentist')
+                    .from('services_tbl')
+                    .select('service_id, service_name');
 
-        if (servicesError) throw servicesError;
+                if (servicesError) throw servicesError;
 
-        // Get all personnel
-        const { data: personnelData, error: personnelError } = await supabase
-            .schema('public')
-            .from('personnel_tbl')
-            .select('personnel_id, f_name, l_name');
+                // Get all personnel
+                const { data: personnelData, error: personnelError } = await supabase
+                    .schema('public')
+                    .from('personnel_tbl')
+                    .select('personnel_id, f_name, l_name');
 
-        if (personnelError) throw personnelError;
+                if (personnelError) throw personnelError;
 
-        // Create a map of service_id to service_name
-        const servicesMap = servicesData.reduce((acc, service) => {
-            acc[service.service_id] = service.service_name;
-            return acc;
-        }, {});
+                // Create a map of service_id to service_name
+                const servicesMap = servicesData.reduce((acc: Record<string, string>, service) => {
+                    acc[service.service_id] = service.service_name;
+                    return acc;
+                }, {} as Record<string, string>);
 
-        // Create a map of personnel_id to personnel name
-        const personnelMap = personnelData.reduce((acc, person) => {
-            acc[person.personnel_id] = `${person.f_name} ${person.l_name}`;
-            return acc;
-        }, {});
+                // Create a map of personnel_id to personnel name
+                const personnelMap = personnelData.reduce((acc: Record<string, string>, person) => {
+                    acc[person.personnel_id] = `${person.f_name} ${person.l_name}`;
+                    return acc;
+                }, {} as Record<string, string>);
 
-        // Combine the data
-        const appointmentsWithServiceNames = appointmentsData.map(apt => ({
-    ...apt,
-    service_name: servicesMap[apt.service_id] || 'Dental Service',
-    personnel_name: apt.personnel_id ? personnelMap[apt.personnel_id] : null
-}));
-        setAppointments(appointmentsWithServiceNames);
-        
-    } catch (error) {
-        console.error('Error fetching appointments:', error);
-        setAppointments([]);
-    }
-};
+                // Combine the data
+                const appointmentsWithServiceNames = appointmentsData.map(apt => ({
+                    ...apt,
+                    service_name: servicesMap[apt.service_id] || 'Dental Service',
+                    personnel_name: apt.personnel_id ? personnelMap[apt.personnel_id] : null
+                }));
+                setAppointments(appointmentsWithServiceNames);
+
+            } catch (error) {
+                console.error('Error fetching appointments:', error);
+                setAppointments([]);
+            }
+        };
 
         const fetchAppointmentHistory = async (patientId: string) => {
             try {
@@ -257,7 +257,7 @@ export default function PatientPage() {
         const today = new Date();
         const diffTime = today.getTime() - created.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        
+
         // Assuming prescription is valid for 30 days from creation
         const remaining = 30 - diffDays;
         if (remaining <= 0) return 'Expired';
@@ -268,7 +268,7 @@ export default function PatientPage() {
     const getAppointmentStatus = (statusId: number) => {
         const statusMap: Record<number, string> = {
             1: 'Pending',
-            2: 'Confirmed', 
+            2: 'Confirmed',
             3: 'Completed',
             4: 'Cancelled'
         };
@@ -294,8 +294,8 @@ export default function PatientPage() {
 
             return {
                 id: apt.appointment_id,
-    treatment: apt.service_name || 'Dental Service', // Default since we can't join services_tbl
-               doctor: apt.personnel_name ? `Dr. ${apt.personnel_name}` : 'No assigned Dentist', // Default since we can't join personnel_tbl
+                treatment: apt.service_name || 'Dental Service', // Default since we can't join services_tbl
+                doctor: apt.personnel_name ? `Dr. ${apt.personnel_name}` : 'No assigned Dentist', // Default since we can't join personnel_tbl
                 date: appointmentDate,
                 time: formatTimeToAMPM(apt.appointment_time),
                 location: "Clinic Room",
@@ -316,7 +316,7 @@ export default function PatientPage() {
 
             const serviceName = apt.services_tbl?.service_name || 'Dental Service';
             const personnel = apt.personnel_tbl;
-            const doctorName = personnel 
+            const doctorName = personnel
                 ? `Dr. ${personnel.first_name || ''} ${personnel.last_name || ''}`.trim()
                 : 'Dentist';
 
@@ -372,7 +372,7 @@ export default function PatientPage() {
         // Combine both current appointments marked as history and appointment history
         const currentHistory = transformedAppointments.filter(a => a.type === 'history');
         return [...currentHistory, ...transformedAppointmentHistory]
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            .sort((a, b) => new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime());
     }, [transformedAppointments, transformedAppointmentHistory]);
 
     const nextVisit = useMemo(() => {
@@ -407,26 +407,26 @@ export default function PatientPage() {
                     <div className="flex items-center gap-2 mb-1">
                         <span className="text-muted-foreground text-sm">Overview</span>
                     </div>
-                    <BlurText 
-                        text={`Welcome back, ${currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}`} 
-                        delay={100} 
-                        className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100" 
+                    <BlurText
+                        text={`Welcome back, ${currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}`}
+                        delay={100}
+                        className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100"
                     />
                     <p className="text-muted-foreground mt-2">
                         Here's what's happening with your dental health today.
                     </p>
                 </div>
-                <Button 
-                    size="lg" 
-                    className="shadow-lg" 
+                <Button
+                    size="lg"
+                    className="shadow-lg"
                     onClick={() => setIsBookingModalOpen(true)}
                 >
                     <Calendar className="mr-2 h-4 w-4" /> Book Appointment
                 </Button>
             </div>
-        
+
             <div className="grid gap-4 md:grid-cols-3">
-                <Card 
+                <Card
                     className="cursor-pointer hover:bg-accent/40 transition-all hover:shadow-md relative overflow-hidden"
                     onClick={() => setIsCalendarOpen(true)}
                     title="Click to view full calendar"
@@ -488,7 +488,7 @@ export default function PatientPage() {
                                 Appointments
                             </CardTitle>
                             <CardDescription>
-                                {upcomingAppointments.length > 0 
+                                {upcomingAppointments.length > 0
                                     ? `You have ${upcomingAppointments.length} upcoming appointment${upcomingAppointments.length > 1 ? 's' : ''}`
                                     : 'No upcoming appointments'
                                 }
@@ -500,7 +500,7 @@ export default function PatientPage() {
                                     <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
                                     <TabsTrigger value="history">History</TabsTrigger>
                                 </TabsList>
-                                
+
                                 <TabsContent value="upcoming" className="space-y-4">
                                     {upcomingAppointments.length > 0 ? (
                                         upcomingAppointments.map((apt) => (
@@ -525,9 +525,9 @@ export default function PatientPage() {
                                                 </div>
                                                 <div className="mt-4 sm:mt-0 flex gap-2 self-end sm:self-center">
                                                     <StatusBadge status={apt.status} />
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="ghost" 
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
                                                         className="h-7 text-xs"
                                                         onClick={() => handleRescheduleClick(apt)}
                                                     >
@@ -540,8 +540,8 @@ export default function PatientPage() {
                                         <div className="text-center py-8 text-muted-foreground">
                                             <Calendar className="w-12 h-12 mx-auto mb-2 opacity-20" />
                                             <p>No upcoming appointments.</p>
-                                            <Button 
-                                                variant="outline" 
+                                            <Button
+                                                variant="outline"
                                                 className="mt-2"
                                                 onClick={() => setIsBookingModalOpen(true)}
                                             >
@@ -550,11 +550,11 @@ export default function PatientPage() {
                                         </div>
                                     )}
                                 </TabsContent>
-                                
+
                                 <TabsContent value="history">
                                     <div className="space-y-4">
                                         {pastAppointments.length > 0 ? (
-                                            pastAppointments.map((apt) => (
+                                            pastAppointments.filter((apt): apt is NonNullable<typeof apt> => apt !== null).map((apt) => (
                                                 <div key={apt.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                                                     <div className="flex items-center gap-4">
                                                         <div className="bg-muted p-2 rounded-full">
@@ -624,16 +624,16 @@ export default function PatientPage() {
                                 </h3>
                                 <p className="text-sm text-muted-foreground mb-4">Member since 2024</p>
                                 <div className="w-full space-y-2">
-                                    <Button 
-                                        variant="outline" 
+                                    <Button
+                                        variant="outline"
                                         className="w-full justify-between bg-background"
                                         onClick={() => navigate('/patient/profile')}
                                     >
                                         View Profile <ChevronRight className="w-4 h-4" />
                                     </Button>
-                                    
-                                    <Button 
-                                        variant="outline" 
+
+                                    <Button
+                                        variant="outline"
                                         className="w-full justify-between bg-background"
                                         onClick={() => navigate('/patient/records')}
                                     >
@@ -666,8 +666,8 @@ export default function PatientPage() {
                                     </div>
                                 ))}
                             </div>
-                            <Button 
-                                variant="ghost" 
+                            <Button
+                                variant="ghost"
                                 className="w-full mt-4 text-primary"
                                 onClick={() => navigate('/patient/transactions')}
                             >
@@ -678,18 +678,18 @@ export default function PatientPage() {
                 </div>
             </div>
 
-            <BookAppointmentModal 
-                isOpen={isBookingModalOpen} 
-                onClose={() => setIsBookingModalOpen(false)} 
+            <BookAppointmentModal
+                isOpen={isBookingModalOpen}
+                onClose={() => setIsBookingModalOpen(false)}
             />
-            
-            <RescheduleAppointmentModal 
+
+            <RescheduleAppointmentModal
                 isOpen={isRescheduleModalOpen}
                 onClose={() => setIsRescheduleModalOpen(false)}
                 appointment={selectedAppointment}
             />
 
-            <AppointmentCalendarModal 
+            <AppointmentCalendarModal
                 isOpen={isCalendarOpen}
                 onClose={() => setIsCalendarOpen(false)}
                 appointments={transformedAppointments}

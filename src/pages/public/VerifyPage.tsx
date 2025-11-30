@@ -17,7 +17,7 @@ export default function VerifyPage() {
   useEffect(() => {
     async function handleHash() {
       if (window.location.hash.includes("access_token")) {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.hash);
+        const { error } = await supabase.auth.exchangeCodeForSession(window.location.hash);
         if (error) {
           console.error("Error parsing session:", error);
           setErrorMsg("Verification link is invalid or expired.");
