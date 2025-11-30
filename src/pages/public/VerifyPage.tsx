@@ -13,16 +13,30 @@ export default function VerifyPage() {
   const error = searchParams.get("error");
   const errorDesc = searchParams.get("error_description");
 
+  // ✅ Handle Supabase hash fragment and clean up URL
+  useEffect(() => {
+    async function handleHash() {
+      if (window.location.hash.includes("access_token")) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.hash);
+        if (error) {
+          console.error("Error parsing session:", error);
+          setErrorMsg("Verification link is invalid or expired.");
+        }
+        // Clean up the URL
+        window.history.replaceState({}, document.title, "/verify");
+      }
+    }
+    handleHash();
+  }, []);
+
   useEffect(() => {
     async function completeRegistration() {
-      // 🔒 Prevent double inserts due to React StrictMode
       if (localStorage.getItem("registration_processing") === "true") {
         console.log("Already processing. Skipping duplicate execution.");
         return;
       }
       localStorage.setItem("registration_processing", "true");
 
-      // If link is invalid
       if (error) {
         setLoading(false);
         setErrorMsg(errorDesc || "Verification link is invalid or expired.");
@@ -31,7 +45,6 @@ export default function VerifyPage() {
       }
 
       try {
-        // Get session after email verification
         const { data: sessionData } = await supabase.auth.getSession();
         const session = sessionData.session;
 
@@ -49,7 +62,6 @@ export default function VerifyPage() {
           return;
         }
 
-        // Get stored form data
         const saved = localStorage.getItem("pending_registration");
         if (!saved) {
           alert("No registration data found. Please register again.");
@@ -62,7 +74,7 @@ export default function VerifyPage() {
 
         setMessage("Creating your account...");
 
-        // Insert patient
+        // Insert patient record
         const { data: patientData, error: patientError } = await supabase
           .schema("patient_record")
           .from("patient_tbl")
@@ -97,7 +109,6 @@ export default function VerifyPage() {
           return;
         }
 
-        // Insert emergency contact
         setMessage("Adding emergency contact...");
 
         const { error: emergencyError } = await supabase
@@ -143,38 +154,41 @@ export default function VerifyPage() {
 
   const handleResend = async () => {
     setResendLoading(true);
-  
+
     try {
       const saved = localStorage.getItem("pending_registration");
-  
       if (!saved) {
         alert("No registration data found. Please register again.");
         navigate("/register");
         return;
       }
-  
+
       const data = JSON.parse(saved);
-  
-      // Resend verification email
+
+      const redirectUrl =
+        import.meta.env.MODE === "development"
+          ? "http://localhost:3000/verify"
+          : `${import.meta.env.VITE_SITE_URL}/verify`;
+
       const { error } = await supabase.auth.admin.generateLink({
         type: "signup",
         email: data.email,
-        password: data.password, // hashed or original (depends on your flow)
+        password: data.password,
+        options: { redirectTo: redirectUrl },
       });
-  
+
       if (error) {
         alert("Failed to resend verification email: " + error.message);
       } else {
         alert("Verification email resent! Check your inbox.");
       }
-  
     } catch (err) {
       console.error("Resend error:", err);
     } finally {
       setResendLoading(false);
     }
   };
-  
+
   return (
     <div className="p-8 text-center">
       {loading && <div className="mb-4">⏳ Loading...</div>}

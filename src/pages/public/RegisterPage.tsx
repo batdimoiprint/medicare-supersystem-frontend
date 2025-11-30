@@ -12,141 +12,124 @@ import { useState } from 'react'
 import bcrypt from 'bcryptjs'
 
 type RegistrationForm = {
-    f_name: string
-    l_name: string
-    m_name?: string
-    suffix?: string
-    birthdate: Date | undefined
-    gender: string
-    email?: string
-    password: string
-    confirm_password?: string
-    house_no?: string
-    street: string
-    barangay?: string
-    city: string
-    country?: string
-    blood_type?: string
-    pri_contact_no: string
-    sec_contact_no?: string
-    ec_f_name: string
-    ec_l_name: string
-    ec_m_name?: string
-    ec_contact_no: string
-    ec_relationship: string
-    ec_email?: string
+  f_name: string
+  l_name: string
+  m_name?: string
+  suffix?: string
+  birthdate: Date | undefined
+  gender: string
+  email?: string
+  password: string
+  confirm_password?: string
+  house_no?: string
+  street: string
+  barangay?: string
+  city: string
+  country?: string
+  blood_type?: string
+  pri_contact_no: string
+  sec_contact_no?: string
+  ec_f_name: string
+  ec_l_name: string
+  ec_m_name?: string
+  ec_contact_no: string
+  ec_relationship: string
+  ec_email?: string
 }
 
 export default function RegisterPage() {
-    const { register, handleSubmit, control, watch, formState: { errors } } = useForm<RegistrationForm>({ mode: 'onBlur' })
-    const navigate = useNavigate()
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [submitError, setSubmitError] = useState<string | null>(null)
+  const { register, handleSubmit, control, watch, formState: { errors } } = useForm<RegistrationForm>({ mode: 'onBlur' })
+  const navigate = useNavigate()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-    const birthdate = watch('birthdate')
-    const password = watch('password')
-    const age = birthdate ? differenceInYears(new Date(), birthdate) : null
+  const birthdate = watch('birthdate')
+  const password = watch('password')
+  const age = birthdate ? differenceInYears(new Date(), birthdate) : null
 
-    function normalizePhone(raw?: string) {
-        if (!raw) return ''
-        const trimmed = raw.trim()
+  function normalizePhone(raw?: string) {
+    if (!raw) return ''
+    const trimmed = raw.trim()
+    if (trimmed.startsWith('+')) return trimmed.replace(/\s+/g, '')
+    let digits = trimmed.replace(/\D/g, '')
+    digits = digits.replace(/^0+/, '')
+    if (digits.startsWith('63')) return `+${digits}`
+    if (digits.length === 10 && digits.startsWith('9')) return `+63${digits}`
+    if (digits.length === 10) return `+63${digits}`
+    return `+63${digits}`
+  }
 
-        // quick-return when already in +63 form (or another +country) — remove whitespace
-        if (trimmed.startsWith('+')) return trimmed.replace(/\s+/g, '')
-
-        // keep only digits
-        let digits = trimmed.replace(/\D/g, '')
-
-        // remove leading zeros
-        digits = digits.replace(/^0+/, '')
-
-        // if it already contains a country prefix (63...), return with +
-        if (digits.startsWith('63')) return `+${digits}`
-
-        // if the user typed the national (10-digit) number starting with 9 (e.g. 9123456789)
-        if (digits.length === 10 && digits.startsWith('9')) return `+63${digits}`
-
-        // if someone typed 11-digit local with leading 0 (e.g. 09123456789) we've stripped zeros above
-        if (digits.length === 10) return `+63${digits}`
-
-        // fallback — prefix with +63
-        return `+63${digits}`
-    }
-
-    async function onSubmit(data: RegistrationForm) {
+  async function onSubmit(data: RegistrationForm) {
     setIsSubmitting(true)
     setSubmitError(null)
 
     try {
-        // Normalize phone numbers
-        data.pri_contact_no = normalizePhone(data.pri_contact_no)
-        if (data.sec_contact_no) {
-            data.sec_contact_no = normalizePhone(data.sec_contact_no)
-        }
-        const ecContactNo = normalizePhone(data.ec_contact_no)
+      data.pri_contact_no = normalizePhone(data.pri_contact_no)
+      if (data.sec_contact_no) {
+        data.sec_contact_no = normalizePhone(data.sec_contact_no)
+      }
+      const ecContactNo = normalizePhone(data.ec_contact_no)
 
-        // Format birthdate as YYYY-MM-DD
-        const formattedBirthdate = data.birthdate ? format(data.birthdate, 'yyyy-MM-dd') : null
+      const formattedBirthdate = data.birthdate ? format(data.birthdate, 'yyyy-MM-dd') : null
 
-        // Hash password
-        const saltRounds = 10
-        const hashedPassword = await bcrypt.hash(data.password, saltRounds)
+      const saltRounds = 10
+      const hashedPassword = await bcrypt.hash(data.password, saltRounds)
 
-        // Store everything (patient + hashed password + contacts)
-        const tempData = {
-            ...data,
-            pri_contact_no: data.pri_contact_no,
-            sec_contact_no: data.sec_contact_no,
-            ec_contact_no: ecContactNo,
-            birthdate: formattedBirthdate,
-            password: hashedPassword
-        };
+      const tempData = {
+        ...data,
+        pri_contact_no: data.pri_contact_no,
+        sec_contact_no: data.sec_contact_no,
+        ec_contact_no: ecContactNo,
+        birthdate: formattedBirthdate,
+        password: hashedPassword
+      }
 
-        localStorage.setItem("pending_registration", JSON.stringify(tempData));
+      localStorage.setItem("pending_registration", JSON.stringify(tempData))
 
-        // 🔵 Create Supabase Auth user
-        const { error: authError } = await supabase.auth.signUp({
-            email: data.email!,
-            password: data.password,
-            options: {
-                emailRedirectTo: `${window.location.origin}/verify`
-            }
-        });
+      // ✅ Use VITE_SITE_URL for redirect
+      const redirectUrl =
+        import.meta.env.MODE === "development"
+          ? "http://localhost:3000/verify"
+          : `${import.meta.env.VITE_SITE_URL}/verify`
 
-        if (authError) {
-            throw new Error(authError.message);
-        }
+      const { error: authError } = await supabase.auth.signUp({
+        email: data.email!,
+        password: data.password,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      })
 
-        alert("A verification email has been sent! Please check your inbox.");
-        navigate('/login');
+      if (authError) throw new Error(authError.message)
 
+      alert("A verification email has been sent! Please check your inbox.")
+      navigate('/login')
     } catch (error) {
-        console.error('Registration error:', error)
-        setSubmitError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
+      console.error('Registration error:', error)
+      setSubmitError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
     } finally {
-        setIsSubmitting(false)
+      setIsSubmitting(false)
     }
-}
+  }
 
+  // Password strength logic
+  const getStrength = (pass: string) => {
+    let score = 0
+    if (!pass) return 0
+    if (pass.length > 8) score++
+    if (/[A-Z]/.test(pass)) score++
+    if (/[0-9]/.test(pass)) score++
+    if (/[^A-Za-z0-9]/.test(pass)) score++
+    return score
+  }
 
-    // Password strength logic
-    const getStrength = (pass: string) => {
-        let score = 0;
-        if (!pass) return 0;
-        if (pass.length > 8) score++;
-        if (/[A-Z]/.test(pass)) score++;
-        if (/[0-9]/.test(pass)) score++;
-        if (/[^A-Za-z0-9]/.test(pass)) score++;
-        return score;
-    }
+  const strength = getStrength(password || "")
+  const strengthColor = ['bg-border', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500']
+  const strengthText = ['Enter password', 'Weak', 'Fair', 'Good', 'Strong']
 
-    const strength = getStrength(password || "");
-    const strengthColor = ['bg-border', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
-    const strengthText = ['Enter password', 'Weak', 'Fair', 'Good', 'Strong'];
-
-    const genderOptions = ['Male', 'Female', 'LGBTQIA+', 'Prefer Not to Say']
-    const bloodTypes = ['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-', 'Unspecified']
-    const relationships = ['Parent', 'Child', 'Relative', 'Spouse', 'Friend', 'Sibling', 'Guardian', 'Others', 'Unspecified']
+  const genderOptions = ['Male', 'Female', 'LGBTQIA+', 'Prefer Not to Say']
+  const bloodTypes = ['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-', 'Unspecified']
+  const relationships = ['Parent', 'Child', 'Relative', 'Spouse', 'Friend', 'Sibling', 'Guardian', 'Others', 'Unspecified']
 
     return (
         <main className="mx-auto ">
