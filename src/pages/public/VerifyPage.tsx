@@ -167,7 +167,7 @@ export default function VerifyPage() {
 
       const redirectUrl =
         import.meta.env.MODE === "development"
-          ? "http://localhost:3000/verify"
+          ? "http://localhost:5173/verify"
           : `${import.meta.env.VITE_SITE_URL}/verify`;
 
       const { error } = await supabase.auth.admin.generateLink({
