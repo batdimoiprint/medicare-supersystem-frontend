@@ -39,7 +39,6 @@ import {
 } from "@/components/ui/collapsible"
 import {
     SidebarGroup,
-    SidebarGroupLabel,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
@@ -143,7 +142,7 @@ export function NavMain() {
 
     return (
         <SidebarGroup>
-            <SidebarGroupLabel>Platform</SidebarGroupLabel>
+
             <SidebarMenu>
                 {finalItems.map((item) => (
                     item.items && item.items.length ? (
