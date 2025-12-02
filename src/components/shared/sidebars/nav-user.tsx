@@ -1,6 +1,6 @@
 "use client"
 
-import { BadgeCheck, ChevronsUpDown, LogOut as LogOutIcon } from "lucide-react"
+import { ChevronsUpDown, LogOut as LogOutIcon } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/context/userContext"
@@ -91,13 +91,6 @@ export function NavUser({
                         <DropdownMenuSeparator />
                         <DropdownMenuSeparator />
                         <DropdownMenuGroup>
-                            <DropdownMenuItem asChild>
-                                {/* My Profile — for now routes to `/` */}
-                                <a href="/">
-                                    <BadgeCheck />
-                                    My Profile
-                                </a>
-                            </DropdownMenuItem>
                             <DropdownMenuItem>
                                 <div className="flex items-center justify-between w-full">
                                     <div className="flex items-center gap-2">

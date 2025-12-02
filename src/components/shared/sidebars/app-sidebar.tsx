@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/sidebar"
 import { NavMain } from "./nav-main"
 import { NavUser } from "./nav-user"
-import BrandTitle from "../brand/BrandTitle"
+import SidebarBrandTitle from "../brand/SidebarBrandTitle"
 import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/context/userContext"
 
@@ -28,7 +28,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return (
         <Sidebar collapsible="icon" {...props}>
             <SidebarHeader>
-                <BrandTitle />
+                <SidebarBrandTitle />
 
             </SidebarHeader>
             <Separator />
