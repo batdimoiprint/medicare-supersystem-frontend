@@ -12,167 +12,124 @@ import { useState } from 'react'
 import bcrypt from 'bcryptjs'
 
 type RegistrationForm = {
-    f_name: string
-    l_name: string
-    m_name?: string
-    suffix?: string
-    birthdate: Date | undefined
-    gender: string
-    email?: string
-    password: string
-    confirm_password?: string
-    house_no?: string
-    street: string
-    barangay?: string
-    city: string
-    country?: string
-    blood_type?: string
-    pri_contact_no: string
-    sec_contact_no?: string
-    ec_f_name: string
-    ec_l_name: string
-    ec_m_name?: string
-    ec_contact_no: string
-    ec_relationship: string
-    ec_email?: string
+  f_name: string
+  l_name: string
+  m_name?: string
+  suffix?: string
+  birthdate: Date | undefined
+  gender: string
+  email?: string
+  password: string
+  confirm_password?: string
+  house_no?: string
+  street: string
+  barangay?: string
+  city: string
+  country?: string
+  blood_type?: string
+  pri_contact_no: string
+  sec_contact_no?: string
+  ec_f_name: string
+  ec_l_name: string
+  ec_m_name?: string
+  ec_contact_no: string
+  ec_relationship: string
+  ec_email?: string
 }
 
 export default function RegisterPage() {
-    const { register, handleSubmit, control, watch, formState: { errors } } = useForm<RegistrationForm>({ mode: 'onBlur' })
-    const navigate = useNavigate()
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [submitError, setSubmitError] = useState<string | null>(null)
+  const { register, handleSubmit, control, watch, formState: { errors } } = useForm<RegistrationForm>({ mode: 'onBlur' })
+  const navigate = useNavigate()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-    const birthdate = watch('birthdate')
-    const password = watch('password')
-    const age = birthdate ? differenceInYears(new Date(), birthdate) : null
+  const birthdate = watch('birthdate')
+  const password = watch('password')
+  const age = birthdate ? differenceInYears(new Date(), birthdate) : null
 
-    function normalizePhone(raw?: string) {
-        if (!raw) return ''
-        const trimmed = raw.trim()
+  function normalizePhone(raw?: string) {
+    if (!raw) return ''
+    const trimmed = raw.trim()
+    if (trimmed.startsWith('+')) return trimmed.replace(/\s+/g, '')
+    let digits = trimmed.replace(/\D/g, '')
+    digits = digits.replace(/^0+/, '')
+    if (digits.startsWith('63')) return `+${digits}`
+    if (digits.length === 10 && digits.startsWith('9')) return `+63${digits}`
+    if (digits.length === 10) return `+63${digits}`
+    return `+63${digits}`
+  }
 
-        // quick-return when already in +63 form (or another +country) — remove whitespace
-        if (trimmed.startsWith('+')) return trimmed.replace(/\s+/g, '')
+  async function onSubmit(data: RegistrationForm) {
+    setIsSubmitting(true)
+    setSubmitError(null)
 
-        // keep only digits
-        let digits = trimmed.replace(/\D/g, '')
+    try {
+      data.pri_contact_no = normalizePhone(data.pri_contact_no)
+      if (data.sec_contact_no) {
+        data.sec_contact_no = normalizePhone(data.sec_contact_no)
+      }
+      const ecContactNo = normalizePhone(data.ec_contact_no)
 
-        // remove leading zeros
-        digits = digits.replace(/^0+/, '')
+      const formattedBirthdate = data.birthdate ? format(data.birthdate, 'yyyy-MM-dd') : null
 
-        // if it already contains a country prefix (63...), return with +
-        if (digits.startsWith('63')) return `+${digits}`
+      const saltRounds = 10
+      const hashedPassword = await bcrypt.hash(data.password, saltRounds)
 
-        // if the user typed the national (10-digit) number starting with 9 (e.g. 9123456789)
-        if (digits.length === 10 && digits.startsWith('9')) return `+63${digits}`
+      const tempData = {
+        ...data,
+        pri_contact_no: data.pri_contact_no,
+        sec_contact_no: data.sec_contact_no,
+        ec_contact_no: ecContactNo,
+        birthdate: formattedBirthdate,
+        password: hashedPassword
+      }
 
-        // if someone typed 11-digit local with leading 0 (e.g. 09123456789) we've stripped zeros above
-        if (digits.length === 10) return `+63${digits}`
+      localStorage.setItem("pending_registration", JSON.stringify(tempData))
 
-        // fallback — prefix with +63
-        return `+63${digits}`
+      // ✅ Use VITE_SITE_URL for redirect
+      const redirectUrl =
+        import.meta.env.MODE === "development"
+          ? "http://localhost:5173/verify"
+          : `${import.meta.env.VITE_SITE_URL}/verify`
+
+      const { error: authError } = await supabase.auth.signUp({
+        email: data.email!,
+        password: data.password,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      })
+
+      if (authError) throw new Error(authError.message)
+
+      alert("A verification email has been sent! Please check your inbox.")
+      navigate('/login')
+    } catch (error) {
+      console.error('Registration error:', error)
+      setSubmitError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
+  }
 
-    async function onSubmit(data: RegistrationForm) {
-        setIsSubmitting(true)
-        setSubmitError(null)
+  // Password strength logic
+  const getStrength = (pass: string) => {
+    let score = 0
+    if (!pass) return 0
+    if (pass.length > 8) score++
+    if (/[A-Z]/.test(pass)) score++
+    if (/[0-9]/.test(pass)) score++
+    if (/[^A-Za-z0-9]/.test(pass)) score++
+    return score
+  }
 
-        try {
-            // Normalize phone numbers
-            data.pri_contact_no = normalizePhone(data.pri_contact_no)
-            if (data.sec_contact_no) {
-                data.sec_contact_no = normalizePhone(data.sec_contact_no)
-            }
-            const ecContactNo = normalizePhone(data.ec_contact_no)
+  const strength = getStrength(password || "")
+  const strengthColor = ['bg-border', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500']
+  const strengthText = ['Enter password', 'Weak', 'Fair', 'Good', 'Strong']
 
-            // Format birthdate as YYYY-MM-DD for Supabase date column
-            const formattedBirthdate = data.birthdate ? format(data.birthdate, 'yyyy-MM-dd') : null
-
-            // Hash password with bcrypt
-            const saltRounds = 10
-            const hashedPassword = await bcrypt.hash(data.password, saltRounds)
-
-            // Insert into patient_tbl (schema: patient_record)
-            const { data: patientData, error: patientError } = await supabase
-                .schema('patient_record')
-                .from('patient_tbl')
-                .insert({
-                    f_name: data.f_name,
-                    l_name: data.l_name,
-                    m_name: data.m_name || null,
-                    suffix: data.suffix || null,
-                    birthdate: formattedBirthdate,
-                    gender: data.gender,
-                    email: data.email || null,
-                    password: hashedPassword,
-                    house_no: data.house_no || null,
-                    street: data.street,
-                    barangay: data.barangay || null,
-                    city: data.city,
-                    country: data.country || null,
-                    blood_type: data.blood_type || null,
-                    pri_contact_no: data.pri_contact_no,
-                    sec_contact_no: data.sec_contact_no || null,
-                    account_status: 'Pending',
-                    created_at: new Date().toISOString(),
-                })
-                .select('patient_id')
-                .single()
-
-            if (patientError) {
-                console.error('Patient insert error:', patientError)
-                throw new Error(`Failed to create patient account: ${patientError.message}`)
-            }
-
-            // Insert into emergency_contact_tbl
-            const { error: emergencyError } = await supabase
-                .schema('patient_record')
-                .from('emergency_contact_tbl')
-                .insert({
-                    patient_id: patientData.patient_id,
-                    ec_f_name: data.ec_f_name,
-                    ec_l_name: data.ec_l_name,
-                    ec_m_name: data.ec_m_name || null,
-                    ec_contact_no: ecContactNo,
-                    ec_relationship: data.ec_relationship,
-                    ec_email: data.ec_email || null,
-                    created_at: new Date().toISOString(),
-                })
-
-            if (emergencyError) {
-                console.error('Emergency contact insert error:', emergencyError)
-                // Note: Patient record is already created. In production, handle this with transactions.
-                throw new Error(`Failed to save emergency contact: ${emergencyError.message}`)
-            }
-
-            alert('Registration successful! Your account is pending approval.')
-            navigate('/login')
-        } catch (error) {
-            console.error('Registration error:', error)
-            setSubmitError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
-        } finally {
-            setIsSubmitting(false)
-        }
-    }
-
-    // Password strength logic
-    const getStrength = (pass: string) => {
-        let score = 0;
-        if (!pass) return 0;
-        if (pass.length > 8) score++;
-        if (/[A-Z]/.test(pass)) score++;
-        if (/[0-9]/.test(pass)) score++;
-        if (/[^A-Za-z0-9]/.test(pass)) score++;
-        return score;
-    }
-
-    const strength = getStrength(password || "");
-    const strengthColor = ['bg-border', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
-    const strengthText = ['Enter password', 'Weak', 'Fair', 'Good', 'Strong'];
-
-    const genderOptions = ['Male', 'Female', 'LGBTQIA+', 'Prefer Not to Say']
-    const bloodTypes = ['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-', 'Unspecified']
-    const relationships = ['Parent', 'Child', 'Relative', 'Spouse', 'Friend', 'Sibling', 'Guardian', 'Others', 'Unspecified']
+  const genderOptions = ['Male', 'Female', 'LGBTQIA+', 'Prefer Not to Say']
+  const bloodTypes = ['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-', 'Unspecified']
+  const relationships = ['Parent', 'Child', 'Relative', 'Spouse', 'Friend', 'Sibling', 'Guardian', 'Others', 'Unspecified']
 
     return (
         <main className="mx-auto ">
