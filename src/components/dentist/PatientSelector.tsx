@@ -10,22 +10,24 @@ import {
 } from '@/components/ui/select';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
 
-interface PatientRow {
-  patient_id: number;
-  f_name?: string;
-  l_name?: string;
-  m_name?: string;
-}
+const MOCK_PATIENTS = [
+  'All Patients',
+  'John Doe',
+  'Jane Smith',
+  'Michael Johnson',
+  'Sarah Williams',
+  'David Brown',
+  'Emily Davis',
+];
 
 interface PatientSelectorProps {
   selectedPatient: string;
-  onPatientChange: (patientId: string) => void; // we return the patient ID
-  patients: PatientRow[];                       // dynamic patients
+  onPatientChange: (patient: string) => void;
   onNewPatient?: () => void;
 }
 
-
-export const PatientSelector = ({ selectedPatient, onPatientChange, patients, onNewPatient }: PatientSelectorProps) => {
+export const PatientSelector = ({ selectedPatient, onPatientChange, onNewPatient }: PatientSelectorProps) => {
+  const filteredPatients = MOCK_PATIENTS;
 
   return (
     <Card>
@@ -41,9 +43,9 @@ export const PatientSelector = ({ selectedPatient, onPatientChange, patients, on
                     <SelectValue placeholder="Select a patient" />
                   </SelectTrigger>
                   <SelectContent>
-                    {patients.map((p) => (
-                      <SelectItem key={p.patient_id} value={String(p.patient_id)}>
-                        {`${p.f_name ?? ''} ${p.m_name ?? ''} ${p.l_name ?? ''}`.trim()}
+                    {filteredPatients.map((patient) => (
+                      <SelectItem key={patient} value={patient}>
+                        {patient}
                       </SelectItem>
                     ))}
                   </SelectContent>

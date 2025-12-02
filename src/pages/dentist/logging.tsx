@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Package,
@@ -25,137 +25,105 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { patientRecordClient, inventoryClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
 interface MaterialLog {
-  stock_out_id: number;
-  item_name: string;
+  id: number;
+  materialName: string;
   category: string;
   quantity: number;
-  unit?: string;
-  created_at: string;
-  procedure?: string;
-  patient_name?: string;
-  unit_cost?: number;
+  unit: string;
+  date: string;
+  procedure: string;
+  patientName: string;
+  cost: number;
   notes?: string;
 }
 
-interface PatientRow {
-  patient_id: number;
-  f_name?: string;
-  m_name?: string;
-  l_name?: string;
-}
+// --- Mock Data ---
+const INITIAL_LOGS: MaterialLog[] = [
+  {
+    id: 1,
+    materialName: 'Composite Resin',
+    category: 'Filling Materials',
+    quantity: 2,
+    unit: 'pack',
+    date: '2024-01-15',
+    procedure: 'Composite Filling',
+    patientName: 'John Doe',
+    cost: 500,
+    notes: 'Used for tooth #3 and #14',
+  },
+  {
+    id: 2,
+    materialName: 'Local Anesthetic',
+    category: 'Anesthetics',
+    quantity: 1,
+    unit: 'vial',
+    date: '2024-01-15',
+    procedure: 'Tooth Extraction',
+    patientName: 'Jane Smith',
+    cost: 150,
+  },
+];
 
-interface InventoryItem {
-  name: string;
-  category: string;
-  unit_cost: number;
-}
+const MATERIAL_CATEGORIES = [
+  'Filling Materials',
+  'Anesthetics',
+  'Impression Materials',
+  'Crown & Bridge Materials',
+  'Orthodontic Materials',
+  'Surgical Supplies',
+  'Disinfectants',
+  'Other',
+];
+
+const COMMON_MATERIALS = [
+  'Composite Resin',
+  'Amalgam',
+  'Local Anesthetic',
+  'Gauze',
+  'Cotton Rolls',
+  'Dental Floss',
+  'Bonding Agent',
+  'Etching Gel',
+];
 
 // --- Main Component ---
 const MaterialsLogging = () => {
-  const [logs, setLogs] = useState<MaterialLog[]>([]);
-  const [patients, setPatients] = useState<PatientRow[]>([]);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [logs, setLogs] = useState<MaterialLog[]>(INITIAL_LOGS);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<Partial<MaterialLog>>({
-    item_name: '',
+    materialName: '',
     category: '',
     quantity: 0,
     unit: 'unit',
+    date: new Date().toISOString().split('T')[0],
     procedure: '',
-    patient_name: '',
-    unit_cost: 0,
+    patientName: '',
+    cost: 0,
     notes: '',
   });
 
-  // Load patients
-  useEffect(() => {
-    const loadPatients = async () => {
-      const { data } = await patientRecordClient
-        .from('patient_tbl')
-        .select('patient_id, f_name, m_name, l_name')
-        .order('l_name', { ascending: true });
-      setPatients(data ?? []);
-    };
-    loadPatients();
-  }, []);
-
-  // Load inventory items (consumables, medicines, equipment)
-  useEffect(() => {
-    const loadInventoryItems = async () => {
-      try {
-        const [consumables, medicines, equipment] = await Promise.all([
-          inventoryClient.from('consumables_tbl').select('consumable_name, unit_cost'),
-          inventoryClient.from('medicine_tbl').select('medicine_name, unit_cost'),
-          inventoryClient.from('equipment_tbl').select('equipment_name, unit_cost'),
-        ]);
-
-        const items: InventoryItem[] = [
-          ...(consumables.data ?? []).map(c => ({ name: c.consumable_name, category: 'Consumables', unit_cost: c.unit_cost || 0 })),
-          ...(medicines.data ?? []).map(m => ({ name: m.medicine_name, category: 'Medicines', unit_cost: m.unit_cost || 0 })),
-          ...(equipment.data ?? []).map(e => ({ name: e.equipment_name, category: 'Equipment', unit_cost: e.unit_cost || 0 })),
-        ];
-        setInventoryItems(items);
-      } catch (err) {
-        console.error('Failed to load inventory items:', err);
-      }
-    };
-    loadInventoryItems();
-  }, []);
-
-  // Load stock out logs
-  const loadLogs = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await inventoryClient
-        .from('stock_out')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setLogs(data ?? []);
-    } catch (err) {
-      console.error('Failed to load logs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadLogs();
-  }, []);
-
-  // Helper to get patient name
-  const getPatientName = (patientId: number): string => {
-    const patient = patients.find(p => p.patient_id === patientId);
-    if (!patient) return 'Unknown';
-    return `${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim();
-  };
-
   const filteredLogs = logs.filter((log) =>
-    log.item_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.patient_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.category?.toLowerCase().includes(searchTerm.toLowerCase())
+    log.materialName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalCost = logs.reduce((sum, log) => sum + ((log.unit_cost || 0) * log.quantity), 0);
+  const totalCost = logs.reduce((sum, log) => sum + (log.cost * log.quantity), 0);
   const thisMonthCost = logs
     .filter(l => {
-      const logDate = new Date(l.created_at);
+      const logDate = new Date(l.date);
       const now = new Date();
       return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
     })
-    .reduce((sum, log) => sum + ((log.unit_cost || 0) * log.quantity), 0);
+    .reduce((sum, log) => sum + (log.cost * log.quantity), 0);
 
   const categoryBreakdown = logs.reduce((acc, log) => {
-    const cat = log.category || 'Other';
-    acc[cat] = (acc[cat] || 0) + ((log.unit_cost || 0) * log.quantity);
+    acc[log.category] = (acc[log.category] || 0) + (log.cost * log.quantity);
     return acc;
   }, {} as Record<string, number>);
 
@@ -163,88 +131,61 @@ const MaterialsLogging = () => {
     setIsAdding(true);
     setIsEditing(null);
     setFormData({
-      item_name: '',
+      materialName: '',
       category: '',
       quantity: 0,
       unit: 'unit',
+      date: new Date().toISOString().split('T')[0],
       procedure: '',
-      patient_name: '',
-      unit_cost: 0,
+      patientName: '',
+      cost: 0,
       notes: '',
     });
   };
 
   const handleEdit = (log: MaterialLog) => {
-    setIsEditing(log.stock_out_id);
+    setIsEditing(log.id);
     setIsAdding(false);
     setFormData(log);
   };
 
-  const handleSave = async () => {
-    try {
-      if (isEditing) {
-        const { error } = await inventoryClient
-          .from('stock_out')
-          .update({
-            item_name: formData.item_name,
-            category: formData.category,
-            quantity: formData.quantity,
-            procedure: formData.procedure,
-            patient_name: formData.patient_name,
-            unit_cost: formData.unit_cost,
-            notes: formData.notes,
-          })
-          .eq('stock_out_id', isEditing);
-
-        if (error) throw error;
-        setIsEditing(null);
-      } else if (isAdding) {
-        const { error } = await inventoryClient
-          .from('stock_out')
-          .insert({
-            item_name: formData.item_name,
-            category: formData.category,
-            quantity: formData.quantity,
-            procedure: formData.procedure,
-            patient_name: formData.patient_name,
-            unit_cost: formData.unit_cost,
-            notes: formData.notes,
-          });
-
-        if (error) throw error;
-        setIsAdding(false);
-      }
-
-      await loadLogs();
-      alert('Material log saved successfully!');
-
-      setFormData({
-        item_name: '',
-        category: '',
-        quantity: 0,
-        unit: 'unit',
-        procedure: '',
-        patient_name: '',
-        unit_cost: 0,
-        notes: '',
-      });
-    } catch (err) {
-      console.error('Failed to save log:', err);
-      alert('Failed to save material log');
+  const handleSave = () => {
+    if (isEditing) {
+      setLogs(logs.map(l => l.id === isEditing ? { ...formData, id: isEditing } as MaterialLog : l));
+      setIsEditing(null);
+    } else if (isAdding) {
+      const newLog: MaterialLog = {
+        ...formData,
+        id: Date.now(),
+      } as MaterialLog;
+      setLogs([...logs, newLog]);
+      setIsAdding(false);
     }
+    setFormData({
+      materialName: '',
+      category: '',
+      quantity: 0,
+      unit: 'unit',
+      date: new Date().toISOString().split('T')[0],
+      procedure: '',
+      patientName: '',
+      cost: 0,
+      notes: '',
+    });
   };
 
   const handleCancel = () => {
     setIsAdding(false);
     setIsEditing(null);
     setFormData({
-      item_name: '',
+      materialName: '',
       category: '',
       quantity: 0,
       unit: 'unit',
+      date: new Date().toISOString().split('T')[0],
       procedure: '',
-      patient_name: '',
-      unit_cost: 0,
+      patientName: '',
+      cost: 0,
       notes: '',
     });
   };
@@ -392,24 +333,16 @@ const MaterialsLogging = () => {
                 <FieldLabel>Material Name</FieldLabel>
                 <FieldContent>
                   <Select
-                    value={formData.item_name}
-                    onValueChange={(value) => {
-                      const item = inventoryItems.find(i => i.name === value);
-                      setFormData({ 
-                        ...formData, 
-                        item_name: value,
-                        category: item?.category || formData.category,
-                        unit_cost: item?.unit_cost || formData.unit_cost,
-                      });
-                    }}
+                    value={formData.materialName}
+                    onValueChange={(value) => setFormData({ ...formData, materialName: value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select material" />
                     </SelectTrigger>
                     <SelectContent>
-                      {inventoryItems.map((item) => (
-                        <SelectItem key={item.name} value={item.name}>
-                          {item.name} ({item.category})
+                      {COMMON_MATERIALS.map((material) => (
+                        <SelectItem key={material} value={material}>
+                          {material}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -427,9 +360,11 @@ const MaterialsLogging = () => {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Consumables">Consumables</SelectItem>
-                      <SelectItem value="Medicines">Medicines</SelectItem>
-                      <SelectItem value="Equipment">Equipment</SelectItem>
+                      {MATERIAL_CATEGORIES.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </FieldContent>
@@ -446,37 +381,56 @@ const MaterialsLogging = () => {
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
-                <FieldLabel>Unit Cost (₱)</FieldLabel>
+                <FieldLabel>Unit</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={formData.unit}
+                    onValueChange={(value) => setFormData({ ...formData, unit: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unit">Unit</SelectItem>
+                      <SelectItem value="pack">Pack</SelectItem>
+                      <SelectItem value="vial">Vial</SelectItem>
+                      <SelectItem value="box">Box</SelectItem>
+                      <SelectItem value="bottle">Bottle</SelectItem>
+                      <SelectItem value="tube">Tube</SelectItem>
+                      <SelectItem value="sheet">Sheet</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
+              <Field orientation="vertical">
+                <FieldLabel>Date</FieldLabel>
+                <FieldContent>
+                  <Input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  />
+                </FieldContent>
+              </Field>
+              <Field orientation="vertical">
+                <FieldLabel>Cost (₱)</FieldLabel>
                 <FieldContent>
                   <Input
                     type="number"
-                    value={formData.unit_cost}
-                    onChange={(e) => setFormData({ ...formData, unit_cost: Number(e.target.value) })}
+                    value={formData.cost}
+                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
                     placeholder="0"
                   />
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
-                <FieldLabel>Patient</FieldLabel>
+                <FieldLabel>Patient Name</FieldLabel>
                 <FieldContent>
-                  <Select
-                    value={formData.patient_name}
-                    onValueChange={(value) => setFormData({ ...formData, patient_name: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select patient" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {patients.map((patient) => (
-                        <SelectItem 
-                          key={patient.patient_id} 
-                          value={`${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim()}
-                        >
-                          {`${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    value={formData.patientName}
+                    onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                    placeholder="Enter patient name"
+                  />
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
@@ -517,15 +471,7 @@ const MaterialsLogging = () => {
 
       {/* Logs List */}
       <div className="space-y-4">
-        {loading ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center text-muted-foreground">
-                <p className="text-lg font-medium">Loading logs...</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : filteredLogs.length === 0 ? (
+        {filteredLogs.length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
@@ -537,20 +483,20 @@ const MaterialsLogging = () => {
           </Card>
         ) : (
           filteredLogs.map((log) => (
-            <Card key={log.stock_out_id}>
+            <Card key={log.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-xl mb-2">{log.item_name}</CardTitle>
+                    <CardTitle className="text-xl mb-2">{log.materialName}</CardTitle>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-semibold">
-                        {log.category || 'Uncategorized'}
+                        {log.category}
                       </span>
                       <div className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
-                        {log.created_at ? new Date(log.created_at).toLocaleDateString() : 'N/A'}
+                        {log.date}
                       </div>
-                      {log.patient_name && <span className="font-medium">{log.patient_name}</span>}
+                      <span className="font-medium">{log.patientName}</span>
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => handleEdit(log)}>
@@ -563,29 +509,27 @@ const MaterialsLogging = () => {
                 <div className="grid md:grid-cols-4 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Quantity</p>
-                    <p className="font-semibold">{log.quantity} {log.unit || 'units'}</p>
+                    <p className="font-semibold">{log.quantity} {log.unit}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Procedure</p>
-                    <p className="font-semibold">{log.procedure || 'N/A'}</p>
+                    <p className="font-semibold">{log.procedure}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Unit Cost</p>
-                    <p className="font-semibold text-primary">{formatCurrency(log.unit_cost || 0)}</p>
+                    <p className="text-sm text-muted-foreground">Cost</p>
+                    <p className="font-semibold text-primary">{formatCurrency(log.cost)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total Cost</p>
-                    <p className="font-semibold text-primary">{formatCurrency(log.quantity * (log.unit_cost || 0))}</p>
+                    <p className="font-semibold text-primary">{formatCurrency(log.quantity * log.cost)}</p>
                   </div>
-                  {log.patient_name && (
-                    <div className="md:col-span-4 pt-2">
-                      <Link to={`/dentist/patient/records?patient=${log.patient_name}`}>
-                        <Button variant="outline" size="sm">
-                          View Patient Records
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
+                  <div className="md:col-span-4 pt-2">
+                    <Link to={`/dentist/patient/records?patient=${log.patientName}`}>
+                      <Button variant="outline" size="sm">
+                        View Patient Records
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
                 {log.notes && (
                   <div className="mt-4 pt-4 border-t">
