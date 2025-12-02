@@ -1,12 +1,15 @@
-import BlurText from '@/components/ui/BlurText'
+// C:\Users\gulfe\Medi\medicare-supersystem-frontend\src\pages\DentistPage.tsx
 
-// Import only functional components on this page
+import DentistHeader from '@/components/landing/Dentist/DentistHeader';
+import DentistList from '@/components/landing/Dentist/DentistList'; 
 
-export default function OurDentistPage() {
+export default function DentistPage() {
     return (
-        <div>
-            <BlurText text="Our Dentist Page" delay={100} className="text-lg font-semibold" />
-
-        </div>
-    )
+        <main className="bg-background min-h-screen">
+            
+            <DentistHeader />
+            <DentistList /> 
+            
+        </main>
+    );
 }

@@ -1,14 +1,46 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import Chart from 'react-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useTheme } from '@/components/theme-provider'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
-import { Calendar, Clock, CheckCircle, XCircle, Activity, ArrowRight } from 'lucide-react'
+import { Calendar, Clock, CheckCircle, XCircle, Activity, ArrowRight, RefreshCw, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useReceptionistDashboard } from '@/hooks/use-receptionist-dashboard'
+
+// Helper to format relative time
+function formatRelativeTime(timestamp: string): string {
+    const now = new Date()
+    const date = new Date(timestamp)
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins} min ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+}
 
 export default function Dashboard() {
     const { theme } = useTheme()
     const [isDark, setIsDark] = useState(false)
+
+    // Fetch dashboard data from Supabase
+    const {
+        stats,
+        appointmentsChart,
+        statusDistribution,
+        recentActivity,
+        isLoading,
+        isStatsLoading,
+        isChartLoading,
+        isDistributionLoading,
+        isActivityLoading,
+        refetchAll,
+    } = useReceptionistDashboard()
 
     useEffect(() => {
         const updateTheme = () => {
@@ -25,21 +57,25 @@ export default function Dashboard() {
         }
     }, [theme])
 
-    // Mock stats for receptionist
-    const stats = {
-        todaysAppointments: 18,
-        pendingFollowups: 4,
-        cancelRequests: 2,
-        avgWaitMinutes: 12,
+    // Default stats when loading
+    const displayStats = stats ?? {
+        todaysAppointments: 0,
+        pendingFollowups: 0,
+        cancelRequests: 0,
+        avgWaitMinutes: 0,
     }
 
-    // Appointments last 7 days
-    const lineSeries = [
+    // Transform appointments chart data for ApexCharts
+    const lineSeries = useMemo(() => [
         {
             name: 'Appointments',
-            data: [2, 4, 6, 5, 3, 7, 8],
+            data: appointmentsChart?.map(d => d.count) ?? [0, 0, 0, 0, 0, 0, 0],
         },
-    ]
+    ], [appointmentsChart])
+
+    const chartCategories = useMemo(() => 
+        appointmentsChart?.map(d => d.day) ?? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    [appointmentsChart])
 
     const lineOptions: ApexOptions = {
         chart: {
@@ -50,7 +86,7 @@ export default function Dashboard() {
         stroke: { curve: 'smooth', width: 3 },
         markers: { size: 4 },
         xaxis: {
-            categories: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            categories: chartCategories,
             labels: { style: { colors: isDark ? '#fff' : '#000' } },
         },
         yaxis: { labels: { style: { colors: isDark ? '#fff' : '#000' } } },
@@ -59,16 +95,29 @@ export default function Dashboard() {
         colors: ['#0ea5e9'],
     }
 
-    // Appointment status donut
-    const donutSeries = [12, 5, 2] // confirmed, completed, cancelled
+    // Transform status distribution for donut chart
+    const donutSeries = useMemo(() => 
+        statusDistribution?.map(d => d.count) ?? [0],
+    [statusDistribution])
+
+    const donutLabels = useMemo(() => 
+        statusDistribution?.map(d => d.status) ?? ['No Data'],
+    [statusDistribution])
     const donutOptions: ApexOptions = {
         chart: { type: 'donut' },
-        labels: ['Confirmed', 'Completed', 'Cancelled'],
-        colors: ['#34d399', '#60a5fa', '#f87171'],
+        labels: donutLabels,
+        colors: ['#34d399', '#60a5fa', '#f87171', '#fbbf24', '#a78bfa'],
         legend: { position: 'bottom', labels: { colors: isDark ? '#fff' : '#000' } },
         theme: { mode: isDark ? 'dark' : 'light' },
         tooltip: { theme: isDark ? 'dark' : 'light' },
+        noData: {
+            text: 'No appointments today',
+            style: { color: isDark ? '#fff' : '#000' },
+        },
     }
+
+    // Calculate total appointments from chart data
+    const totalAppointmentsLast7Days = lineSeries[0].data.reduce((a, b) => a + b, 0)
 
     return (
         <>
@@ -82,6 +131,19 @@ export default function Dashboard() {
                             </CardTitle>
                             <p className="text-muted-foreground">Welcome! Here are today's snapshots and quick actions for reception.</p>
                         </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={refetchAll}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <RefreshCw className="w-4 h-4" />
+                            )}
+                            <span className="ml-2">Refresh</span>
+                        </Button>
                     </div>
                 </CardHeader>
             </Card>
@@ -92,7 +154,11 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-muted-foreground">Today's Appointments</p>
-                                <p className="text-2xl font-bold">{stats.todaysAppointments}</p>
+                                {isStatsLoading ? (
+                                    <Skeleton className="h-8 w-16 mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold">{displayStats.todaysAppointments}</p>
+                                )}
                             </div>
                             <Calendar className="w-8 h-8 text-primary" />
                         </div>
@@ -104,7 +170,11 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-muted-foreground">Pending Followups</p>
-                                <p className="text-2xl font-bold">{stats.pendingFollowups}</p>
+                                {isStatsLoading ? (
+                                    <Skeleton className="h-8 w-16 mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold">{displayStats.pendingFollowups}</p>
+                                )}
                             </div>
                             <CheckCircle className="w-8 h-8 text-primary" />
                         </div>
@@ -116,7 +186,11 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-muted-foreground">Cancel Requests</p>
-                                <p className="text-2xl font-bold text-destructive">{stats.cancelRequests}</p>
+                                {isStatsLoading ? (
+                                    <Skeleton className="h-8 w-16 mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold text-destructive">{displayStats.cancelRequests}</p>
+                                )}
                             </div>
                             <XCircle className="w-8 h-8 text-destructive" />
                         </div>
@@ -128,7 +202,11 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-muted-foreground">Avg Wait Time</p>
-                                <p className="text-2xl font-bold">{stats.avgWaitMinutes} min</p>
+                                {isStatsLoading ? (
+                                    <Skeleton className="h-8 w-16 mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold">{displayStats.avgWaitMinutes} min</p>
+                                )}
                             </div>
                             <Clock className="w-8 h-8 text-primary" />
                         </div>
@@ -142,18 +220,22 @@ export default function Dashboard() {
                         <CardTitle className="flex items-center gap-2">Appointments (Last 7 Days)</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <Chart options={lineOptions} series={lineSeries} type="line" height={300} />
+                        {isChartLoading ? (
+                            <Skeleton className="h-[300px] w-full" />
+                        ) : (
+                            <Chart options={lineOptions} series={lineSeries} type="line" height={300} />
+                        )}
                         <div className="grid grid-cols-3 pt-4">
                             <div className="text-center">
-                                <p className="text-2xl font-bold text-primary">{lineSeries[0].data.reduce((a, b) => a + b, 0)}</p>
+                                <p className="text-2xl font-bold text-primary">{totalAppointmentsLast7Days}</p>
                                 <p className="text-sm text-muted-foreground">Total Appointments</p>
                             </div>
                             <div className="text-center">
-                                <p className="text-2xl font-bold">{stats.todaysAppointments}</p>
+                                <p className="text-2xl font-bold">{displayStats.todaysAppointments}</p>
                                 <p className="text-sm text-muted-foreground">Today</p>
                             </div>
                             <div className="text-center">
-                                <p className="text-2xl font-bold text-destructive">{stats.cancelRequests}</p>
+                                <p className="text-2xl font-bold text-destructive">{displayStats.cancelRequests}</p>
                                 <p className="text-sm text-muted-foreground">Cancellations</p>
                             </div>
                         </div>
@@ -165,7 +247,11 @@ export default function Dashboard() {
                         <CardTitle>Status Distribution</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <Chart options={donutOptions} series={donutSeries} type="donut" height={250} />
+                        {isDistributionLoading ? (
+                            <Skeleton className="h-[250px] w-full" />
+                        ) : (
+                            <Chart options={donutOptions} series={donutSeries} type="donut" height={250} />
+                        )}
                     </CardContent>
                     <CardFooter>
                         <div className="flex-1" />
@@ -182,22 +268,32 @@ export default function Dashboard() {
                         <CardTitle className="flex items-center gap-2">Recent Activity</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-3">
-                            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                                <CheckCircle className="w-5 h-5 text-primary mt-0.5" />
-                                <div className="flex-1">
-                                    <p className="text-sm font-medium">Appointment #5222 confirmed</p>
-                                    <p className="text-xs text-muted-foreground">Alice - 1 hour ago</p>
-                                </div>
+                        {isActivityLoading ? (
+                            <div className="space-y-3">
+                                <Skeleton className="h-16 w-full" />
+                                <Skeleton className="h-16 w-full" />
                             </div>
-                            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                                <XCircle className="w-5 h-5 text-destructive mt-0.5" />
-                                <div className="flex-1">
-                                    <p className="text-sm font-medium">Cancel request #1121</p>
-                                    <p className="text-xs text-muted-foreground">Bob - 4 hours ago</p>
-                                </div>
+                        ) : recentActivity && recentActivity.length > 0 ? (
+                            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                                {recentActivity.map((activity) => (
+                                    <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                                        {activity.type === 'appointment_cancelled' ? (
+                                            <XCircle className="w-5 h-5 text-destructive mt-0.5" />
+                                        ) : (
+                                            <CheckCircle className="w-5 h-5 text-primary mt-0.5" />
+                                        )}
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium">{activity.description}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatRelativeTime(activity.timestamp)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-8">No recent activity</p>
+                        )}
                     </CardContent>
                 </Card>
 

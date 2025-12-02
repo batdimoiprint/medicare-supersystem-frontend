@@ -1,22 +1,23 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart, Coins, Calendar } from 'lucide-react'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
 import { cn, formatCurrency } from '@/lib/utils'
+import supabase from '@/utils/supabase'
 import ChartRadialSimple from '@/components/ui/chart-radial-simple'
+import { DatePicker } from '@/components/ui/date-picker'
 
 const ReportPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'usage' | 'cost'>('usage')
   const [dateRange, setDateRange] = useState('Last 6 Months')
-  const [startRangeMonth, setStartRangeMonth] = useState<string>('')
-  const [endRangeMonth, setEndRangeMonth] = useState<string>('')
+  const [startDate, setStartDate] = useState<Date | undefined>()
+  const [endDate, setEndDate] = useState<Date | undefined>()
 
-  const usageData = [
-    { label: 'Latex Gloves', value: 74779 },
-    { label: 'Dental Masks', value: 56435 },
-    { label: 'Amalgam Capsules', value: 43887 },
-  ]
+  const [usageData, setUsageData] = useState<{ label: string; value: number }[]>([])
+  const CATEGORY_COLORS: Record<string, string> = { Consumables: '#58B3FF', Medicines: '#77DD77', Equipment: '#FFD166' }
+  // default colors; will override based on categoryFilter or usageData length
   const usageColors = ['#58B3FF', '#77DD77', '#FFD166']
+  const [categoryFilter, setCategoryFilter] = useState<string>('All Categories')
 
   // Horizontal bar chart component for usage trends
   function HorizontalBarChart({ data, colors = ['#00a8a8'] }: { data: { label: string; value: number }[]; colors?: string[] }) {
@@ -49,13 +50,15 @@ const ReportPage: React.FC = () => {
   }
 
   // Cost breakdown sample data (for Cost Analysis)
-  const costBreakdownData = [
-    { label: 'Supplies', value: 15400, color: '#58B3FF' },
-    { label: 'Medicine', value: 19800, color: '#77DD77' },
-    { label: 'Equipment', value: 9800, color: '#FFD166' },
-  ]
+  const [costBreakdownData, setCostBreakdownData] = useState<{ label: string; value: number; color: string }[]>([])
 
   const totalCost = costBreakdownData.reduce((s, c) => s + c.value, 0)
+  const [inventoryValue, setInventoryValue] = useState<number>(0)
+  const [monthlyUsageCost, setMonthlyUsageCost] = useState<number>(0)
+  type ConsumableRow = { consumable_name: string; quantity: number | string; unit_cost: number | string }
+  type MedicineRow = { medicine_name: string; quantity: number | string; unit_cost: number | string }
+  type EquipmentRow = { equipment_name: string; quantity: number | string; unit_cost: number | string }
+  type StockOutRow = { item_name: string; quantity: number | string; category?: string; created_at?: string }
 
   // PieChart removed - using ChartRadialSimple component instead
 
@@ -86,52 +89,127 @@ const ReportPage: React.FC = () => {
     return { start, end, formatted: `${formatShortDate(start)} - ${formatShortDate(end)}` }
   }
 
-  // Use custom month selection when dateRange is set to Custom
-  function parseMonthValue(value?: string) {
-    if (!value) return null
-    const [year, month] = value.split('-').map(Number)
-    const start = new Date(year, month - 1, 1)
-    const end = new Date(year, month, 0)
-    return { start, end }
-  }
+  // Initialize start/end dates when dateRange changes (unless Custom)
+  React.useEffect(() => {
+    if (dateRange !== 'Custom') {
+      const { start, end } = getRangeFor(dateRange)
+      setStartDate(start)
+      setEndDate(end)
+    }
+  }, [dateRange])
 
+  // Calculate active range for display/filtering
   let activeRange = getRangeFor(dateRange)
   if (dateRange === 'Custom') {
-    const s = parseMonthValue(startRangeMonth)
-    const e = parseMonthValue(endRangeMonth)
-    if (s && e) {
-      activeRange = { start: s.start, end: e.end, formatted: `${formatShortDate(s.start)} - ${formatShortDate(e.end)}` }
+    if (startDate && endDate) {
+      activeRange = { start: startDate, end: endDate, formatted: `${formatShortDate(startDate)} - ${formatShortDate(endDate)}` }
     }
   }
 
-  // Helpers for months list used in the custom start/end selects
-  function pad(n: number) {
-    return n < 10 ? `0${n}` : `${n}`
-  }
+  useEffect(() => {
+    async function loadReportData() {
+      try {
+        // Fetch inventory tables for unit_cost and quantities
+        const [consRes, medRes, equipRes] = await Promise.all([
+          supabase.schema('inventory').from('consumables_tbl').select('consumable_name, quantity, unit_cost'),
+          supabase.schema('inventory').from('medicine_tbl').select('medicine_name, quantity, unit_cost'),
+          supabase.schema('inventory').from('equipment_tbl').select('equipment_name, quantity, unit_cost'),
+        ])
 
-  function generateMonthOptions(year?: number) {
-    const opts: { value: string; label: string }[] = []
-    const y = typeof year === 'number' ? year : new Date().getFullYear()
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(y, i, 1)
-      const value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}` // format YYYY-MM
-      // Use only short month (e.g., 'Jun') to minimize label UI
-      const label = d.toLocaleString(undefined, { month: 'short' })
-      opts.push({ value, label })
+        const cons = (consRes.data || []) as ConsumableRow[]
+        const meds = (medRes.data || []) as MedicineRow[]
+        const equips = (equipRes.data || []) as EquipmentRow[]
+
+        // Calculate inventory total value
+        let invTotal = 0
+        cons.forEach((c: any) => { invTotal += (parseFloat(c.quantity) || 0) * (parseFloat(c.unit_cost) || 0) })
+        meds.forEach((m: any) => { invTotal += (parseFloat(m.quantity) || 0) * (parseFloat(m.unit_cost) || 0) })
+        equips.forEach((e: any) => { invTotal += (parseFloat(e.quantity) || 0) * (parseFloat(e.unit_cost) || 0) })
+        setInventoryValue(invTotal)
+
+        // Build map of item_name -> unit_cost per category
+        const consMap: Record<string, number> = {}
+        const medMap: Record<string, number> = {}
+        const equipMap: Record<string, number> = {}
+        cons.forEach((c: any) => { consMap[c.consumable_name] = parseFloat(c.unit_cost) || 0 })
+        meds.forEach((m: any) => { medMap[m.medicine_name] = parseFloat(m.unit_cost) || 0 })
+        equips.forEach((e: any) => { equipMap[e.equipment_name] = parseFloat(e.unit_cost) || 0 })
+
+        // Fetch stock_out within active range
+        const startISO = activeRange.start.toISOString()
+        const endISO = activeRange.end.toISOString()
+        const { data: stockOutData } = await supabase.schema('inventory').from('stock_out').select('item_name, quantity, category, created_at').gte('created_at', startISO).lte('created_at', endISO)
+        const stockOut = (stockOutData || []) as StockOutRow[]
+
+        const categoryQty: Record<string, number> = { Consumables: 0, Medicines: 0, Equipment: 0 }
+        const categoryCost: Record<string, number> = { Consumables: 0, Medicines: 0, Equipment: 0 }
+
+        // If user selected a specific category, group by item_name within that category
+        if (categoryFilter !== 'All Categories') {
+          // filter stockOut to this category
+          const selectedCatRaw = categoryFilter.toLowerCase()
+          const filtered = stockOut.filter(s => (s.category || '').toString().toLowerCase().includes(selectedCatRaw))
+          // group by item_name
+          const itemQtyMap: Record<string, number> = {}
+          const itemCostMap: Record<string, number> = {}
+          filtered.forEach((s: StockOutRow) => {
+            const item = s.item_name || 'Unknown'
+            const qty = parseFloat((s.quantity as any) || '0') || 0
+            itemQtyMap[item] = (itemQtyMap[item] || 0) + qty
+            // determine unit cost from inventory maps
+            let unit = 0
+            if (categoryFilter === 'Consumables') unit = consMap[item] || 0
+            else if (categoryFilter === 'Medicines') unit = medMap[item] || 0
+            else if (categoryFilter === 'Equipment') unit = equipMap[item] || 0
+            itemCostMap[item] = (itemCostMap[item] || 0) + (unit * qty)
+          })
+
+          // convert to arrays
+          const items = Object.keys(itemQtyMap).map(name => ({ name, qty: itemQtyMap[name], cost: Math.round(itemCostMap[name] || 0) }))
+          items.sort((a, b) => b.qty - a.qty)
+          const topItems = items.slice(0, 10)
+          setUsageData(topItems.map(i => ({ label: i.name, value: i.qty })))
+          setCostBreakdownData(topItems.map((i, idx) => ({ label: i.name, value: i.cost, color: CATEGORY_COLORS[categoryFilter] || usageColors[idx % usageColors.length] })))
+          setMonthlyUsageCost(items.reduce((s, x) => s + x.cost, 0))
+        } else {
+          stockOut.forEach((s: StockOutRow) => {
+            const qty = parseFloat((s.quantity as any) || '0') || 0
+            const catRaw = (s.category || '').toString().toLowerCase()
+            let cat: 'Consumables' | 'Medicines' | 'Equipment' = 'Consumables'
+            if (catRaw.includes('medi')) cat = 'Medicines'
+            else if (catRaw.includes('equip')) cat = 'Equipment'
+
+            categoryQty[cat] += qty
+            // get unit_cost
+            let unit = 0
+            if (cat === 'Consumables') unit = consMap[(s.item_name as string)] || 0
+            else if (cat === 'Medicines') unit = medMap[(s.item_name as string)] || 0
+            else if (cat === 'Equipment') unit = equipMap[(s.item_name as string)] || 0
+            categoryCost[cat] += unit * qty
+          })
+
+          setUsageData([
+            { label: 'Consumables', value: categoryQty.Consumables },
+            { label: 'Medicines', value: categoryQty.Medicines },
+            { label: 'Equipment', value: categoryQty.Equipment },
+          ])
+
+          setCostBreakdownData([
+            { label: 'Supplies', value: Math.round(categoryCost.Consumables), color: CATEGORY_COLORS.Consumables },
+            { label: 'Medicine', value: Math.round(categoryCost.Medicines), color: CATEGORY_COLORS.Medicines },
+            { label: 'Equipment', value: Math.round(categoryCost.Equipment), color: CATEGORY_COLORS.Equipment },
+          ])
+
+          setMonthlyUsageCost(Math.round(categoryCost.Consumables + categoryCost.Medicines + categoryCost.Equipment))
+        }
+
+        // Removed batch breakdown aggregation per request
+      } catch (err) {
+        console.error('Failed to load report data', err)
+      }
     }
-    return opts
-  }
-
-  // Use the start year from active range (or current year) for the Jan-Dec list
-  const monthOptions = React.useMemo(() => generateMonthOptions(activeRange.start.getFullYear()), [activeRange.start])
-
-  // Initialize start/end month values to activeRange months
-  React.useEffect(() => {
-    const s = activeRange.start
-    const e = activeRange.end
-    setStartRangeMonth(`${s.getFullYear()}-${pad(s.getMonth() + 1)}`)
-    setEndRangeMonth(`${e.getFullYear()}-${pad(e.getMonth() + 1)}`)
-  }, [dateRange])
+    loadReportData()
+  }, [dateRange, startDate, endDate, categoryFilter])
 
   return (
     <div className="px-6 md:px-12">
@@ -166,38 +244,31 @@ const ReportPage: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-xs text-slate-500 mb-1">Category</div>
-                  <Select value="All Categories" onValueChange={() => {}}>
+                  <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v)}>
                     <SelectTrigger size="sm" className="rounded-3xl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All Categories">All Categories</SelectItem>
+                      <SelectItem value="Consumables">Consumables</SelectItem>
+                      <SelectItem value="Medicines">Medicines</SelectItem>
+                      <SelectItem value="Equipment">Equipment</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="md:col-span-2">
                   <div className="text-xs text-slate-500 mb-1">Custom Date Range</div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Select value={startRangeMonth} onValueChange={(v) => { setStartRangeMonth(v); setDateRange('Custom') }}>
-                      <SelectTrigger size="sm" className="rounded-3xl">
-                        <div className="inline-flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><SelectValue>{monthOptions.find(o => o.value === startRangeMonth)?.label ?? 'Start'}</SelectValue></div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {monthOptions.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={endRangeMonth} onValueChange={(v) => { setEndRangeMonth(v); setDateRange('Custom') }}>
-                      <SelectTrigger size="sm" className="rounded-3xl">
-                        <div className="inline-flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><SelectValue>{monthOptions.find(o => o.value === endRangeMonth)?.label ?? 'End'}</SelectValue></div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {monthOptions.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DatePicker
+                      value={startDate}
+                      onChange={(d) => { setStartDate(d); setDateRange('Custom') }}
+                      placeholder="Start Date"
+                    />
+                    <DatePicker
+                      value={endDate}
+                      onChange={(d) => { setEndDate(d); setDateRange('Custom') }}
+                      placeholder="End Date"
+                    />
                   </div>
                 </div>
               </div>
@@ -214,14 +285,14 @@ const ReportPage: React.FC = () => {
                     <div className="text-xs text-slate-500">Total Inventory Value</div>
                     <div className="ml-auto text-xs text-slate-500 py-1 px-2 rounded bg-slate-100 dark:bg-slate-900">₱</div>
                   </div>
-                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(45280)}</div>
+                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(inventoryValue)}</div>
                 </div>
                 <div className="p-6 rounded-lg bg-emerald-50 dark:bg-emerald-900/10 border">
                   <div className="flex items-center gap-3">
                     <div className="text-xs text-slate-500">Monthly Usage</div>
                     <div className="ml-auto text-xs text-slate-500 py-1 px-2 rounded bg-slate-100 dark:bg-slate-900">₱</div>
                   </div>
-                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(8540)}</div>
+                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(monthlyUsageCost)}</div>
                 </div>
               </div>
             </CardContent>
@@ -268,11 +339,16 @@ const ReportPage: React.FC = () => {
                   <div className="p-6 rounded-lg bg-card border">
                     <h3 className="text-lg font-semibold mb-3">Monthly Usage</h3>
                     <div className="w-full">
-                      <HorizontalBarChart data={usageData} colors={usageColors} />
+                      {/* Compute chart colors: If All Categories & showing the three categories, show each category's color; else use the selected category's color for all items */}
+                      <HorizontalBarChart data={usageData} colors={
+                        categoryFilter === 'All Categories' && usageData.length === 3
+                          ? [CATEGORY_COLORS.Consumables, CATEGORY_COLORS.Medicines, CATEGORY_COLORS.Equipment]
+                          : usageData.map(() => CATEGORY_COLORS[categoryFilter] ?? usageColors[0])
+                      } />
                       <div className="mt-4 flex gap-4 items-center justify-center">
                         {usageData.map((u, i) => (
                           <div key={u.label} className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full" style={{ background: usageColors[i % usageColors.length] }} />
+                            <span className="w-3 h-3 rounded-full" style={{ background: usageData.length === 3 && categoryFilter === 'All Categories' ? usageColors[i] : (CATEGORY_COLORS[categoryFilter] ?? usageColors[i % usageColors.length]) }} />
                             <div className="text-sm text-muted-foreground">{u.label} — {u.value.toLocaleString()}</div>
                           </div>
                         ))}
@@ -322,6 +398,7 @@ const ReportPage: React.FC = () => {
                       ))}
                     </div>
                   </div>
+                  {/* Top Spending Batches removed per request */}
                 </div>
               </CardContent>
             </Card>
