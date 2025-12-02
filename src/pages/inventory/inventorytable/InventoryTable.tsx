@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
-import { Field, FieldLabel, FieldContent } from '@/components/ui/field'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -291,7 +290,6 @@ export default function InventoryTable() {
         const [showRestockModal, setShowRestockModal] = useState(false);
         const [isRestockOpen, setIsRestockOpen] = useState(false);
         
-        const [restockStage, setRestockStage] = useState<'selected' | 'success'>('selected');
         const [restockQuantities, setRestockQuantities] = useState<Record<string, number>>({});
         const [restockExpiryDates, setRestockExpiryDates] = useState<Record<string, string>>({});
         const [isRestockSuccessOpen, setIsRestockSuccessOpen] = useState(false);
@@ -561,7 +559,6 @@ export default function InventoryTable() {
             })
             setRestockQuantities(defaults)
             setRestockExpiryDates(defaultExpiry)
-            setRestockStage('selected')
             setShowRestockModal(true)
             setTimeout(() => setIsRestockOpen(true), 10)
         }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart, Coins, Calendar } from 'lucide-react'
+import { BarChart, Coins } from 'lucide-react'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
 import { cn, formatCurrency } from '@/lib/utils'
 import supabase from '@/utils/supabase'
