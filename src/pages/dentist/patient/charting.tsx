@@ -60,6 +60,15 @@ interface ProcedureOverview {
 }
 
 // --- Constants ---
+const TOOTH_CONDITIONS: ToothCondition[] = [
+  'Healthy',
+  'Crown',
+  'For Filling',
+  'Implant',
+  'Missing',
+  'Root Canal',
+];
+
 const IMPLANT_TYPES = [
   'Single Tooth Implant',
   'Implant-Supported Bridge',
@@ -138,10 +147,10 @@ const DentalCharting = () => {
     const loadConditions = async () => {
       const { data, error } = await patientRecordClient
         .from('tooth_conditions')
-        .select('*')
+        .select('id, condition_name')
         .order('id', { ascending: true });
       if (error) return console.error(error);
-      setConditions(data ?? []);
+      setConditions(data?.map((c: any) => ({ id: String(c.id), name: c.condition_name })) ?? []);
     };
     loadConditions();
   }, []);
@@ -151,24 +160,33 @@ const DentalCharting = () => {
     if (!selectedPatient) return;
     const { data, error } = await patientRecordClient
       .from('patient_teeth')
-      .select(`tooth_number, notes,  condition:condition_id(name)`)
+      .select(`tooth_number, notes, procedure_type, condition_id`)
       .eq('patient_id', selectedPatient);
 
-    if (error) return console.error(error);
+    if (error) {
+      console.error('Error loading teeth:', error);
+      return;
+    }
 
     const map: Record<number, ToothData> = initializeTeeth();
     data?.forEach((t: any) => {
+      // Look up condition name from the conditions array we loaded
+      const condition = conditions.find(c => c.id === String(t.condition_id));
+      const conditionName = condition?.name || 'Healthy';
       map[t.tooth_number] = {
         number: t.tooth_number,
-        condition: t.condition?.name || 'Healthy',
-        notes: t.notes,
+        condition: (TOOTH_CONDITIONS.includes(conditionName as ToothCondition) ? conditionName : 'Healthy') as ToothCondition,
+        procedureType: t.procedure_type || undefined,
+        notes: t.notes || undefined,
       };
     });
     setTeeth(map);
   };
 
   useEffect(() => {
-    loadTeeth();
+    if (conditions.length > 0) {
+      loadTeeth();
+    }
   }, [selectedPatient, conditions]);
 
   // --- Functions ---
@@ -198,8 +216,14 @@ const DentalCharting = () => {
     setIsMultiSelectMode(false);
   };
 
-  const handleApplyCondition = () => {
-    if (selectedTeeth.length === 0) return;
+  const handleApplyCondition = async () => {
+    if (selectedTeeth.length === 0 || !selectedPatient) return;
+
+    // Validate that procedureType is selected for Implant and For Filling conditions
+    if ((selectedCondition === 'Implant' || selectedCondition === 'For Filling') && !procedureType) {
+      alert(`Please select a ${selectedCondition === 'Implant' ? 'implant' : 'filling'} type.`);
+      return;
+    }
 
     const updatedTeeth = { ...teeth };
     selectedTeeth.forEach((toothNum) => {
@@ -214,6 +238,55 @@ const DentalCharting = () => {
     });
 
     setTeeth(updatedTeeth);
+
+    // Save to database
+    try {
+      const patientId = Number(selectedPatient);
+      const conditionId = getConditionId(selectedCondition, conditions);
+      
+      if (!conditionId) {
+        throw new Error(`Condition ID not found for: ${selectedCondition}`);
+      }
+
+      // With UNIQUE (patient_id, tooth_number) constraint:
+      // - Each tooth can have one condition
+      // - Multiple teeth can have the same condition
+      // - Simple batch insert works perfectly
+      
+      // Step 1: Delete existing records for selected teeth
+      // This ensures we don't have duplicate tooth_number entries
+      await patientRecordClient
+        .from('patient_teeth')
+        .delete()
+        .eq('patient_id', patientId)
+        .in('tooth_number', selectedTeeth);
+
+      // Step 2: Prepare all rows for batch insert
+      const rows = selectedTeeth.map(toothNum => ({
+        patient_id: patientId,
+        tooth_number: toothNum,
+        condition_id: conditionId,
+        procedure_type: (selectedCondition === 'Implant' || selectedCondition === 'For Filling')
+          ? procedureType
+          : null,
+        notes: notes.trim() || null,
+      }));
+
+      // Step 3: Insert all records in a single batch operation
+      const { error: insertError } = await patientRecordClient
+        .from('patient_teeth')
+        .insert(rows);
+
+      if (insertError) {
+        console.error('Error inserting teeth data:', insertError);
+        throw insertError;
+      }
+    } catch (err) {
+      console.error('Error saving teeth data:', err);
+      alert('Failed to save teeth data. Please try again.');
+      return;
+    }
+
     setIsDialogOpen(false);
     setSelectedTeeth([]);
     setIsMultiSelectMode(false);
@@ -296,16 +369,33 @@ const DentalCharting = () => {
       return;
     }
 
-    // Prepare rows for Supabase
-    const rows = unhealthyTeeth.map(tooth => ({
-      patient_id: patientId,
-      tooth_number: tooth.number,
-      condition_id: getConditionId(tooth.condition)
-    }));
+    // Delete existing records for these teeth first to avoid unique constraint issues
+    const toothNumbers = unhealthyTeeth.map(tooth => tooth.number);
+    await patientRecordClient
+      .from('patient_teeth')
+      .delete()
+      .eq('patient_id', patientId)
+      .in('tooth_number', toothNumbers);
 
+    // Prepare rows for Supabase
+    const rows = unhealthyTeeth.map(tooth => {
+      const conditionId = getConditionId(tooth.condition, conditions);
+      if (!conditionId) {
+        throw new Error(`Condition ID not found for: ${tooth.condition}`);
+      }
+      return {
+        patient_id: patientId,
+        tooth_number: tooth.number,
+        condition_id: conditionId,
+        procedure_type: tooth.procedureType || null,
+        notes: tooth.notes || null,
+      };
+    });
+
+    // Insert new records
     const { data, error } = await patientRecordClient
       .from('patient_teeth')
-      .upsert(rows, { onConflict: 'patient_id,tooth_number' });
+      .insert(rows);
 
     if (error) throw error;
 
@@ -318,17 +408,11 @@ const DentalCharting = () => {
 };
 
 // Map tooth condition to the condition_id in Supabase
-function getConditionId(condition: string) {
-  const conditionMap: Record<string, number> = {
-    'Healthy': 1,
-    'Missing': 2,
-    'For Filling': 3,
-    'Implant': 4,
-    'Crown': 5,
-    'Root Canal': 6
-  };
-  return conditionMap[condition];
-}
+// This function should be called with the conditions array loaded from the database
+const getConditionId = (condition: string, conditionsList: { id: string; name: string }[]): number | null => {
+  const found = conditionsList.find(c => c.name === condition);
+  return found ? Number(found.id) : null;
+};
 
 
 

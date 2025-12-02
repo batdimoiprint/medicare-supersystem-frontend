@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
-import supabase, { dentistClient } from '@/utils/supabase';
+import supabase, { dentistClient, frontdeskClient, patientRecordClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
 interface Service {
@@ -263,9 +263,11 @@ interface PatientDashboardProps {
   dispatch: React.Dispatch<AppointmentAction>;
   services: Service[];
   dentists: Dentist[];
+  appointmentStatuses: { appointment_status_id: number; appointment_status_name: string }[];
+  currentPatientId: number | null;
 }
 
-const PatientDashboard = ({ appointments, dispatch, services, dentists }: PatientDashboardProps) => {
+const PatientDashboard = ({ appointments, dispatch, services, dentists, appointmentStatuses, currentPatientId }: PatientDashboardProps) => {
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [selectedDentistId, setSelectedDentistId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -345,6 +347,12 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
       return;
     }
 
+    if (!currentPatientId) {
+      setError('Patient not found. Please ensure you are logged in.');
+      setIsBooking(false);
+      return;
+    }
+
     // Step 2: System checks dentist availability
     setIsCheckingAvailability(true);
     await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
@@ -357,60 +365,96 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
     }
     setIsCheckingAvailability(false);
 
-    // Step 1 & 2: Create appointment with PENDING_PAYMENT status
-    const newAppointment = {
-      service: service.service_name,
-      dentist: dentistName,
-      date: selectedDate,
-      time: selectedTimeSlot,
-      fee: fee,
-      patient: 'Current Patient',
-    };
+    try {
+      // Find PENDING_PAYMENT status ID
+      const pendingPaymentStatus = appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => 
+        s.appointment_status_name.toLowerCase().includes('pending') && 
+        s.appointment_status_name.toLowerCase().includes('payment')
+      ) || appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => s.appointment_status_name === 'Pending Payment');
 
-    // Step 1 & 2: Create appointment with PENDING_PAYMENT status
-    // The appointment is created immediately with PENDING_PAYMENT status
-    pendingAppointmentRef.current = newAppointment;
-    
-    // Create appointment record (Step 1 & 2 complete)
-    dispatch({ type: 'CREATE_APPOINTMENT', payload: newAppointment });
-    setMessage('✓ Availability confirmed (Step 2). Appointment slot reserved. Redirecting to PayMongo for payment (Step 3)...');
+      if (!pendingPaymentStatus) {
+        throw new Error('Pending Payment status not found in database');
+      }
 
-    // Step 3: Simulate PayMongo Payment
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate payment processing
-    setMessage('Processing payment with PayMongo...');
+      // Step 1 & 2: Create appointment in database with PENDING_PAYMENT status
+      setMessage('✓ Availability confirmed (Step 2). Creating appointment...');
+      
+      const { data: appointmentData, error: createError } = await frontdeskClient
+        .from('appointment_tbl')
+        .insert({
+          patient_id: currentPatientId,
+          service_id: service.service_id,
+          personnel_id: selectedDentistId,
+          appointment_date: selectedDate,
+          appointment_time: selectedTimeSlot,
+          appointment_status_id: pendingPaymentStatus.appointment_status_id,
+        })
+        .select()
+        .single();
 
-    // Step 4: Simulate PayMongo Webhook - automatically confirms payment and creates record
-    // Wait for React state to update with the new appointment
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    // Find the appointment we just created
-    // The webhook automatically finds and confirms the appointment by matching details
-    const createdAppointment = [...appointments]
-      .sort((a, b) => b.id - a.id)
-      .find((app: Appointment) => 
-        pendingAppointmentRef.current &&
-        app.patient === pendingAppointmentRef.current.patient && 
-        app.date === pendingAppointmentRef.current.date &&
-        app.time === pendingAppointmentRef.current.time &&
-        app.dentist === pendingAppointmentRef.current.dentist &&
-        app.service === pendingAppointmentRef.current.service &&
-        app.status === 'PENDING_PAYMENT'
-      ) || [...appointments]
-        .sort((a, b) => b.id - a.id)
-        .find((app: Appointment) => app.status === 'PENDING_PAYMENT');
+      if (createError) {
+        throw createError;
+      }
 
-    if (createdAppointment) {
-      // Webhook confirms payment and updates status to PENDING_APPROVAL
-      // The webhook automatically creates the appointment record and confirms payment
+      if (!appointmentData) {
+        throw new Error('Failed to create appointment');
+      }
+
+      // Update local state
+      const newAppointment: Appointment = {
+        id: appointmentData.appointment_id,
+        service: service.service_name,
+        dentist: dentistName,
+        date: selectedDate,
+        time: selectedTimeSlot,
+        fee: fee,
+        patient: 'Current Patient',
+        status: 'PENDING_PAYMENT',
+        statusHistory: [
+          { step: 1, label: 'Service & Schedule Selected (Patient)', timestamp: new Date(), completed: true },
+        ],
+      };
+
+      dispatch({ type: 'CREATE_APPOINTMENT', payload: newAppointment });
+      setMessage('✓ Availability confirmed (Step 2). Appointment slot reserved. Redirecting to PayMongo for payment (Step 3)...');
+
+      // Step 3: Simulate PayMongo Payment
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate payment processing
+      setMessage('Processing payment with PayMongo...');
+
+      // Step 4: Simulate PayMongo Webhook - automatically confirms payment and updates status
       await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate webhook processing time
-      dispatch({ type: 'CONFIRM_PAYMENT', payload: { id: createdAppointment.id } });
-      setMessage(`✓ Payment confirmed via PayMongo webhook (Step 4)! Appointment #${createdAppointment.id} has been automatically created and sent to Front Desk for approval (Step 5).`);
-      pendingAppointmentRef.current = null;
-    } else {
-      setMessage('Payment processed. Waiting for webhook confirmation...');
-    }
 
-    setIsBooking(false);
+      // Find PENDING_APPROVAL status ID
+      const pendingApprovalStatus = appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => 
+        s.appointment_status_name.toLowerCase().includes('pending') && 
+        s.appointment_status_name.toLowerCase().includes('approval')
+      ) || appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => s.appointment_status_name === 'Pending Approval');
+
+      if (!pendingApprovalStatus) {
+        throw new Error('Pending Approval status not found in database');
+      }
+
+      // Update appointment status in database
+      const { error: updateError } = await frontdeskClient
+        .from('appointment_tbl')
+        .update({ appointment_status_id: pendingApprovalStatus.appointment_status_id })
+        .eq('appointment_id', appointmentData.appointment_id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Update local state
+      dispatch({ type: 'CONFIRM_PAYMENT', payload: { id: appointmentData.appointment_id } });
+      setMessage(`✓ Payment confirmed via PayMongo webhook (Step 4)! Appointment #${appointmentData.appointment_id} has been automatically created and sent to Front Desk for approval (Step 5).`);
+      pendingAppointmentRef.current = null;
+    } catch (err: any) {
+      console.error('Error creating appointment:', err);
+      setError(err.message || 'Failed to create appointment. Please try again.');
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   const patientAppointments = appointments.filter((a: Appointment) => a.patient === 'Current Patient');
@@ -607,17 +651,70 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
 interface FrontDeskViewProps {
   appointments: Appointment[];
   dispatch: React.Dispatch<AppointmentAction>;
+  appointmentStatuses: { appointment_status_id: number; appointment_status_name: string }[];
 }
 
-const FrontDeskView = ({ appointments, dispatch }: FrontDeskViewProps) => {
+const FrontDeskView = ({ appointments, dispatch, appointmentStatuses }: FrontDeskViewProps) => {
   const pendingAppointments = appointments.filter((a: Appointment) => a.status === 'PENDING_APPROVAL');
   
-  const handleApprove = (id: number) => {
-    dispatch({ type: 'APPROVE_APPOINTMENT', payload: { id } });
+  const handleApprove = async (id: number) => {
+    try {
+      // Find CONFIRMED status ID
+      const confirmedStatus = appointmentStatuses.find(s => 
+        s.appointment_status_name.toLowerCase() === 'confirmed'
+      );
+
+      if (!confirmedStatus) {
+        alert('Confirmed status not found in database');
+        return;
+      }
+
+      // Update appointment status in database
+      const { error } = await frontdeskClient
+        .from('appointment_tbl')
+        .update({ appointment_status_id: confirmedStatus.appointment_status_id })
+        .eq('appointment_id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      dispatch({ type: 'APPROVE_APPOINTMENT', payload: { id } });
+    } catch (err: any) {
+      console.error('Error approving appointment:', err);
+      alert('Failed to approve appointment. Please try again.');
+    }
   };
 
-  const handleCancel = (id: number) => {
-    dispatch({ type: 'CANCEL_APPOINTMENT', payload: { id } });
+  const handleCancel = async (id: number) => {
+    try {
+      // Find CANCELLED status ID
+      const cancelledStatus = appointmentStatuses.find(s => 
+        s.appointment_status_name.toLowerCase() === 'cancelled'
+      );
+
+      if (!cancelledStatus) {
+        alert('Cancelled status not found in database');
+        return;
+      }
+
+      // Update appointment status in database
+      const { error } = await frontdeskClient
+        .from('appointment_tbl')
+        .update({ appointment_status_id: cancelledStatus.appointment_status_id })
+        .eq('appointment_id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      dispatch({ type: 'CANCEL_APPOINTMENT', payload: { id } });
+    } catch (err: any) {
+      console.error('Error cancelling appointment:', err);
+      alert('Failed to cancel appointment. Please try again.');
+    }
   };
 
   return (
@@ -754,6 +851,8 @@ const App = () => {
   const [activeView, setActiveView] = useState('patient'); // 'patient', 'frontdesk', 'records'
   const [services, setServices] = useState<Service[]>([]);
   const [dentists, setDentists] = useState<Dentist[]>([]);
+  const [appointmentStatuses, setAppointmentStatuses] = useState<{ appointment_status_id: number; appointment_status_name: string }[]>([]);
+  const [currentPatientId, setCurrentPatientId] = useState<number | null>(null);
 
   // Load services from dentist.services_tbl
   useEffect(() => {
@@ -818,15 +917,163 @@ const App = () => {
     loadDentists();
   }, []);
 
+  // Load appointment statuses
+  useEffect(() => {
+    const loadStatuses = async () => {
+      try {
+        const { data, error } = await frontdeskClient
+          .from('appointment_status_tbl')
+          .select('appointment_status_id, appointment_status_name')
+          .order('appointment_status_id', { ascending: true });
+
+        if (error) {
+          console.error('Failed to load appointment statuses:', error);
+          return;
+        }
+        setAppointmentStatuses(data ?? []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadStatuses();
+  }, []);
+
+  // Load current patient (for now, get first patient or use a default)
+  useEffect(() => {
+    const loadCurrentPatient = async () => {
+      try {
+        const { data, error } = await patientRecordClient
+          .from('patient_tbl')
+          .select('patient_id')
+          .limit(1)
+          .single();
+
+        if (!error && data) {
+          setCurrentPatientId(data.patient_id);
+        } else {
+          // Use a default patient ID if available, or set to null
+          setCurrentPatientId(null);
+        }
+      } catch (err) {
+        console.error('Error loading current patient:', err);
+      }
+    };
+    loadCurrentPatient();
+  }, []);
+
+  // Load appointments from database
+  useEffect(() => {
+    const loadAppointments = async () => {
+      try {
+        const { data, error } = await frontdeskClient
+          .from('appointment_tbl')
+          .select(`
+            appointment_id,
+            patient_id,
+            service_id,
+            appointment_date,
+            appointment_time,
+            appointment_status_id,
+            personnel_id,
+            created_at
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Failed to load appointments:', error);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          dispatch({ type: 'SET_APPOINTMENTS', payload: [] });
+          return;
+        }
+
+        // Fetch related data
+        const serviceIds = [...new Set(data.map(a => a.service_id).filter(Boolean))];
+        const personnelIds = [...new Set(data.map(a => a.personnel_id).filter(Boolean))];
+        const patientIds = [...new Set(data.map(a => a.patient_id))];
+
+        // Load services
+        const { data: servicesData } = await dentistClient
+          .from('services_tbl')
+          .select('service_id, service_name')
+          .in('service_id', serviceIds);
+
+        // Load personnel
+        const { data: personnelData } = await supabase
+          .from('personnel_tbl')
+          .select('personnel_id, f_name, m_name, l_name')
+          .in('personnel_id', personnelIds);
+
+        // Load patients
+        const { data: patientsData } = await patientRecordClient
+          .from('patient_tbl')
+          .select('patient_id, f_name, l_name')
+          .in('patient_id', patientIds);
+
+        const serviceMap = new Map(servicesData?.map(s => [s.service_id, s.service_name]) ?? []);
+        const personnelMap = new Map(personnelData?.map(p => [p.personnel_id, getDentistName({ personnel_id: p.personnel_id, f_name: p.f_name, m_name: p.m_name, l_name: p.l_name })]) ?? []);
+        const patientMap = new Map(patientsData?.map(p => [p.patient_id, `${p.f_name} ${p.l_name}`]) ?? []);
+        const statusMap = new Map(appointmentStatuses.map(s => [s.appointment_status_id, s.appointment_status_name]));
+
+        // Map status names to our internal status format
+        const statusNameToStatus: Record<string, 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'CANCELLED'> = {
+          'Pending Payment': 'PENDING_PAYMENT',
+          'Pending Approval': 'PENDING_APPROVAL',
+          'Confirmed': 'CONFIRMED',
+          'Cancelled': 'CANCELLED',
+        };
+
+        // Convert database appointments to our format
+        const mappedAppointments: Appointment[] = data.map((app: any) => {
+          const statusName = statusMap.get(app.appointment_status_id) || 'Pending Payment';
+          const status = (statusNameToStatus[statusName as keyof typeof statusNameToStatus] || 'PENDING_PAYMENT') as 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'CANCELLED';
+
+          return {
+            id: app.appointment_id,
+            service: serviceMap.get(app.service_id) || 'Unknown Service',
+            dentist: personnelMap.get(app.personnel_id) || 'Unassigned',
+            date: app.appointment_date || '',
+            time: app.appointment_time || '',
+            fee: 0, // We'll need to load this from services
+            patient: patientMap.get(app.patient_id) || `Patient #${app.patient_id}`,
+            status: status,
+            statusHistory: [
+              { step: 1, label: 'Service & Schedule Selected (Patient)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+              ...(status !== 'PENDING_PAYMENT' ? [
+                { step: 2, label: 'Dentist Availability Confirmed (System)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+                { step: 3, label: 'PayMongo Payment Initiated (Patient)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+                { step: 4, label: 'Payment Confirmed / Record Created (Webhook)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+              ] : []),
+              ...(status === 'CONFIRMED' ? [
+                { step: 5, label: 'Front Desk Approved (Group 1)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+                { step: 6, label: 'Patient Dashboard & Records Updated (Core/Group 3)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+              ] : []),
+            ],
+          };
+        });
+
+        dispatch({ type: 'SET_APPOINTMENTS', payload: mappedAppointments });
+      } catch (err) {
+        console.error('Error loading appointments:', err);
+      }
+    };
+
+    if (appointmentStatuses.length > 0) {
+      loadAppointments();
+    }
+  }, [appointmentStatuses]);
+
   const renderView = () => {
     switch (activeView) {
       case 'frontdesk':
-        return <FrontDeskView appointments={appointments} dispatch={dispatch} />;
+        return <FrontDeskView appointments={appointments} dispatch={dispatch} appointmentStatuses={appointmentStatuses} />;
       case 'records':
         return <PatientRecordsView appointments={appointments} />;
       case 'patient':
       default:
-        return <PatientDashboard appointments={appointments} dispatch={dispatch} services={services} dentists={dentists} />;
+        return <PatientDashboard appointments={appointments} dispatch={dispatch} services={services} dentists={dentists} appointmentStatuses={appointmentStatuses} currentPatientId={currentPatientId} />;
     }
   };
 

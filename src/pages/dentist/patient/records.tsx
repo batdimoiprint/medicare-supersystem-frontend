@@ -29,7 +29,8 @@ import {
 } from '@/components/ui/select';
 import { PatientNav } from '@/components/dentist/PatientNav';
 import { PatientSelector } from '@/components/dentist/PatientSelector';
-import { patientRecordClient } from '@/utils/supabase';
+import { patientRecordClient, dentistClient } from '@/utils/supabase';
+import supabase from '@/utils/supabase';
 
 // --- Type Definitions ---
 interface PatientRow {
@@ -37,6 +38,19 @@ interface PatientRow {
   f_name?: string;
   m_name?: string;
   l_name?: string;
+}
+
+interface Dentist {
+  personnel_id: number | string; // Can be number or string depending on how Supabase returns it
+  f_name?: string;
+  m_name?: string;
+  l_name?: string;
+}
+
+interface Service {
+  service_id: number;
+  service_name: string;
+  service_description?: string;
 }
 
 interface EMRRecord {
@@ -47,8 +61,10 @@ interface EMRRecord {
   chief_complaint: string;
   diagnosis: string;
   treatment: string;
+  treatment_id?: number; // FK to services_tbl
   notes: string;
   dentist: string;
+  personnel_id?: string | number; // FK to personnel_tbl (bigint)
   status: 'Active' | 'Archived';
 }
 
@@ -56,6 +72,8 @@ interface EMRRecord {
 const PatientRecords = () => {
   const [searchParams] = useSearchParams();
   const [patients, setPatients] = useState<PatientRow[]>([]);
+  const [dentists, setDentists] = useState<Dentist[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<string>(searchParams.get('patient') || '');
   const [records, setRecords] = useState<EMRRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -69,10 +87,25 @@ const PatientRecords = () => {
     chief_complaint: '',
     diagnosis: '',
     treatment: '',
+    treatment_id: undefined,
     notes: '',
-    dentist: 'Dr. Evelyn Reyes',
+    dentist: '',
+    personnel_id: '',
     status: 'Active',
   });
+
+  // Helper to get dentist name
+  const getDentistName = (dentist: Dentist): string => {
+    return `Dr. ${dentist.f_name ?? ''} ${dentist.m_name ?? ''} ${dentist.l_name ?? ''}`.trim();
+  };
+
+  // Helper to get dentist name by ID
+  const getDentistNameById = (personnelId?: string | number): string => {
+    if (!personnelId) return 'Unknown';
+    // Compare as strings to handle both number and string types
+    const dentist = dentists.find(d => String(d.personnel_id) === String(personnelId));
+    return dentist ? getDentistName(dentist) : 'Unknown';
+  };
 
   // --- Load Patients ---
   useEffect(() => {
@@ -99,14 +132,68 @@ const PatientRecords = () => {
     return () => { mounted = false; };
   }, [selectedPatient]);
 
+  // --- Load Dentists ---
+  useEffect(() => {
+    const loadDentists = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('personnel_tbl')
+          .select('personnel_id, f_name, m_name, l_name, role_id')
+          .eq('role_id', '1')
+          .order('l_name', { ascending: true });
+
+        if (error) {
+          console.error('Failed to load dentists:', error);
+          return;
+        }
+
+        // Convert personnel_id to number if it's returned as string (bigint handling)
+        // Keep as number for consistency since both tables use bigint
+        const processedData = data?.map(d => ({
+          ...d,
+          personnel_id: typeof d.personnel_id === 'string' ? Number(d.personnel_id) : d.personnel_id
+        })) ?? [];
+
+        setDentists(processedData);
+      } catch (err) {
+        console.error('Error loading dentists:', err);
+      }
+    };
+    loadDentists();
+  }, []);
+
+  // --- Load Services (Treatments) ---
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const { data, error } = await dentistClient
+          .from('services_tbl')
+          .select('service_id, service_name, service_description')
+          .not('service_id', 'is', null)
+          .not('service_name', 'is', null)
+          .order('service_name', { ascending: true });
+
+        if (error) {
+          console.error('Failed to load services:', error);
+          return;
+        }
+        setServices(data ?? []);
+      } catch (err) {
+        console.error('Error loading services:', err);
+      }
+    };
+    loadServices();
+  }, []);
+
   // --- Load EMR Records ---
   const loadRecords = async () => {
     if (!selectedPatient) return;
     setLoading(true);
     try {
+      // Select columns - treatment is bigint (service_id), not text
       const { data, error } = await patientRecordClient
         .from('emr_records')
-        .select('*')
+        .select('id, patient_id, date, time, chief_complaint, diagnosis, treatment, notes, dentist, status')
         .eq('patient_id', selectedPatient)
         .order('date', { ascending: false });
 
@@ -115,7 +202,27 @@ const PatientRecords = () => {
         return;
       }
 
-      setRecords(data ?? []);
+      // Transform data: convert IDs to names for display
+      // - treatment is service_id (bigint) -> convert to service name
+      // - dentist is personnel_id (bigint) -> convert to dentist name
+      const transformedData = data?.map(record => {
+        const service = services.find(s => s.service_id === record.treatment);
+        const dentist = dentists.find(d => 
+          typeof d.personnel_id === 'number' 
+            ? d.personnel_id === record.dentist
+            : Number(d.personnel_id) === record.dentist
+        );
+        
+        return {
+          ...record,
+          treatment_id: record.treatment, // service_id from database
+          treatment: service?.service_name || `Service ID: ${record.treatment}`, // Convert to name for display
+          personnel_id: record.dentist, // personnel_id from database (stored in dentist column)
+          dentist: dentist ? getDentistName(dentist) : `Dentist ID: ${record.dentist}`, // Convert to name for display
+        };
+      });
+
+      setRecords(transformedData ?? []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -143,13 +250,22 @@ const PatientRecords = () => {
 
   const handleEdit = (record: EMRRecord) => {
     setIsEditing(record.id);
-    setFormData(record);
+    // Convert IDs back to form format
+    // - treatment_id is the service_id (bigint)
+    // - personnel_id is the dentist (bigint, stored in dentist column)
+    setFormData({
+      ...record,
+      treatment_id: record.treatment_id, // Already set from transformation
+      personnel_id: record.personnel_id ? String(record.personnel_id) : undefined, // Convert to string for form
+      // Keep treatment and dentist as display names for the form
+    });
     setIsAdding(false);
   };
 
   const handleAdd = () => {
     setIsAdding(true);
     setIsEditing(null);
+    const defaultDentist = dentists.length > 0 ? dentists[0].personnel_id : '';
     setFormData({
       patient_id: selectedPatient ? Number(selectedPatient) : undefined,
       date: new Date().toISOString().split('T')[0],
@@ -157,49 +273,134 @@ const PatientRecords = () => {
       chief_complaint: '',
       diagnosis: '',
       treatment: '',
+      treatment_id: undefined,
       notes: '',
-      dentist: 'Dr. Evelyn Reyes',
+      dentist: '',
+      personnel_id: defaultDentist,
       status: 'Active',
     });
   };
 
   const handleSave = async () => {
     try {
+      if (!selectedPatient) {
+        alert('Please select a patient first');
+        return;
+      }
+
+      // Get treatment_id - the treatment column in emr_records is bigint (service_id)
+      // If user selected a service from dropdown, use its service_id
+      // If user entered custom text, we can't save it as bigint, so we'll need to handle this
+      let treatmentId: number | null = null;
+      
+      if (formData.treatment_id) {
+        // User selected a service from dropdown
+        treatmentId = formData.treatment_id;
+      } else if (formData.treatment && formData.treatment.trim() !== '') {
+        // User entered custom treatment text
+        // Since treatment column is bigint, we can't save custom text directly
+        // Try to find a matching service by name
+        const matchingService = services.find(s => 
+          s.service_name?.toLowerCase() === formData.treatment?.toLowerCase()
+        );
+        if (matchingService) {
+          treatmentId = matchingService.service_id;
+        } else {
+          // Custom treatment that doesn't match any service
+          // Can't save as bigint, so we'll set to null
+          treatmentId = null;
+          alert('Custom treatment text cannot be saved. Please select from services dropdown.');
+          return;
+        }
+      }
+
+      // Get personnel_id - the dentist column in emr_records is bigint (personnel_id)
+      // We need to save the personnel_id, not the dentist name
+      let personnelId: number | null = null;
+      
+      if (formData.personnel_id) {
+        // Convert personnel_id to number (it's bigint in database)
+        const parsed = typeof formData.personnel_id === 'string' 
+          ? Number(formData.personnel_id) 
+          : formData.personnel_id;
+        
+        if (!isNaN(parsed) && parsed > 0) {
+          personnelId = parsed;
+        }
+      }
+      
+      if (!personnelId) {
+        alert('Please select a dentist');
+        return;
+      }
+
+      const patientId = Number(selectedPatient);
+      
+      if (isNaN(patientId)) {
+        alert('Invalid patient ID');
+        return;
+      }
+
+      // Note: emr_records table does NOT have a personnel_id column
+      // We only save the dentist name in the 'dentist' field
+
       if (isEditing) {
         // Update existing record
+        // Note: 
+        // - treatment column is bigint (service_id), not text
+        // - dentist column is bigint (personnel_id), not text
+        const updateData: Record<string, any> = {
+          date: formData.date || new Date().toISOString().split('T')[0],
+          time: formData.time || null,
+          chief_complaint: formData.chief_complaint || null,
+          diagnosis: formData.diagnosis || null,
+          treatment: treatmentId, // Send service_id (bigint)
+          notes: formData.notes || null,
+          dentist: personnelId, // Send personnel_id (bigint), not name (text)
+          status: formData.status || 'Active',
+        };
+
         const { error } = await patientRecordClient
           .from('emr_records')
-          .update({
-            date: formData.date,
-            time: formData.time,
-            chief_complaint: formData.chief_complaint,
-            diagnosis: formData.diagnosis,
-            treatment: formData.treatment,
-            notes: formData.notes,
-            dentist: formData.dentist,
-            status: formData.status,
-          })
+          .update(updateData)
           .eq('id', isEditing);
 
         if (error) throw error;
         setIsEditing(null);
       } else if (isAdding) {
         // Insert new record
+        // Note: 
+        // - treatment column is bigint (service_id), not text
+        // - dentist column is bigint (personnel_id), not text
+        const insertData: Record<string, any> = {};
+        
+        // Add only the fields we know exist
+        insertData.patient_id = patientId;
+        insertData.date = formData.date || new Date().toISOString().split('T')[0];
+        insertData.time = formData.time || null;
+        insertData.chief_complaint = formData.chief_complaint || null;
+        insertData.diagnosis = formData.diagnosis || null;
+        insertData.treatment = treatmentId; // Send service_id (bigint)
+        insertData.notes = formData.notes || null;
+        insertData.status = formData.status || 'Active';
+        insertData.dentist = personnelId; // Send personnel_id (bigint), not name (text)
+
+        // Log exactly what we're sending
+        console.log('=== INSERT DATA ===');
+        console.log('Keys:', Object.keys(insertData));
+        console.log('Values:', Object.values(insertData));
+        console.log('Full object:', JSON.stringify(insertData, null, 2));
+        console.log('Personnel ID (dentist):', personnelId);
+
         const { error } = await patientRecordClient
           .from('emr_records')
-          .insert({
-            patient_id: Number(selectedPatient),
-            date: formData.date,
-            time: formData.time,
-            chief_complaint: formData.chief_complaint,
-            diagnosis: formData.diagnosis,
-            treatment: formData.treatment,
-            notes: formData.notes,
-            dentist: formData.dentist,
-            status: formData.status,
-          });
+          .insert(insertData);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Insert error details:', error);
+          console.error('Insert data that caused error:', insertData);
+          throw error;
+        }
         setIsAdding(false);
       }
 
@@ -229,6 +430,7 @@ const PatientRecords = () => {
   const handleCancel = () => {
     setIsEditing(null);
     setIsAdding(false);
+    const defaultDentist = dentists.length > 0 ? dentists[0].personnel_id : '';
     setFormData({
       patient_id: undefined,
       date: new Date().toISOString().split('T')[0],
@@ -236,8 +438,10 @@ const PatientRecords = () => {
       chief_complaint: '',
       diagnosis: '',
       treatment: '',
+      treatment_id: undefined,
       notes: '',
-      dentist: 'Dr. Evelyn Reyes',
+      dentist: '',
+      personnel_id: defaultDentist,
       status: 'Active',
     });
   };
@@ -390,15 +594,22 @@ const PatientRecords = () => {
                 <FieldLabel>Dentist</FieldLabel>
                 <FieldContent>
                   <Select
-                    value={formData.dentist}
-                    onValueChange={(value) => setFormData({ ...formData, dentist: value })}
+                    value={formData.personnel_id ? String(formData.personnel_id) : ''}
+                    onValueChange={(value) => setFormData({ ...formData, personnel_id: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder={dentists.length === 0 ? "Loading dentists..." : "Select dentist"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Dr. Evelyn Reyes">Dr. Evelyn Reyes</SelectItem>
-                      <SelectItem value="Dr. Mark Santos">Dr. Mark Santos</SelectItem>
+                      {dentists.length === 0 ? (
+                        <SelectItem value="none" disabled>No dentists available</SelectItem>
+                      ) : (
+                        dentists.map(d => (
+                          <SelectItem key={String(d.personnel_id)} value={String(d.personnel_id)}>
+                            {getDentistName(d)}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </FieldContent>
@@ -427,11 +638,42 @@ const PatientRecords = () => {
             <Field orientation="vertical">
               <FieldLabel>Treatment</FieldLabel>
               <FieldContent>
-                <Input
-                  value={formData.treatment}
-                  onChange={(e) => setFormData({ ...formData, treatment: e.target.value })}
-                  placeholder="Treatment provided"
-                />
+                <Select
+                  value={formData.treatment_id ? String(formData.treatment_id) : ''}
+                  onValueChange={(value) => {
+                    const serviceId = Number(value);
+                    const selectedService = services.find(s => s.service_id === serviceId);
+                    setFormData({ 
+                      ...formData, 
+                      treatment_id: serviceId,
+                      treatment: selectedService?.service_name || ''
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={services.length === 0 ? "Loading services..." : "Select treatment/service"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.length === 0 ? (
+                      <SelectItem value="none" disabled>No services available</SelectItem>
+                    ) : (
+                      services.map(s => (
+                        <SelectItem key={s.service_id} value={String(s.service_id)}>
+                          {s.service_name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {/* Allow manual entry as fallback */}
+                {formData.treatment_id && (
+                  <Input
+                    className="mt-2"
+                    value={formData.treatment}
+                    onChange={(e) => setFormData({ ...formData, treatment: e.target.value })}
+                    placeholder="Or enter custom treatment"
+                  />
+                )}
               </FieldContent>
             </Field>
             <Field orientation="vertical">
@@ -497,7 +739,7 @@ const PatientRecords = () => {
                       </div>
                       <div className="flex items-center gap-1">
                         <User className="w-4 h-4" />
-                        {record.dentist}
+                        {record.personnel_id ? getDentistNameById(record.personnel_id) : record.dentist}
                       </div>
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${record.status === 'Active'
                           ? 'bg-primary/10 text-primary'
