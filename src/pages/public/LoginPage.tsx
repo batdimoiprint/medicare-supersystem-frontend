@@ -42,6 +42,29 @@ export default function LoginPage() {
     return hash.replace(/^\$2y\$/, '$2a$');
   }
 
+  /**
+   * Check if a string looks like a bcrypt hash
+   */
+  function isBcryptHash(str: string): boolean {
+    return /^\$2[aby]?\$\d{1,2}\$.{53}$/.test(str);
+  }
+
+  /**
+   * Compare password - handles both bcrypt hashes and plain text
+   * Returns true if password matches
+   */
+  async function comparePassword(inputPassword: string, storedPassword: string): Promise<boolean> {
+    if (isBcryptHash(storedPassword)) {
+      // Password is hashed - use bcrypt compare
+      const normalizedHash = normalizeHash(storedPassword);
+      return await bcrypt.compare(inputPassword, normalizedHash);
+    } else {
+      // Password is plain text - direct comparison
+      // TODO: Migrate all passwords to bcrypt hashes
+      return inputPassword === storedPassword;
+    }
+  }
+
   async function onSubmit(formData: LoginFormValues) {
     try {
       setError(null);
@@ -67,10 +90,9 @@ export default function LoginPage() {
           return;
         }
 
-        const normalizedHash = normalizeHash(patientData.password);
-        const hashedMatch = await bcrypt.compare(formData.password, normalizedHash);
+        const passwordMatch = await comparePassword(formData.password, patientData.password);
 
-        if (!hashedMatch) {
+        if (!passwordMatch) {
           setError('Invalid email or password');
           return;
         }
@@ -110,13 +132,12 @@ export default function LoginPage() {
         return;
       }
 
-      const normalizedPersonnelHash = normalizeHash(personnelData.password);
-      const hashedMatchPersonnel = await bcrypt.compare(
+      const passwordMatchPersonnel = await comparePassword(
         formData.password,
-        normalizedPersonnelHash
+        personnelData.password
       );
 
-      if (!hashedMatchPersonnel) {
+      if (!passwordMatchPersonnel) {
         setError('Invalid email or password');
         return;
       }
