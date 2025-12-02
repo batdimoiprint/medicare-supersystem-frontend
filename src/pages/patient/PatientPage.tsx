@@ -130,19 +130,19 @@ export default function PatientPage() {
         if (personnelError) throw personnelError;
 
         // Create a map of service_id to service_name
-        const servicesMap = servicesData.reduce((acc, service) => {
+        const servicesMap = servicesData.reduce((acc: Record<string, string>, service: { service_id: string; service_name: string }) => {
             acc[service.service_id] = service.service_name;
             return acc;
-        }, {});
+        }, {} as Record<string, string>);
 
         // Create a map of personnel_id to personnel name
-        const personnelMap = personnelData.reduce((acc, person) => {
+        const personnelMap = personnelData.reduce((acc: Record<string, string>, person: { personnel_id: string; f_name: string; l_name: string }) => {
             acc[person.personnel_id] = `${person.f_name} ${person.l_name}`;
             return acc;
-        }, {});
+        }, {} as Record<string, string>);
 
         // Combine the data
-        const appointmentsWithServiceNames = appointmentsData.map(apt => ({
+        const appointmentsWithServiceNames = appointmentsData.map((apt: { service_id: string; personnel_id?: string }) => ({
     ...apt,
     service_name: servicesMap[apt.service_id] || 'Dental Service',
     personnel_name: apt.personnel_id ? personnelMap[apt.personnel_id] : null
@@ -372,6 +372,7 @@ export default function PatientPage() {
         // Combine both current appointments marked as history and appointment history
         const currentHistory = transformedAppointments.filter(a => a.type === 'history');
         return [...currentHistory, ...transformedAppointmentHistory]
+            .filter((apt): apt is NonNullable<typeof apt> => apt !== null)
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [transformedAppointments, transformedAppointmentHistory]);
 
@@ -554,7 +555,7 @@ export default function PatientPage() {
                                 <TabsContent value="history">
                                     <div className="space-y-4">
                                         {pastAppointments.length > 0 ? (
-                                            pastAppointments.map((apt) => (
+                                            pastAppointments.map((apt) => apt && (
                                                 <div key={apt.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                                                     <div className="flex items-center gap-4">
                                                         <div className="bg-muted p-2 rounded-full">
