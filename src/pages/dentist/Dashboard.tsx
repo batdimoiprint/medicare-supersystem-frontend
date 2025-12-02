@@ -24,7 +24,6 @@ import { patientRecordClient, dentistClient, inventoryClient, frontdeskClient } 
 const Dashboard = () => {
   const { theme } = useTheme();
   const [isDark, setIsDark] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     todayAppointments: 0,
     pendingApprovals: 0,
@@ -33,7 +32,6 @@ const Dashboard = () => {
     pendingPrescriptions: 0,
     materialsUsedThisMonth: 0,
   });
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
     const updateTheme = () => {
@@ -60,7 +58,6 @@ const Dashboard = () => {
   useEffect(() => {
     const loadStats = async () => {
       try {
-        setLoading(true);
         const today = new Date().toISOString().split('T')[0];
 
         // Get today's appointments from frontdesk.appointment_tbl
@@ -110,8 +107,6 @@ const Dashboard = () => {
 
       } catch (err) {
         console.error('Failed to load dashboard stats:', err);
-      } finally {
-        setLoading(false);
       }
     };
 

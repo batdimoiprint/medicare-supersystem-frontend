@@ -17,7 +17,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import supabase, { patientRecordClient } from '@/utils/supabase';
+import { patientRecordClient } from '@/utils/supabase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
   Select,
@@ -43,7 +43,7 @@ type ToothCondition = 'Healthy' | 'Crown' | 'For Filling' | 'Implant' | 'Missing
 interface ToothData {
   number: number;
   condition: ToothCondition;
- 
+  procedureType?: string;
   notes?: string;
 }
 
@@ -83,14 +83,6 @@ const TEETH_LAYOUT = {
   lowerRight: [25, 26, 27, 28, 29, 30, 31, 32],
 };
 
-const conditionMap: Record<string, number> = {
-  'Healthy': 1,
-  'Missing': 2,
-  'For Filling': 3,
-  'Implant': 4,
-  'Crown': 5,
-  'Root Canal': 6,
-};
 
 
 const initializeTeeth = (): Record<number, ToothData> => {
@@ -196,8 +188,38 @@ const DentalCharting = () => {
     if (selectedTeeth.length === 0) return alert('Select at least one tooth first.');
     setSelectedTooth(null);
     setSelectedCondition('Healthy');
+    setProcedureType('');
     setNotes('');
     setIsDialogOpen(true);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedTeeth([]);
+    setIsMultiSelectMode(false);
+  };
+
+  const handleApplyCondition = () => {
+    if (selectedTeeth.length === 0) return;
+
+    const updatedTeeth = { ...teeth };
+    selectedTeeth.forEach((toothNum) => {
+      updatedTeeth[toothNum] = {
+        number: toothNum,
+        condition: selectedCondition,
+        procedureType: (selectedCondition === 'Implant' || selectedCondition === 'For Filling')
+          ? procedureType
+          : undefined,
+        notes: notes.trim() || undefined,
+      };
+    });
+
+    setTeeth(updatedTeeth);
+    setIsDialogOpen(false);
+    setSelectedTeeth([]);
+    setIsMultiSelectMode(false);
+    setSelectedTooth(null);
+    setProcedureType('');
+    setNotes('');
   };
 
   const handleToothClick = (toothNum: number) => {
@@ -283,7 +305,7 @@ const DentalCharting = () => {
 
     const { data, error } = await patientRecordClient
       .from('patient_teeth')
-      .upsert(rows, { onConflict: ['patient_id', 'tooth_number'] });
+      .upsert(rows, { onConflict: 'patient_id,tooth_number' });
 
     if (error) throw error;
 
@@ -315,14 +337,14 @@ function getConditionId(condition: string) {
 useEffect(() => {
   const fetchTeeth = async () => {
     const patientId = 30;
-    const { data, error } = await patientRecordClient
+    const { data } = await patientRecordClient
       .from('patient_teeth')
       .select('teeth')
       .eq('patient_id', patientId)
       .single();
 
     if (data?.teeth) setTeeth(
-      data.teeth.reduce((acc, tooth) => {
+      data.teeth.reduce((acc: Record<number, ToothData>, tooth: any) => {
         acc[tooth.number] = tooth;
         return acc;
       }, {} as Record<number, ToothData>)
@@ -334,13 +356,18 @@ useEffect(() => {
 
 
   const calculateSummary = (): ToothSummary[] => {
-    const counts: Record<ToothCondition, ToothSummary> = {};
+    const counts: Partial<Record<ToothCondition, ToothSummary>> = {};
     Object.values(teeth).forEach(t => {
-      if (!counts[t.condition]) counts[t.condition] = { condition: t.condition, count: 0, teeth: [] };
-      counts[t.condition].count++;
-      counts[t.condition].teeth.push(t.number);
+      if (!counts[t.condition]) {
+        counts[t.condition] = { condition: t.condition, count: 0, teeth: [] };
+      }
+      const summary = counts[t.condition];
+      if (summary) {
+        summary.count++;
+        summary.teeth.push(t.number);
+      }
     });
-    return Object.values(counts);
+    return Object.values(counts) as ToothSummary[];
   };
 
   const calculateProcedures = (): ProcedureOverview[] => {
@@ -384,7 +411,6 @@ useEffect(() => {
           selectedPatient={selectedPatient}
           onPatientChange={setSelectedPatient}
           patients={patients}
-          returnBy="id"
         />
 
         {/* Header */}

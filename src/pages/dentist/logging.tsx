@@ -131,12 +131,6 @@ const MaterialsLogging = () => {
     loadLogs();
   }, []);
 
-  // Helper to get patient name
-  const getPatientName = (patientId: number): string => {
-    const patient = patients.find(p => p.patient_id === patientId);
-    if (!patient) return 'Unknown';
-    return `${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim();
-  };
 
   const filteredLogs = logs.filter((log) =>
     log.item_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -313,7 +307,7 @@ const MaterialsLogging = () => {
                 <p className="text-sm text-muted-foreground">This Month</p>
                 <p className="text-2xl font-bold">
                   {logs.filter(l => {
-                    const logDate = new Date(l.date);
+                    const logDate = new Date(l.created_at);
                     const now = new Date();
                     return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
                   }).length}
