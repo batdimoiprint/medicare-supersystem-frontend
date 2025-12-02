@@ -19,10 +19,21 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import Chart from 'react-apexcharts';
 import { useTheme } from '@/components/theme-provider';
 import type { ApexOptions } from 'apexcharts';
+import { patientRecordClient, dentistClient, inventoryClient, frontdeskClient } from '@/utils/supabase';
 
 const Dashboard = () => {
   const { theme } = useTheme();
   const [isDark, setIsDark] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    todayAppointments: 0,
+    pendingApprovals: 0,
+    totalPatients: 0,
+    activeTreatmentPlans: 0,
+    pendingPrescriptions: 0,
+    materialsUsedThisMonth: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
     const updateTheme = () => {
@@ -45,15 +56,67 @@ const Dashboard = () => {
     }
   }, [theme]);
 
-  // Mock statistics - in real app, these would come from API
-  const stats = {
-    todayAppointments: 8,
-    pendingApprovals: 3,
-    totalPatients: 45,
-    activeTreatmentPlans: 12,
-    pendingPrescriptions: 5,
-    materialsUsedThisMonth: 24,
-  };
+  // Load dashboard statistics from database
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setLoading(true);
+        const today = new Date().toISOString().split('T')[0];
+
+        // Get today's appointments from frontdesk.appointment_tbl
+        const { count: todayAppointments } = await frontdeskClient
+          .from('appointment_tbl')
+          .select('*', { count: 'exact', head: true })
+          .eq('appointment_date', today);
+
+        // Get pending appointments (status = 'Pending')
+        const { count: pendingApprovals } = await frontdeskClient
+          .from('appointment_tbl')
+          .select('*', { count: 'exact', head: true })
+          .eq('appointment_status', 'Pending');
+
+        // Get total patients from patient_record.patient_tbl
+        const { count: totalPatients } = await patientRecordClient
+          .from('patient_tbl')
+          .select('*', { count: 'exact', head: true });
+
+        // Get active treatment plans from dentist.treatment_plan_tbl
+        const { count: activeTreatmentPlans } = await dentistClient
+          .from('treatment_plan_tbl')
+          .select('*', { count: 'exact', head: true })
+          .in('treatment_status', ['Planned', 'In Progress']);
+
+        // Get pending prescriptions from patient_record.prescription_tbl
+        const { count: pendingPrescriptions } = await patientRecordClient
+          .from('prescription_tbl')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'Pending');
+
+        // Get materials used this month from inventory.stock_out
+        const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+        const { count: materialsUsedThisMonth } = await inventoryClient
+          .from('stock_out')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', startOfMonth);
+
+        setStats({
+          todayAppointments: todayAppointments || 0,
+          pendingApprovals: pendingApprovals || 0,
+          totalPatients: totalPatients || 0,
+          activeTreatmentPlans: activeTreatmentPlans || 0,
+          pendingPrescriptions: pendingPrescriptions || 0,
+          materialsUsedThisMonth: materialsUsedThisMonth || 0,
+        });
+
+      } catch (err) {
+        console.error('Failed to load dashboard stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStats();
+  }, []);
 
   // Chart data - Monthly appointments over the last 6 months
   const chartSeries = [
