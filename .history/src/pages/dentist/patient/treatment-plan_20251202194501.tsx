@@ -395,7 +395,8 @@ const TreatmentPlanPage = () => {
 
   const handleUpdatePlanStatus = async (planId: number, status: TreatmentPlan['treatment_status']) => {
     try {
-      const { error } = await dentistClient
+      const { error } = await supabase
+        .schema('dentist')
         .from('treatment_plan_tbl')
         .update({ treatment_status: status })
         .eq('treatment_id', planId);

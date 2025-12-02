@@ -370,7 +370,8 @@ const TreatmentPlanPage = () => {
 
   const handleUpdateServiceStatus = async (planId: number, serviceId: number, status: TreatmentPlanService['status']) => {
     try {
-      const { error } = await dentistClient
+      const { error } = await supabase
+        .schema('dentist')
         .from('treatment_services_tbl')
         .update({ status })
         .eq('id', serviceId);
@@ -395,7 +396,8 @@ const TreatmentPlanPage = () => {
 
   const handleUpdatePlanStatus = async (planId: number, status: TreatmentPlan['treatment_status']) => {
     try {
-      const { error } = await dentistClient
+      const { error } = await supabase
+        .schema('dentist')
         .from('treatment_plan_tbl')
         .update({ treatment_status: status })
         .eq('treatment_id', planId);

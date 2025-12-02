@@ -785,7 +785,7 @@ const App = () => {
         const { data, error } = await supabase
           .from('personnel_tbl')
           .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-          .eq('role_id', '1')
+          .eq('role_id', 1)
           .order('l_name', { ascending: true });
 
         if (error) {

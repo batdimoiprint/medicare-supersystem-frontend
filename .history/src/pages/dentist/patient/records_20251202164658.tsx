@@ -299,7 +299,7 @@ const PatientRecords = () => {
       </Card>
 
       {/* Statistics */}
-      {selectedPatient && (
+      {selectedPatient !== 'All Patients' && (
         <div className="grid md:grid-cols-3 gap-4">
           <Card>
             <CardContent className="pt-6">
@@ -318,7 +318,7 @@ const PatientRecords = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Active Records</p>
                   <p className="text-2xl font-bold">
-                    {records.filter(r => r.status === 'Active').length}
+                    {patientRecords.filter(r => r.status === 'Active').length}
                   </p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-muted-foreground" />
@@ -357,12 +357,12 @@ const PatientRecords = () => {
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <Field orientation="vertical">
-                <FieldLabel>Patient</FieldLabel>
+                <FieldLabel>Patient Name</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={selectedPatient ? getPatientName(Number(selectedPatient)) : ''}
-                    disabled
-                    placeholder="Select a patient first"
+                    value={formData.patientName}
+                    onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                    placeholder="Enter patient name"
                   />
                 </FieldContent>
               </Field>
@@ -408,8 +408,8 @@ const PatientRecords = () => {
               <FieldLabel>Chief Complaint</FieldLabel>
               <FieldContent>
                 <Input
-                  value={formData.chief_complaint}
-                  onChange={(e) => setFormData({ ...formData, chief_complaint: e.target.value })}
+                  value={formData.chiefComplaint}
+                  onChange={(e) => setFormData({ ...formData, chiefComplaint: e.target.value })}
                   placeholder="Patient's main complaint"
                 />
               </FieldContent>
@@ -461,15 +461,7 @@ const PatientRecords = () => {
 
       {/* Records List */}
       <div className="space-y-4">
-        {loading ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center text-muted-foreground">
-                <p className="text-lg font-medium">Loading records...</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : filteredRecords.length === 0 ? (
+        {filteredRecords.length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
@@ -485,7 +477,7 @@ const PatientRecords = () => {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-xl mb-2">{getPatientName(record.patient_id)}</CardTitle>
+                    <CardTitle className="text-xl mb-2">{record.patientName}</CardTitle>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
@@ -516,7 +508,7 @@ const PatientRecords = () => {
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm font-semibold mb-1">Chief Complaint:</p>
-                  <p className="text-sm text-muted-foreground">{record.chief_complaint}</p>
+                  <p className="text-sm text-muted-foreground">{record.chiefComplaint}</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold mb-1">Diagnosis:</p>
@@ -534,13 +526,13 @@ const PatientRecords = () => {
                 )}
                 <div className="pt-3 border-t flex gap-2">
                   <Button variant="outline" size="sm" asChild>
-                    <Link to={`/dentist/patient/charting?patient=${record.patient_id}`}>
+                    <Link to={`/dentist/patient/charting?patient=${record.patientName}`}>
                       <Stethoscope className="w-3 h-3 mr-1" />
                       View Chart
                     </Link>
                   </Button>
                   <Button variant="outline" size="sm" asChild>
-                    <Link to={`/dentist/patient/treatment/plan?patient=${record.patient_id}`}>
+                    <Link to={`/dentist/patient/treatment/plan?patient=${record.patientName}`}>
                       <ClipboardList className="w-3 h-3 mr-1" />
                       Treatment Plan
                     </Link>

@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/select';
 import { PatientNav } from '@/components/dentist/PatientNav';
 import { PatientSelector } from '@/components/dentist/PatientSelector';
-import { patientRecordClient, dentistClient } from '@/utils/supabase';
+import supabase, { patientRecordClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
 interface PatientRow {
@@ -107,22 +107,16 @@ const TreatmentPlanPage = () => {
   useEffect(() => {
     const loadServices = async () => {
       try {
-        const { data, error } = await dentistClient
+        const { data, error } = await supabase
+          .schema('dentist')
           .from('services_tbl')
           .select('service_id, service_name, service_description, service_fee')
-          .not('service_id', 'is', null)
-          .not('service_name', 'is', null)
           .order('service_name', { ascending: true });
 
-        if (error) {
-          console.error('Failed to fetch services:', error);
-          return;
-        }
-        
-        console.log('Loaded services:', data);
+        if (error) return console.error('Failed to fetch services:', error);
         setServices(data ?? []);
       } catch (err) {
-        console.error('Error loading services:', err);
+        console.error(err);
       }
     };
     loadServices();
@@ -134,7 +128,8 @@ const TreatmentPlanPage = () => {
     setLoading(true);
     try {
       // Load plans from dentist.treatment_plan_tbl
-      const { data: plansData, error: plansError } = await dentistClient
+      const { data: plansData, error: plansError } = await supabase
+        .schema('dentist')
         .from('treatment_plan_tbl')
         .select('*')
         .eq('patient_id', selectedPatient)
@@ -148,8 +143,9 @@ const TreatmentPlanPage = () => {
       // Load services for each plan from treatment_plan_services_tbl
       const plansWithServices: TreatmentPlan[] = [];
       for (const plan of plansData ?? []) {
-        const { data: servicesData, error: servicesError } = await dentistClient
-          .from('treatment_services_tbl')
+        const { data: servicesData, error: servicesError } = await supabase
+          .schema('dentist')
+          .from('treatment_plan_services_tbl')
           .select(`
             *,
             services_tbl (service_name, service_fee)
@@ -258,7 +254,8 @@ const TreatmentPlanPage = () => {
         }
 
         // Insert new plan into dentist.treatment_plan_tbl
-        const { data: planData, error: planError } = await dentistClient
+        const { data: planData, error: planError } = await supabase
+          .schema('dentist')
           .from('treatment_plan_tbl')
           .insert({
             patient_id: Number(selectedPatient),
@@ -282,8 +279,9 @@ const TreatmentPlanPage = () => {
             status: service.status,
           }));
 
-          const { error: servicesError } = await dentistClient
-            .from('treatment_services_tbl')
+          const { error: servicesError } = await supabase
+            .schema('dentist')
+            .from('treatment_plan_services_tbl')
             .insert(servicesToInsert);
 
           if (servicesError) throw servicesError;
@@ -340,8 +338,9 @@ const TreatmentPlanPage = () => {
     } else if (selectedPlan) {
       // Adding service to existing plan - save to database
       try {
-        const { error } = await dentistClient
-          .from('treatment_services_tbl')
+        const { error } = await supabase
+          .schema('dentist')
+          .from('treatment_plan_services_tbl')
           .insert({
             treatment_id: selectedPlan,
             service_id: newService.service_id,
@@ -370,8 +369,9 @@ const TreatmentPlanPage = () => {
 
   const handleUpdateServiceStatus = async (planId: number, serviceId: number, status: TreatmentPlanService['status']) => {
     try {
-      const { error } = await dentistClient
-        .from('treatment_services_tbl')
+      const { error } = await supabase
+        .schema('dentist')
+        .from('treatment_plan_services_tbl')
         .update({ status })
         .eq('id', serviceId);
 
@@ -395,7 +395,8 @@ const TreatmentPlanPage = () => {
 
   const handleUpdatePlanStatus = async (planId: number, status: TreatmentPlan['treatment_status']) => {
     try {
-      const { error } = await dentistClient
+      const { error } = await supabase
+        .schema('dentist')
         .from('treatment_plan_tbl')
         .update({ treatment_status: status })
         .eq('treatment_id', planId);
@@ -588,9 +589,9 @@ const TreatmentPlanPage = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>
-                {isAdding ? 'New Treatment Plan' : `Treatment Plan - ${displayPlan.treatment_name || ''}`}
+                {isAdding ? 'New Treatment Plan' : `Treatment Plan - ${displayPlan.patient_id ? getPatientName(displayPlan.patient_id) : ''}`}
               </CardTitle>
-              {isAdding ? (
+              {isAdding && (
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setIsAdding(false)}>
                     <X className="w-4 h-4 mr-2" />
@@ -601,21 +602,6 @@ const TreatmentPlanPage = () => {
                     Save Plan
                   </Button>
                 </div>
-              ) : (
-                <Select
-                  value={displayPlan.treatment_status}
-                  onValueChange={(value) => selectedPlan && handleUpdatePlanStatus(selectedPlan, value as TreatmentPlan['treatment_status'])}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Planned">Planned</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                    <SelectItem value="Cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
               )}
             </div>
           </CardHeader>
@@ -633,79 +619,44 @@ const TreatmentPlanPage = () => {
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
-                <FieldLabel>Treatment Name</FieldLabel>
+                <FieldLabel>Date</FieldLabel>
                 <FieldContent>
                   {isAdding ? (
                     <Input
-                      value={formData.treatment_name}
-                      onChange={(e) => setFormData({ ...formData, treatment_name: e.target.value })}
-                      placeholder="Enter treatment plan name"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     />
                   ) : (
-                    <Input value={displayPlan.treatment_name} readOnly className="bg-muted" />
+                    <Input value={displayPlan.date} readOnly className="bg-muted" />
                   )}
                 </FieldContent>
               </Field>
             </div>
-            
-            {/* Description */}
-            <Field orientation="vertical">
-              <FieldLabel>Description</FieldLabel>
-              <FieldContent>
-                {isAdding ? (
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full min-h-[80px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Treatment plan description..."
-                  />
-                ) : (
-                  <textarea
-                    value={displayPlan.description || ''}
-                    readOnly
-                    className="w-full min-h-[80px] p-2 border rounded-lg resize-none bg-muted"
-                  />
-                )}
-              </FieldContent>
-            </Field>
 
-            {/* Add Service */}
+            {/* Add Treatment Item */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Add Service</CardTitle>
+                <CardTitle className="text-lg">Add Treatment Item</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <Field orientation="vertical">
-                    <FieldLabel>Service/Procedure</FieldLabel>
+                    <FieldLabel>Procedure</FieldLabel>
                     <FieldContent>
                       <Select
-                        value={itemForm.service_id?.toString()}
-                        onValueChange={(value) => {
-                          const serviceId = Number(value);
-                          const service = getServiceById(serviceId);
-                          setItemForm({ 
-                            ...itemForm, 
-                            service_id: serviceId,
-                            estimated_cost: service?.service_fee || 0,
-                          });
-                        }}
+                        value={itemForm.procedure}
+                        onValueChange={(value) => setItemForm({ ...itemForm, procedure: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={services.length === 0 ? "No services available" : "Select service"} />
+                          <SelectValue placeholder="Select procedure" />
                         </SelectTrigger>
                         <SelectContent>
-                          {services.length === 0 ? (
-                            <SelectItem value="none" disabled>
-                              No services found - add services first
+                          {PROCEDURES.map((proc) => (
+                            <SelectItem key={proc} value={proc}>
+                              {proc}
                             </SelectItem>
-                          ) : (
-                            services.map((service) => (
-                              <SelectItem key={service.service_id} value={service.service_id.toString()}>
-                                {service.service_name} - {formatCurrency(service.service_fee || 0)}
-                              </SelectItem>
-                            ))
-                          )}
+                          ))}
                         </SelectContent>
                       </Select>
                     </FieldContent>
@@ -721,6 +672,16 @@ const TreatmentPlanPage = () => {
                     </FieldContent>
                   </Field>
                 </div>
+                <Field orientation="vertical">
+                  <FieldLabel>Description</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={itemForm.description}
+                      onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                      placeholder="Describe the procedure"
+                    />
+                  </FieldContent>
+                </Field>
                 <div className="grid md:grid-cols-3 gap-4">
                   <Field orientation="vertical">
                     <FieldLabel>Estimated Cost (₱)</FieldLabel>
@@ -738,7 +699,7 @@ const TreatmentPlanPage = () => {
                     <FieldContent>
                       <Select
                         value={itemForm.priority}
-                        onValueChange={(value) => setItemForm({ ...itemForm, priority: value as TreatmentPlanService['priority'] })}
+                        onValueChange={(value) => setItemForm({ ...itemForm, priority: value as TreatmentPlanItem['priority'] })}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -752,50 +713,51 @@ const TreatmentPlanPage = () => {
                     </FieldContent>
                   </Field>
                   <div className="flex items-end">
-                    <Button onClick={handleAddService} className="w-full">
+                    <Button onClick={handleAddItem} className="w-full">
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Service
+                      Add Item
                     </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Services List */}
+            {/* Treatment Items List */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Services/Procedures</h3>
-              {displayPlan.services && displayPlan.services.length === 0 ? (
+              <h3 className="text-lg font-semibold">Treatment Items</h3>
+              {displayPlan.items && displayPlan.items.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
-                  No services added yet. Add services using the form above.
+                  No treatment items added yet. Add items using the form above.
                 </p>
               ) : (
-                displayPlan.services?.map((service) => (
-                  <Card key={service.id}>
+                displayPlan.items?.map((item) => (
+                  <Card key={item.id}>
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h4 className="font-semibold text-lg">{service.service_name || `Service #${service.service_id}`}</h4>
-                            {service.tooth_number && (
+                            <h4 className="font-semibold text-lg">{item.procedure}</h4>
+                            {item.tooth_number && (
                               <span className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
-                                Tooth {service.tooth_number}
+                                Tooth {item.tooth_number}
                               </span>
                             )}
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${service.priority === 'High' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                service.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${item.priority === 'High' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                item.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
                                   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                               }`}>
-                              {service.priority}
+                              {item.priority}
                             </span>
                           </div>
+                          <p className="text-sm text-muted-foreground mb-2">{item.description}</p>
                           <div className="flex items-center gap-4">
                             <span className="text-sm font-semibold text-primary">
-                              {formatCurrency(service.estimated_cost)}
+                              {formatCurrency(item.estimated_cost)}
                             </span>
                             {!isAdding && (
                               <Select
-                                value={service.status}
-                                onValueChange={(value) => selectedPlan && handleUpdateServiceStatus(selectedPlan, service.id, value as TreatmentPlanService['status'])}
+                                value={item.status}
+                                onValueChange={(value) => selectedPlan && handleUpdateItemStatus(selectedPlan, item.id, value as TreatmentPlanItem['status'])}
                               >
                                 <SelectTrigger className="w-40">
                                   <SelectValue />
@@ -816,6 +778,27 @@ const TreatmentPlanPage = () => {
                 ))
               )}
             </div>
+
+            {/* Notes */}
+            <Field orientation="vertical">
+              <FieldLabel>Notes</FieldLabel>
+              <FieldContent>
+                {isAdding ? (
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="w-full min-h-[100px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Additional notes about the treatment plan..."
+                  />
+                ) : (
+                  <textarea
+                    value={displayPlan.notes}
+                    readOnly
+                    className="w-full min-h-[100px] p-2 border rounded-lg resize-none bg-muted"
+                  />
+                )}
+              </FieldContent>
+            </Field>
 
             {/* Total Cost */}
             <Card className="bg-primary/5">

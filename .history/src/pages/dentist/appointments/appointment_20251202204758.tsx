@@ -297,7 +297,7 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
   // Check dentist availability for selected date and dentist (Step 2)
   const getAvailableTimeSlots = useCallback((date: string, dentistId: string): string[] => {
     // Get all booked appointments for this dentist and date
-    const selectedDentist = dentists.find(d => d.personnel_id === dentistId);
+    const selectedDentist = dentists.find(d => String(d.dentist_info_id) === dentistId);
     const dentistFullName = selectedDentist ? getDentistName(selectedDentist) : '';
     
     const bookedSlots = appointments
@@ -451,7 +451,7 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
                   <SelectItem value="none" disabled>No dentists available</SelectItem>
                 ) : (
                   dentists.map(d => (
-                    <SelectItem key={d.personnel_id} value={d.personnel_id}>
+                    <SelectItem key={d.dentist_info_id} value={String(d.dentist_info_id)}>
                       {getDentistName(d)}
                     </SelectItem>
                   ))
@@ -777,42 +777,22 @@ const App = () => {
     loadServices();
   }, []);
 
-  // Load dentists from personnel_tbl where role_id = 1 (Dentist)
+  // Load dentists from dentist.dentist_info_tbl
   useEffect(() => {
     const loadDentists = async () => {
       try {
-        console.log('Loading dentists from personnel_tbl...');
-        const { data, error } = await supabase
-          .from('personnel_tbl')
-          .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-          .eq('role_id', '1')
+        const { data, error } = await dentistClient
+          .from('dentist_info_tbl')
+          .select('dentist_info_id, f_name, m_name, l_name')
           .order('l_name', { ascending: true });
 
         if (error) {
-          console.error('Failed to load dentists - Error:', error);
-          console.error('Error details:', JSON.stringify(error, null, 2));
+          console.error('Failed to load dentists:', error);
           return;
         }
-        
-        console.log('Loaded dentists - Count:', data?.length || 0);
-        console.log('Loaded dentists - Data:', data);
-        
-        if (!data || data.length === 0) {
-          console.warn('No dentists found with role_id = 1. Checking all personnel...');
-          // Try loading all personnel to see what's in the table
-          const { data: allData, error: allError } = await supabase
-            .from('personnel_tbl')
-            .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-            .limit(10);
-          
-          if (!allError && allData) {
-            console.log('Sample personnel data:', allData);
-          }
-        }
-        
         setDentists(data ?? []);
       } catch (err) {
-        console.error('Exception loading dentists:', err);
+        console.error(err);
       }
     };
     loadDentists();

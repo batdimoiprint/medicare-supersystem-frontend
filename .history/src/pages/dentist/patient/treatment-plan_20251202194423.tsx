@@ -258,7 +258,8 @@ const TreatmentPlanPage = () => {
         }
 
         // Insert new plan into dentist.treatment_plan_tbl
-        const { data: planData, error: planError } = await dentistClient
+        const { data: planData, error: planError } = await supabase
+          .schema('dentist')
           .from('treatment_plan_tbl')
           .insert({
             patient_id: Number(selectedPatient),
@@ -282,7 +283,8 @@ const TreatmentPlanPage = () => {
             status: service.status,
           }));
 
-          const { error: servicesError } = await dentistClient
+          const { error: servicesError } = await supabase
+            .schema('dentist')
             .from('treatment_services_tbl')
             .insert(servicesToInsert);
 
@@ -340,7 +342,8 @@ const TreatmentPlanPage = () => {
     } else if (selectedPlan) {
       // Adding service to existing plan - save to database
       try {
-        const { error } = await dentistClient
+        const { error } = await supabase
+          .schema('dentist')
           .from('treatment_services_tbl')
           .insert({
             treatment_id: selectedPlan,
@@ -370,7 +373,8 @@ const TreatmentPlanPage = () => {
 
   const handleUpdateServiceStatus = async (planId: number, serviceId: number, status: TreatmentPlanService['status']) => {
     try {
-      const { error } = await dentistClient
+      const { error } = await supabase
+        .schema('dentist')
         .from('treatment_services_tbl')
         .update({ status })
         .eq('id', serviceId);
@@ -395,7 +399,8 @@ const TreatmentPlanPage = () => {
 
   const handleUpdatePlanStatus = async (planId: number, status: TreatmentPlan['treatment_status']) => {
     try {
-      const { error } = await dentistClient
+      const { error } = await supabase
+        .schema('dentist')
         .from('treatment_plan_tbl')
         .update({ treatment_status: status })
         .eq('treatment_id', planId);

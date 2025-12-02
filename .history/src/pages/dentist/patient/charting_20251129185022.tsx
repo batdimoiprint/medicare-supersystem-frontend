@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
 import { PatientNav } from '@/components/dentist/PatientNav';
-import {PatientSelector} from '@/components/dentist/PatientSelector';
+import PatientSelector from '@/components/dentist/PatientSelector';
 
 // --- Type Definitions ---
 interface PatientRow {

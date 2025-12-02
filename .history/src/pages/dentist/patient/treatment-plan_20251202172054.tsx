@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/select';
 import { PatientNav } from '@/components/dentist/PatientNav';
 import { PatientSelector } from '@/components/dentist/PatientSelector';
-import { patientRecordClient, dentistClient } from '@/utils/supabase';
+import supabase, { patientRecordClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
 interface PatientRow {
@@ -71,7 +71,6 @@ interface TreatmentPlanService {
 const TreatmentPlanPage = () => {
   const [searchParams] = useSearchParams();
   const [patients, setPatients] = useState<PatientRow[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<string>(searchParams.get('patient') || '');
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<number | null>(null);
@@ -103,81 +102,43 @@ const TreatmentPlanPage = () => {
     return () => { mounted = false; };
   }, [selectedPatient]);
 
-  // --- Load Services from dentist schema ---
-  useEffect(() => {
-    const loadServices = async () => {
-      try {
-        const { data, error } = await dentistClient
-          .from('services_tbl')
-          .select('service_id, service_name, service_description, service_fee')
-          .not('service_id', 'is', null)
-          .not('service_name', 'is', null)
-          .order('service_name', { ascending: true });
-
-        if (error) {
-          console.error('Failed to fetch services:', error);
-          return;
-        }
-        
-        console.log('Loaded services:', data);
-        setServices(data ?? []);
-      } catch (err) {
-        console.error('Error loading services:', err);
-      }
-    };
-    loadServices();
-  }, []);
-
-  // --- Load Treatment Plans from dentist schema ---
+  // --- Load Treatment Plans ---
   const loadPlans = async () => {
     if (!selectedPatient) return;
     setLoading(true);
     try {
-      // Load plans from dentist.treatment_plan_tbl
-      const { data: plansData, error: plansError } = await dentistClient
-        .from('treatment_plan_tbl')
+      // Load plans
+      const { data: plansData, error: plansError } = await patientRecordClient
+        .from('treatment_plans')
         .select('*')
         .eq('patient_id', selectedPatient)
-        .order('created_at', { ascending: false });
+        .order('date', { ascending: false });
 
       if (plansError) {
         console.error('Failed to fetch plans:', plansError);
         return;
       }
 
-      // Load services for each plan from treatment_plan_services_tbl
-      const plansWithServices: TreatmentPlan[] = [];
+      // Load items for each plan
+      const plansWithItems: TreatmentPlan[] = [];
       for (const plan of plansData ?? []) {
-        const { data: servicesData, error: servicesError } = await dentistClient
-          .from('treatment_services_tbl')
-          .select(`
-            *,
-            services_tbl (service_name, service_fee)
-          `)
-          .eq('treatment_id', plan.treatment_id);
+        const { data: itemsData, error: itemsError } = await patientRecordClient
+          .from('treatment_plan_items')
+          .select('*')
+          .eq('plan_id', plan.id);
 
-        if (servicesError) {
-          console.error('Failed to fetch services:', servicesError);
-          plansWithServices.push({ ...plan, services: [], total_cost: 0 });
+        if (itemsError) {
+          console.error('Failed to fetch items:', itemsError);
           continue;
         }
 
-        const mappedServices = (servicesData ?? []).map((s: any) => ({
-          ...s,
-          service_name: s.services_tbl?.service_name,
-          estimated_cost: s.estimated_cost || s.services_tbl?.service_fee || 0,
-        }));
-
-        const totalCost = mappedServices.reduce((sum: number, s: any) => sum + (s.estimated_cost || 0), 0);
-
-        plansWithServices.push({
+        plansWithItems.push({
           ...plan,
-          services: mappedServices,
-          total_cost: totalCost,
+          items: itemsData ?? [],
         });
       }
 
-      setPlans(plansWithServices);
+      setPlans(plansWithItems);
     } catch (err) {
       console.error(err);
     } finally {
@@ -196,11 +157,6 @@ const TreatmentPlanPage = () => {
     return `${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim();
   };
 
-  // Helper to get service by ID
-  const getServiceById = (serviceId: number): Service | undefined => {
-    return services.find(s => s.service_id === serviceId);
-  };
-
   useEffect(() => {
     const patient = searchParams.get('patient');
     const fromChart = searchParams.get('fromChart');
@@ -211,82 +167,89 @@ const TreatmentPlanPage = () => {
       setIsAdding(true);
       setFormData({
         patient_id: Number(patient),
-        treatment_name: '',
-        description: 'Treatment plan created from dental charting data.',
-        treatment_status: 'Planned',
-        services: [],
+        date: new Date().toISOString().split('T')[0],
+        items: [],
         total_cost: 0,
+        notes: 'Treatment plan created from dental charting data.',
       });
     }
   }, [searchParams]);
 
   const [formData, setFormData] = useState<Partial<TreatmentPlan>>({
     patient_id: undefined,
-    treatment_name: '',
-    description: '',
-    treatment_status: 'Planned',
-    services: [],
+    date: new Date().toISOString().split('T')[0],
+    items: [],
     total_cost: 0,
+    notes: '',
   });
-  const [itemForm, setItemForm] = useState<Partial<TreatmentPlanService>>({
-    service_id: undefined,
+  const [itemForm, setItemForm] = useState<Partial<TreatmentPlanItem>>({
+    procedure: '',
     tooth_number: '',
+    description: '',
     estimated_cost: 0,
     priority: 'Medium',
     status: 'Planned',
   });
+
+  const PROCEDURES = [
+    'Composite Filling',
+    'Amalgam Filling',
+    'Root Canal Treatment',
+    'Crown',
+    'Dental Implant',
+    'Dental Cleaning',
+    'Tooth Extraction',
+    'Bonding',
+    'Veneers',
+    'Teeth Whitening',
+  ];
 
   const handleAddPlan = () => {
     setIsAdding(true);
     setSelectedPlan(null);
     setFormData({
       patient_id: selectedPatient ? Number(selectedPatient) : undefined,
-      treatment_name: '',
-      description: '',
-      treatment_status: 'Planned',
-      services: [],
+      date: new Date().toISOString().split('T')[0],
+      items: [],
       total_cost: 0,
+      notes: '',
     });
   };
 
   const handleSavePlan = async () => {
     try {
       if (isAdding) {
-        if (!formData.treatment_name) {
-          alert('Please enter a treatment name');
-          return;
-        }
-
-        // Insert new plan into dentist.treatment_plan_tbl
-        const { data: planData, error: planError } = await dentistClient
-          .from('treatment_plan_tbl')
+        // Insert new plan
+        const { data: planData, error: planError } = await patientRecordClient
+          .from('treatment_plans')
           .insert({
             patient_id: Number(selectedPatient),
-            treatment_name: formData.treatment_name,
-            description: formData.description,
-            treatment_status: formData.treatment_status || 'Planned',
+            date: formData.date,
+            total_cost: (formData.items || []).reduce((sum, item) => sum + item.estimated_cost, 0),
+            notes: formData.notes,
           })
           .select()
           .single();
 
         if (planError) throw planError;
 
-        // Insert services for this plan
-        if (formData.services && formData.services.length > 0) {
-          const servicesToInsert = formData.services.map(service => ({
-            treatment_id: planData.treatment_id,
-            service_id: service.service_id,
-            tooth_number: service.tooth_number,
-            estimated_cost: service.estimated_cost,
-            priority: service.priority,
-            status: service.status,
+        // Insert items for this plan
+        if (formData.items && formData.items.length > 0) {
+          const itemsToInsert = formData.items.map(item => ({
+            plan_id: planData.id,
+            procedure: item.procedure,
+            tooth_number: item.tooth_number,
+            description: item.description,
+            estimated_cost: item.estimated_cost,
+            priority: item.priority,
+            status: item.status,
           }));
 
-          const { error: servicesError } = await dentistClient
-            .from('treatment_services_tbl')
-            .insert(servicesToInsert);
+          const { error: itemsError } = await patientRecordClient
+            .from('treatment_plan_items')
+            .insert(itemsToInsert);
 
-          if (servicesError) throw servicesError;
+          if (itemsError) throw itemsError;
         }
 
         setIsAdding(false);
@@ -299,11 +262,10 @@ const TreatmentPlanPage = () => {
       // Reset form
       setFormData({
         patient_id: undefined,
-        treatment_name: '',
-        description: '',
-        treatment_status: 'Planned',
-        services: [],
+        date: new Date().toISOString().split('T')[0],
+        items: [],
         total_cost: 0,
+        notes: '',
       });
     } catch (err) {
       console.error('Failed to save plan:', err);
@@ -311,111 +273,100 @@ const TreatmentPlanPage = () => {
     }
   };
 
-  const handleAddService = async () => {
+  const handleAddItem = async () => {
     if (!selectedPlan && !isAdding) return;
-    if (!itemForm.service_id) {
-      alert('Please select a service');
-      return;
-    }
-
-    const service = getServiceById(itemForm.service_id);
-    const newService: TreatmentPlanService = {
+    const newItem: TreatmentPlanItem = {
       id: Date.now(),
-      treatment_id: selectedPlan || 0,
-      service_id: itemForm.service_id,
-      service_name: service?.service_name,
+      plan_id: selectedPlan || 0,
+      procedure: itemForm.procedure || '',
       tooth_number: itemForm.tooth_number,
-      estimated_cost: itemForm.estimated_cost || service?.service_fee || 0,
+      description: itemForm.description || '',
+      estimated_cost: itemForm.estimated_cost || 0,
       priority: itemForm.priority || 'Medium',
       status: itemForm.status || 'Planned',
     };
 
     if (isAdding) {
-      // Adding services to a new plan (not yet saved)
+      // Adding items to a new plan (not yet saved)
       setFormData({
         ...formData,
-        services: [...(formData.services || []), newService],
-        total_cost: (formData.services || []).reduce((sum, s) => sum + (s.estimated_cost || 0), 0) + newService.estimated_cost,
+        items: [...(formData.items || []), newItem],
+        total_cost: (formData.items || []).reduce((sum, item) => sum + item.estimated_cost, 0) + newItem.estimated_cost,
       });
     } else if (selectedPlan) {
-      // Adding service to existing plan - save to database
+      // Adding item to existing plan - save to database
       try {
-        const { error } = await dentistClient
-          .from('treatment_services_tbl')
+        const { error } = await patientRecordClient
+          .from('treatment_plan_items')
           .insert({
-            treatment_id: selectedPlan,
-            service_id: newService.service_id,
-            tooth_number: newService.tooth_number,
-            estimated_cost: newService.estimated_cost,
-            priority: newService.priority,
-            status: newService.status,
+            plan_id: selectedPlan,
+            procedure: newItem.procedure,
+            tooth_number: newItem.tooth_number,
+            description: newItem.description,
+            estimated_cost: newItem.estimated_cost,
+            priority: newItem.priority,
+            status: newItem.status,
           });
 
         if (error) throw error;
+
+        // Update total cost in the plan
+        const plan = plans.find(p => p.id === selectedPlan);
+        if (plan) {
+          const newTotalCost = plan.items.reduce((sum, item) => sum + item.estimated_cost, 0) + newItem.estimated_cost;
+          await patientRecordClient
+            .from('treatment_plans')
+            .update({ total_cost: newTotalCost })
+            .eq('id', selectedPlan);
+        }
+
         await loadPlans();
       } catch (err) {
-        console.error('Failed to add service:', err);
-        alert('Failed to add treatment service');
+        console.error('Failed to add item:', err);
+        alert('Failed to add treatment item');
       }
     }
 
     setItemForm({
-      service_id: undefined,
+      procedure: '',
       tooth_number: '',
+      description: '',
       estimated_cost: 0,
       priority: 'Medium',
       status: 'Planned',
     });
   };
 
-  const handleUpdateServiceStatus = async (planId: number, serviceId: number, status: TreatmentPlanService['status']) => {
+  const handleUpdateItemStatus = async (planId: number, itemId: number, status: TreatmentPlanItem['status']) => {
     try {
-      const { error } = await dentistClient
-        .from('treatment_services_tbl')
+      const { error } = await patientRecordClient
+        .from('treatment_plan_items')
         .update({ status })
-        .eq('id', serviceId);
+        .eq('id', itemId);
 
       if (error) throw error;
 
       // Update local state
       setPlans(plans.map(plan => {
-        if (plan.treatment_id === planId) {
+        if (plan.id === planId) {
           return {
             ...plan,
-            services: plan.services?.map(s => s.id === serviceId ? { ...s, status } : s),
+            items: plan.items.map(item => item.id === itemId ? { ...item, status } : item),
           };
         }
         return plan;
       }));
     } catch (err) {
       console.error('Failed to update status:', err);
-      alert('Failed to update service status');
+      alert('Failed to update item status');
     }
   };
 
-  const handleUpdatePlanStatus = async (planId: number, status: TreatmentPlan['treatment_status']) => {
-    try {
-      const { error } = await dentistClient
-        .from('treatment_plan_tbl')
-        .update({ treatment_status: status })
-        .eq('treatment_id', planId);
-
-      if (error) throw error;
-
-      setPlans(plans.map(plan => 
-        plan.treatment_id === planId ? { ...plan, treatment_status: status } : plan
-      ));
-    } catch (err) {
-      console.error('Failed to update plan status:', err);
-      alert('Failed to update plan status');
-    }
-  };
-
-  const currentPlan = selectedPlan ? plans.find(p => p.treatment_id === selectedPlan) : null;
+  const currentPlan = selectedPlan ? plans.find(p => p.id === selectedPlan) : null;
   const displayPlan = isAdding ? formData : currentPlan;
 
-  const totalPlannedCost = plans.reduce((sum, p) => sum + (p.total_cost || 0), 0);
-  const completedServices = plans.flatMap(p => p.services || []).filter(s => s.status === 'Completed').length;
+  const totalPlannedCost = plans.reduce((sum, p) => sum + p.total_cost, 0);
+  const completedItems = plans.flatMap(p => p.items).filter(i => i.status === 'Completed').length;
 
   return (
     <>
@@ -502,8 +453,8 @@ const TreatmentPlanPage = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Completed Services</p>
-                  <p className="text-2xl font-bold">{completedServices}</p>
+                  <p className="text-sm text-muted-foreground">Completed</p>
+                  <p className="text-2xl font-bold">{completedItems}</p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-muted-foreground" />
               </div>
@@ -525,34 +476,26 @@ const TreatmentPlanPage = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 {plans.map((plan) => (
                   <Card
-                    key={plan.treatment_id}
-                    className={`cursor-pointer transition-all hover:shadow-lg ${selectedPlan === plan.treatment_id ? 'ring-2 ring-primary' : ''
+                    key={plan.id}
+                    className={`cursor-pointer transition-all hover:shadow-lg ${selectedPlan === plan.id ? 'ring-2 ring-primary' : ''
                       }`}
-                    onClick={() => setSelectedPlan(plan.treatment_id)}
+                    onClick={() => setSelectedPlan(plan.id)}
                   >
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div>
-                          <CardTitle className="text-lg">{plan.treatment_name}</CardTitle>
+                          <CardTitle className="text-lg">{getPatientName(plan.patient_id)}</CardTitle>
                           <p className="text-sm text-muted-foreground mt-1">
                             <Calendar className="w-4 h-4 inline mr-1" />
-                            {plan.created_at ? new Date(plan.created_at).toLocaleDateString() : 'N/A'}
+                            {plan.date}
                           </p>
-                          <span className={`inline-block mt-2 px-2 py-1 rounded text-xs font-semibold ${
-                            plan.treatment_status === 'Completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                            plan.treatment_status === 'In Progress' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                            plan.treatment_status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                            'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                          }`}>
-                            {plan.treatment_status}
-                          </span>
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-primary">
-                            {formatCurrency(plan.total_cost || 0)}
+                            {formatCurrency(plan.total_cost)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {(plan.services || []).length} service{(plan.services || []).length !== 1 ? 's' : ''}
+                            {plan.items.length} procedure{plan.items.length !== 1 ? 's' : ''}
                           </p>
                         </div>
                       </div>
@@ -588,9 +531,9 @@ const TreatmentPlanPage = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>
-                {isAdding ? 'New Treatment Plan' : `Treatment Plan - ${displayPlan.treatment_name || ''}`}
+                {isAdding ? 'New Treatment Plan' : `Treatment Plan - ${displayPlan.patient_id ? getPatientName(displayPlan.patient_id) : ''}`}
               </CardTitle>
-              {isAdding ? (
+              {isAdding && (
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setIsAdding(false)}>
                     <X className="w-4 h-4 mr-2" />
@@ -601,21 +544,6 @@ const TreatmentPlanPage = () => {
                     Save Plan
                   </Button>
                 </div>
-              ) : (
-                <Select
-                  value={displayPlan.treatment_status}
-                  onValueChange={(value) => selectedPlan && handleUpdatePlanStatus(selectedPlan, value as TreatmentPlan['treatment_status'])}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Planned">Planned</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                    <SelectItem value="Cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
               )}
             </div>
           </CardHeader>
@@ -633,79 +561,44 @@ const TreatmentPlanPage = () => {
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
-                <FieldLabel>Treatment Name</FieldLabel>
+                <FieldLabel>Date</FieldLabel>
                 <FieldContent>
                   {isAdding ? (
                     <Input
-                      value={formData.treatment_name}
-                      onChange={(e) => setFormData({ ...formData, treatment_name: e.target.value })}
-                      placeholder="Enter treatment plan name"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     />
                   ) : (
-                    <Input value={displayPlan.treatment_name} readOnly className="bg-muted" />
+                    <Input value={displayPlan.date} readOnly className="bg-muted" />
                   )}
                 </FieldContent>
               </Field>
             </div>
-            
-            {/* Description */}
-            <Field orientation="vertical">
-              <FieldLabel>Description</FieldLabel>
-              <FieldContent>
-                {isAdding ? (
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full min-h-[80px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Treatment plan description..."
-                  />
-                ) : (
-                  <textarea
-                    value={displayPlan.description || ''}
-                    readOnly
-                    className="w-full min-h-[80px] p-2 border rounded-lg resize-none bg-muted"
-                  />
-                )}
-              </FieldContent>
-            </Field>
 
-            {/* Add Service */}
+            {/* Add Treatment Item */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Add Service</CardTitle>
+                <CardTitle className="text-lg">Add Treatment Item</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <Field orientation="vertical">
-                    <FieldLabel>Service/Procedure</FieldLabel>
+                    <FieldLabel>Procedure</FieldLabel>
                     <FieldContent>
                       <Select
-                        value={itemForm.service_id?.toString()}
-                        onValueChange={(value) => {
-                          const serviceId = Number(value);
-                          const service = getServiceById(serviceId);
-                          setItemForm({ 
-                            ...itemForm, 
-                            service_id: serviceId,
-                            estimated_cost: service?.service_fee || 0,
-                          });
-                        }}
+                        value={itemForm.procedure}
+                        onValueChange={(value) => setItemForm({ ...itemForm, procedure: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={services.length === 0 ? "No services available" : "Select service"} />
+                          <SelectValue placeholder="Select procedure" />
                         </SelectTrigger>
                         <SelectContent>
-                          {services.length === 0 ? (
-                            <SelectItem value="none" disabled>
-                              No services found - add services first
+                          {PROCEDURES.map((proc) => (
+                            <SelectItem key={proc} value={proc}>
+                              {proc}
                             </SelectItem>
-                          ) : (
-                            services.map((service) => (
-                              <SelectItem key={service.service_id} value={service.service_id.toString()}>
-                                {service.service_name} - {formatCurrency(service.service_fee || 0)}
-                              </SelectItem>
-                            ))
-                          )}
+                          ))}
                         </SelectContent>
                       </Select>
                     </FieldContent>
@@ -721,6 +614,16 @@ const TreatmentPlanPage = () => {
                     </FieldContent>
                   </Field>
                 </div>
+                <Field orientation="vertical">
+                  <FieldLabel>Description</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={itemForm.description}
+                      onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                      placeholder="Describe the procedure"
+                    />
+                  </FieldContent>
+                </Field>
                 <div className="grid md:grid-cols-3 gap-4">
                   <Field orientation="vertical">
                     <FieldLabel>Estimated Cost (₱)</FieldLabel>
@@ -738,7 +641,7 @@ const TreatmentPlanPage = () => {
                     <FieldContent>
                       <Select
                         value={itemForm.priority}
-                        onValueChange={(value) => setItemForm({ ...itemForm, priority: value as TreatmentPlanService['priority'] })}
+                        onValueChange={(value) => setItemForm({ ...itemForm, priority: value as TreatmentPlanItem['priority'] })}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -752,50 +655,51 @@ const TreatmentPlanPage = () => {
                     </FieldContent>
                   </Field>
                   <div className="flex items-end">
-                    <Button onClick={handleAddService} className="w-full">
+                    <Button onClick={handleAddItem} className="w-full">
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Service
+                      Add Item
                     </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Services List */}
+            {/* Treatment Items List */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Services/Procedures</h3>
-              {displayPlan.services && displayPlan.services.length === 0 ? (
+              <h3 className="text-lg font-semibold">Treatment Items</h3>
+              {displayPlan.items && displayPlan.items.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
-                  No services added yet. Add services using the form above.
+                  No treatment items added yet. Add items using the form above.
                 </p>
               ) : (
-                displayPlan.services?.map((service) => (
-                  <Card key={service.id}>
+                displayPlan.items?.map((item) => (
+                  <Card key={item.id}>
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h4 className="font-semibold text-lg">{service.service_name || `Service #${service.service_id}`}</h4>
-                            {service.tooth_number && (
+                            <h4 className="font-semibold text-lg">{item.procedure}</h4>
+                            {item.tooth_number && (
                               <span className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
-                                Tooth {service.tooth_number}
+                                Tooth {item.tooth_number}
                               </span>
                             )}
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${service.priority === 'High' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                service.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${item.priority === 'High' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                item.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
                                   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                               }`}>
-                              {service.priority}
+                              {item.priority}
                             </span>
                           </div>
+                          <p className="text-sm text-muted-foreground mb-2">{item.description}</p>
                           <div className="flex items-center gap-4">
                             <span className="text-sm font-semibold text-primary">
-                              {formatCurrency(service.estimated_cost)}
+                              {formatCurrency(item.estimated_cost)}
                             </span>
                             {!isAdding && (
                               <Select
-                                value={service.status}
-                                onValueChange={(value) => selectedPlan && handleUpdateServiceStatus(selectedPlan, service.id, value as TreatmentPlanService['status'])}
+                                value={item.status}
+                                onValueChange={(value) => selectedPlan && handleUpdateItemStatus(selectedPlan, item.id, value as TreatmentPlanItem['status'])}
                               >
                                 <SelectTrigger className="w-40">
                                   <SelectValue />
@@ -816,6 +720,27 @@ const TreatmentPlanPage = () => {
                 ))
               )}
             </div>
+
+            {/* Notes */}
+            <Field orientation="vertical">
+              <FieldLabel>Notes</FieldLabel>
+              <FieldContent>
+                {isAdding ? (
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="w-full min-h-[100px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Additional notes about the treatment plan..."
+                  />
+                ) : (
+                  <textarea
+                    value={displayPlan.notes}
+                    readOnly
+                    className="w-full min-h-[100px] p-2 border rounded-lg resize-none bg-muted"
+                  />
+                )}
+              </FieldContent>
+            </Field>
 
             {/* Total Cost */}
             <Card className="bg-primary/5">

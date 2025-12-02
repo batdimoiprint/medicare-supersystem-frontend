@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
-import supabase, { dentistClient } from '@/utils/supabase';
+import { dentistClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
 interface Service {
@@ -36,7 +36,7 @@ interface Service {
 }
 
 interface Dentist {
-  personnel_id: string;
+  dentist_id: number;
   f_name?: string;
   m_name?: string;
   l_name?: string;
@@ -82,18 +82,10 @@ const AVAILABLE_TIME_SLOTS = [
 
 const INITIAL_APPOINTMENTS: Appointment[] = [];
 
-// Helper to get dentist full name
-const getDentistName = (dentist: Dentist): string => {
-  return `Dr. ${dentist.f_name ?? ''} ${dentist.m_name ?? ''} ${dentist.l_name ?? ''}`.trim();
-};
-
 // --- Reducer for State Management (Simulating Database) ---
 
 const appointmentReducer = (state: Appointment[], action: AppointmentAction): Appointment[] => {
   switch (action.type) {
-    case 'SET_APPOINTMENTS':
-      return action.payload;
-
     case 'CREATE_APPOINTMENT':
       return [
         ...state,
@@ -261,13 +253,11 @@ const AppointmentStepper = ({ appointment }: AppointmentStepperProps) => {
 interface PatientDashboardProps {
   appointments: Appointment[];
   dispatch: React.Dispatch<AppointmentAction>;
-  services: Service[];
-  dentists: Dentist[];
 }
 
-const PatientDashboard = ({ appointments, dispatch, services, dentists }: PatientDashboardProps) => {
-  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
-  const [selectedDentistId, setSelectedDentistId] = useState<string>('');
+const PatientDashboard = ({ appointments, dispatch }: PatientDashboardProps) => {
+  const [selectedServiceId, setSelectedServiceId] = useState(SERVICES[0].id);
+  const [selectedDentistId, setSelectedDentistId] = useState(DENTISTS[0].id);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [isBooking, setIsBooking] = useState(false);
@@ -276,33 +266,16 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
   const [error, setError] = useState('');
   const pendingAppointmentRef = useRef<{ patient: string; date: string; time: string; dentist: string; service: string } | null>(null);
 
-  // Set defaults when data loads
-  useEffect(() => {
-    if (services.length > 0 && !selectedServiceId) {
-      setSelectedServiceId(String(services[0].service_id));
-    }
-  }, [services, selectedServiceId]);
-
-  useEffect(() => {
-    if (dentists.length > 0 && !selectedDentistId) {
-      setSelectedDentistId(dentists[0].personnel_id);
-    }
-  }, [dentists, selectedDentistId]);
-
-  const service = services.find(s => String(s.service_id) === selectedServiceId);
-  const dentist = dentists.find(d => d.personnel_id === selectedDentistId);
-  const fee = service?.service_fee || 0;
-  const dentistName = dentist ? getDentistName(dentist) : '';
+  const service = SERVICES.find(s => s.id === selectedServiceId);
+  const dentist = DENTISTS.find(d => d.id === selectedDentistId);
+  const fee = service?.fee || 0;
 
   // Check dentist availability for selected date and dentist (Step 2)
   const getAvailableTimeSlots = useCallback((date: string, dentistId: string): string[] => {
     // Get all booked appointments for this dentist and date
-    const selectedDentist = dentists.find(d => d.personnel_id === dentistId);
-    const dentistFullName = selectedDentist ? getDentistName(selectedDentist) : '';
-    
     const bookedSlots = appointments
       .filter((app: Appointment) => 
-        app.dentist === dentistFullName &&
+        app.dentist === DENTISTS.find(d => d.id === dentistId)?.name &&
         app.date === date &&
         app.status !== 'CANCELLED'
       )
@@ -310,7 +283,7 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
 
     // Return available slots (not booked)
     return AVAILABLE_TIME_SLOTS.filter(slot => !bookedSlots.includes(slot));
-  }, [appointments, dentists]);
+  }, [appointments]);
 
   // Get available time slots for current selection
   const availableTimeSlots = getAvailableTimeSlots(selectedDate, selectedDentistId);
@@ -359,8 +332,8 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
 
     // Step 1 & 2: Create appointment with PENDING_PAYMENT status
     const newAppointment = {
-      service: service.service_name,
-      dentist: dentistName,
+      service: service.name,
+      dentist: dentist.name,
       date: selectedDate,
       time: selectedTimeSlot,
       fee: fee,
@@ -423,18 +396,14 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
           <FieldContent>
             <Select value={selectedServiceId} onValueChange={setSelectedServiceId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={services.length === 0 ? "Loading services..." : "Select a service"} />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {services.length === 0 ? (
-                  <SelectItem value="none" disabled>No services available</SelectItem>
-                ) : (
-                  services.map(s => (
-                    <SelectItem key={s.service_id} value={String(s.service_id)}>
-                      {s.service_name} (Fee: {formatCurrency(s.service_fee || 0)})
-                    </SelectItem>
-                  ))
-                )}
+                {SERVICES.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name} (Fee: {formatCurrency(s.fee)})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FieldContent>
@@ -444,18 +413,14 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
           <FieldContent>
             <Select value={selectedDentistId} onValueChange={setSelectedDentistId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={dentists.length === 0 ? "Loading dentists..." : "Select a dentist"} />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {dentists.length === 0 ? (
-                  <SelectItem value="none" disabled>No dentists available</SelectItem>
-                ) : (
-                  dentists.map(d => (
-                    <SelectItem key={d.personnel_id} value={d.personnel_id}>
-                      {getDentistName(d)}
-                    </SelectItem>
-                  ))
-                )}
+                {DENTISTS.map(d => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FieldContent>
@@ -752,71 +717,6 @@ const PatientRecordsView = ({ appointments }: PatientRecordsViewProps) => {
 const App = () => {
   const [appointments, dispatch] = useReducer(appointmentReducer, INITIAL_APPOINTMENTS);
   const [activeView, setActiveView] = useState('patient'); // 'patient', 'frontdesk', 'records'
-  const [services, setServices] = useState<Service[]>([]);
-  const [dentists, setDentists] = useState<Dentist[]>([]);
-
-  // Load services from dentist.services_tbl
-  useEffect(() => {
-    const loadServices = async () => {
-      try {
-        const { data, error } = await dentistClient
-          .from('services_tbl')
-          .select('service_id, service_name, service_fee')
-          .not('service_id', 'is', null)
-          .order('service_name', { ascending: true });
-
-        if (error) {
-          console.error('Failed to load services:', error);
-          return;
-        }
-        setServices(data ?? []);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    loadServices();
-  }, []);
-
-  // Load dentists from personnel_tbl where role_id = 1 (Dentist)
-  useEffect(() => {
-    const loadDentists = async () => {
-      try {
-        console.log('Loading dentists from personnel_tbl...');
-        const { data, error } = await supabase
-          .from('personnel_tbl')
-          .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-          .eq('role_id', '1')
-          .order('l_name', { ascending: true });
-
-        if (error) {
-          console.error('Failed to load dentists - Error:', error);
-          console.error('Error details:', JSON.stringify(error, null, 2));
-          return;
-        }
-        
-        console.log('Loaded dentists - Count:', data?.length || 0);
-        console.log('Loaded dentists - Data:', data);
-        
-        if (!data || data.length === 0) {
-          console.warn('No dentists found with role_id = 1. Checking all personnel...');
-          // Try loading all personnel to see what's in the table
-          const { data: allData, error: allError } = await supabase
-            .from('personnel_tbl')
-            .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-            .limit(10);
-          
-          if (!allError && allData) {
-            console.log('Sample personnel data:', allData);
-          }
-        }
-        
-        setDentists(data ?? []);
-      } catch (err) {
-        console.error('Exception loading dentists:', err);
-      }
-    };
-    loadDentists();
-  }, []);
 
   const renderView = () => {
     switch (activeView) {
@@ -826,7 +726,7 @@ const App = () => {
         return <PatientRecordsView appointments={appointments} />;
       case 'patient':
       default:
-        return <PatientDashboard appointments={appointments} dispatch={dispatch} services={services} dentists={dentists} />;
+        return <PatientDashboard appointments={appointments} dispatch={dispatch} />;
     }
   };
 

@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
-import supabase, { dentistClient } from '@/utils/supabase';
+import { dentistClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
 interface Service {
@@ -36,7 +36,7 @@ interface Service {
 }
 
 interface Dentist {
-  personnel_id: string;
+  dentist_id: number;
   f_name?: string;
   m_name?: string;
   l_name?: string;
@@ -285,19 +285,19 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
 
   useEffect(() => {
     if (dentists.length > 0 && !selectedDentistId) {
-      setSelectedDentistId(dentists[0].personnel_id);
+      setSelectedDentistId(String(dentists[0].dentist_id));
     }
   }, [dentists, selectedDentistId]);
 
   const service = services.find(s => String(s.service_id) === selectedServiceId);
-  const dentist = dentists.find(d => d.personnel_id === selectedDentistId);
+  const dentist = dentists.find(d => String(d.dentist_id) === selectedDentistId);
   const fee = service?.service_fee || 0;
   const dentistName = dentist ? getDentistName(dentist) : '';
 
   // Check dentist availability for selected date and dentist (Step 2)
   const getAvailableTimeSlots = useCallback((date: string, dentistId: string): string[] => {
     // Get all booked appointments for this dentist and date
-    const selectedDentist = dentists.find(d => d.personnel_id === dentistId);
+    const selectedDentist = dentists.find(d => String(d.dentist_id) === dentistId);
     const dentistFullName = selectedDentist ? getDentistName(selectedDentist) : '';
     
     const bookedSlots = appointments
@@ -451,7 +451,7 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists }: Patien
                   <SelectItem value="none" disabled>No dentists available</SelectItem>
                 ) : (
                   dentists.map(d => (
-                    <SelectItem key={d.personnel_id} value={d.personnel_id}>
+                    <SelectItem key={d.dentist_id} value={String(d.dentist_id)}>
                       {getDentistName(d)}
                     </SelectItem>
                   ))
@@ -752,71 +752,6 @@ const PatientRecordsView = ({ appointments }: PatientRecordsViewProps) => {
 const App = () => {
   const [appointments, dispatch] = useReducer(appointmentReducer, INITIAL_APPOINTMENTS);
   const [activeView, setActiveView] = useState('patient'); // 'patient', 'frontdesk', 'records'
-  const [services, setServices] = useState<Service[]>([]);
-  const [dentists, setDentists] = useState<Dentist[]>([]);
-
-  // Load services from dentist.services_tbl
-  useEffect(() => {
-    const loadServices = async () => {
-      try {
-        const { data, error } = await dentistClient
-          .from('services_tbl')
-          .select('service_id, service_name, service_fee')
-          .not('service_id', 'is', null)
-          .order('service_name', { ascending: true });
-
-        if (error) {
-          console.error('Failed to load services:', error);
-          return;
-        }
-        setServices(data ?? []);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    loadServices();
-  }, []);
-
-  // Load dentists from personnel_tbl where role_id = 1 (Dentist)
-  useEffect(() => {
-    const loadDentists = async () => {
-      try {
-        console.log('Loading dentists from personnel_tbl...');
-        const { data, error } = await supabase
-          .from('personnel_tbl')
-          .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-          .eq('role_id', '1')
-          .order('l_name', { ascending: true });
-
-        if (error) {
-          console.error('Failed to load dentists - Error:', error);
-          console.error('Error details:', JSON.stringify(error, null, 2));
-          return;
-        }
-        
-        console.log('Loaded dentists - Count:', data?.length || 0);
-        console.log('Loaded dentists - Data:', data);
-        
-        if (!data || data.length === 0) {
-          console.warn('No dentists found with role_id = 1. Checking all personnel...');
-          // Try loading all personnel to see what's in the table
-          const { data: allData, error: allError } = await supabase
-            .from('personnel_tbl')
-            .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-            .limit(10);
-          
-          if (!allError && allData) {
-            console.log('Sample personnel data:', allData);
-          }
-        }
-        
-        setDentists(data ?? []);
-      } catch (err) {
-        console.error('Exception loading dentists:', err);
-      }
-    };
-    loadDentists();
-  }, []);
 
   const renderView = () => {
     switch (activeView) {
@@ -826,7 +761,7 @@ const App = () => {
         return <PatientRecordsView appointments={appointments} />;
       case 'patient':
       default:
-        return <PatientDashboard appointments={appointments} dispatch={dispatch} services={services} dentists={dentists} />;
+        return <PatientDashboard appointments={appointments} dispatch={dispatch} />;
     }
   };
 

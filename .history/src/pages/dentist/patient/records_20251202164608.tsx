@@ -32,19 +32,12 @@ import { PatientSelector } from '@/components/dentist/PatientSelector';
 import { patientRecordClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
-interface PatientRow {
-  patient_id: number;
-  f_name?: string;
-  m_name?: string;
-  l_name?: string;
-}
-
 interface EMRRecord {
   id: number;
-  patient_id: number;
+  patientName: string;
   date: string;
   time: string;
-  chief_complaint: string;
+  chiefComplaint: string;
   diagnosis: string;
   treatment: string;
   notes: string;
@@ -52,21 +45,34 @@ interface EMRRecord {
   status: 'Active' | 'Archived';
 }
 
+// --- Mock Data ---
+const INITIAL_RECORDS: EMRRecord[] = [
+  {
+    id: 1,
+    patientName: 'John Doe',
+    date: '2024-01-15',
+    time: '10:00 AM',
+    chiefComplaint: 'Tooth pain in upper right molar',
+    diagnosis: 'Dental caries in tooth #3',
+    treatment: 'Composite filling placed',
+    notes: 'Patient reported sensitivity to cold. Recommended follow-up in 2 weeks.',
+    dentist: 'Dr. Evelyn Reyes',
+    status: 'Active',
+  },
+];
+
 // --- Main Component ---
 const PatientRecords = () => {
-  const [searchParams] = useSearchParams();
-  const [patients, setPatients] = useState<PatientRow[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<string>(searchParams.get('patient') || '');
-  const [records, setRecords] = useState<EMRRecord[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState('John Doe');
+  const [records, setRecords] = useState<EMRRecord[]>(INITIAL_RECORDS);
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Partial<EMRRecord>>({
-    patient_id: undefined,
+    patientName: '',
     date: new Date().toISOString().split('T')[0],
     time: '',
-    chief_complaint: '',
+    chiefComplaint: '',
     diagnosis: '',
     treatment: '',
     notes: '',
@@ -74,72 +80,14 @@ const PatientRecords = () => {
     status: 'Active',
   });
 
-  // --- Load Patients ---
-  useEffect(() => {
-    let mounted = true;
-    const loadPatients = async () => {
-      try {
-        const { data, error } = await patientRecordClient
-          .from('patient_tbl')
-          .select('patient_id, f_name, m_name, l_name')
-          .order('l_name', { ascending: true });
-
-        if (!mounted) return;
-        if (error) return console.error('Failed to fetch patients:', error);
-
-        setPatients(data ?? []);
-        if (!selectedPatient && data && data.length > 0) {
-          setSelectedPatient(String(data[0].patient_id));
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    loadPatients();
-    return () => { mounted = false; };
-  }, [selectedPatient]);
-
-  // --- Load EMR Records ---
-  const loadRecords = async () => {
-    if (!selectedPatient) return;
-    setLoading(true);
-    try {
-      const { data, error } = await patientRecordClient
-        .from('emr_records')
-        .select('*')
-        .eq('patient_id', selectedPatient)
-        .order('date', { ascending: false });
-
-      if (error) {
-        console.error('Failed to fetch records:', error);
-        return;
-      }
-
-      setRecords(data ?? []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadRecords();
-  }, [selectedPatient]);
-
-  // Helper to get patient name by ID
-  const getPatientName = (patientId: number): string => {
-    const patient = patients.find(p => p.patient_id === patientId);
-    if (!patient) return 'Unknown';
-    return `${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim();
-  };
-
   const filteredRecords = records.filter((record) =>
-    record.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.chief_complaint.toLowerCase().includes(searchTerm.toLowerCase())
+    (selectedPatient === 'All Patients' || record.patientName === selectedPatient) &&
+    (record.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const totalRecords = records.length;
+  const patientRecords = records.filter(r => r.patientName === selectedPatient);
+  const totalRecords = patientRecords.length;
 
   const handleEdit = (record: EMRRecord) => {
     setIsEditing(record.id);
@@ -151,10 +99,10 @@ const PatientRecords = () => {
     setIsAdding(true);
     setIsEditing(null);
     setFormData({
-      patient_id: selectedPatient ? Number(selectedPatient) : undefined,
+      patientName: selectedPatient !== 'All Patients' ? selectedPatient : '',
       date: new Date().toISOString().split('T')[0],
       time: '',
-      chief_complaint: '',
+      chiefComplaint: '',
       diagnosis: '',
       treatment: '',
       notes: '',
@@ -163,77 +111,39 @@ const PatientRecords = () => {
     });
   };
 
-  const handleSave = async () => {
-    try {
-      if (isEditing) {
-        // Update existing record
-        const { error } = await patientRecordClient
-          .from('emr_records')
-          .update({
-            date: formData.date,
-            time: formData.time,
-            chief_complaint: formData.chief_complaint,
-            diagnosis: formData.diagnosis,
-            treatment: formData.treatment,
-            notes: formData.notes,
-            dentist: formData.dentist,
-            status: formData.status,
-          })
-          .eq('id', isEditing);
-
-        if (error) throw error;
-        setIsEditing(null);
-      } else if (isAdding) {
-        // Insert new record
-        const { error } = await patientRecordClient
-          .from('emr_records')
-          .insert({
-            patient_id: Number(selectedPatient),
-            date: formData.date,
-            time: formData.time,
-            chief_complaint: formData.chief_complaint,
-            diagnosis: formData.diagnosis,
-            treatment: formData.treatment,
-            notes: formData.notes,
-            dentist: formData.dentist,
-            status: formData.status,
-          });
-
-        if (error) throw error;
-        setIsAdding(false);
-      }
-
-      // Reload records after save
-      await loadRecords();
-
-      // Reset form
-      setFormData({
-        patient_id: undefined,
-        date: new Date().toISOString().split('T')[0],
-        time: '',
-        chief_complaint: '',
-        diagnosis: '',
-        treatment: '',
-        notes: '',
-        dentist: 'Dr. Evelyn Reyes',
-        status: 'Active',
-      });
-
-      alert('Record saved successfully!');
-    } catch (err) {
-      console.error('Failed to save record:', err);
-      alert('Failed to save record');
+  const handleSave = () => {
+    if (isEditing) {
+      setRecords(records.map(r => r.id === isEditing ? { ...formData, id: isEditing } as EMRRecord : r));
+      setIsEditing(null);
+    } else if (isAdding) {
+      const newRecord: EMRRecord = {
+        ...formData,
+        id: Date.now(),
+      } as EMRRecord;
+      setRecords([...records, newRecord]);
+      setIsAdding(false);
     }
+    setFormData({
+      patientName: '',
+      date: new Date().toISOString().split('T')[0],
+      time: '',
+      chiefComplaint: '',
+      diagnosis: '',
+      treatment: '',
+      notes: '',
+      dentist: 'Dr. Evelyn Reyes',
+      status: 'Active',
+    });
   };
 
   const handleCancel = () => {
     setIsEditing(null);
     setIsAdding(false);
     setFormData({
-      patient_id: undefined,
+      patientName: '',
       date: new Date().toISOString().split('T')[0],
       time: '',
-      chief_complaint: '',
+      chiefComplaint: '',
       diagnosis: '',
       treatment: '',
       notes: '',
@@ -268,7 +178,6 @@ const PatientRecords = () => {
       <PatientSelector
         selectedPatient={selectedPatient}
         onPatientChange={setSelectedPatient}
-        patients={patients}
       />
 
       {/* Header */}
@@ -299,7 +208,7 @@ const PatientRecords = () => {
       </Card>
 
       {/* Statistics */}
-      {selectedPatient && (
+      {selectedPatient !== 'All Patients' && (
         <div className="grid md:grid-cols-3 gap-4">
           <Card>
             <CardContent className="pt-6">
@@ -318,7 +227,7 @@ const PatientRecords = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Active Records</p>
                   <p className="text-2xl font-bold">
-                    {records.filter(r => r.status === 'Active').length}
+                    {patientRecords.filter(r => r.status === 'Active').length}
                   </p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-muted-foreground" />
@@ -357,12 +266,12 @@ const PatientRecords = () => {
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <Field orientation="vertical">
-                <FieldLabel>Patient</FieldLabel>
+                <FieldLabel>Patient Name</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={selectedPatient ? getPatientName(Number(selectedPatient)) : ''}
-                    disabled
-                    placeholder="Select a patient first"
+                    value={formData.patientName}
+                    onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                    placeholder="Enter patient name"
                   />
                 </FieldContent>
               </Field>
@@ -408,8 +317,8 @@ const PatientRecords = () => {
               <FieldLabel>Chief Complaint</FieldLabel>
               <FieldContent>
                 <Input
-                  value={formData.chief_complaint}
-                  onChange={(e) => setFormData({ ...formData, chief_complaint: e.target.value })}
+                  value={formData.chiefComplaint}
+                  onChange={(e) => setFormData({ ...formData, chiefComplaint: e.target.value })}
                   placeholder="Patient's main complaint"
                 />
               </FieldContent>
@@ -461,15 +370,7 @@ const PatientRecords = () => {
 
       {/* Records List */}
       <div className="space-y-4">
-        {loading ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center text-muted-foreground">
-                <p className="text-lg font-medium">Loading records...</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : filteredRecords.length === 0 ? (
+        {filteredRecords.length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
@@ -485,7 +386,7 @@ const PatientRecords = () => {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-xl mb-2">{getPatientName(record.patient_id)}</CardTitle>
+                    <CardTitle className="text-xl mb-2">{record.patientName}</CardTitle>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
@@ -516,7 +417,7 @@ const PatientRecords = () => {
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm font-semibold mb-1">Chief Complaint:</p>
-                  <p className="text-sm text-muted-foreground">{record.chief_complaint}</p>
+                  <p className="text-sm text-muted-foreground">{record.chiefComplaint}</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold mb-1">Diagnosis:</p>
@@ -534,13 +435,13 @@ const PatientRecords = () => {
                 )}
                 <div className="pt-3 border-t flex gap-2">
                   <Button variant="outline" size="sm" asChild>
-                    <Link to={`/dentist/patient/charting?patient=${record.patient_id}`}>
+                    <Link to={`/dentist/patient/charting?patient=${record.patientName}`}>
                       <Stethoscope className="w-3 h-3 mr-1" />
                       View Chart
                     </Link>
                   </Button>
                   <Button variant="outline" size="sm" asChild>
-                    <Link to={`/dentist/patient/treatment/plan?patient=${record.patient_id}`}>
+                    <Link to={`/dentist/patient/treatment/plan?patient=${record.patientName}`}>
                       <ClipboardList className="w-3 h-3 mr-1" />
                       Treatment Plan
                     </Link>

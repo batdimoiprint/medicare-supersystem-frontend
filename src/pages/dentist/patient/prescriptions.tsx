@@ -25,18 +25,33 @@ import {
 } from '@/components/ui/select';
 import { PatientNav } from '@/components/dentist/PatientNav';
 import { PatientSelector } from '@/components/dentist/PatientSelector';
+import { patientRecordClient, inventoryClient } from '@/utils/supabase';
 
 // --- Type Definitions ---
-interface Prescription {
-  id: number;
-  patientName: string;
-  date: string;
-  medications: Medication[];
-  instructions: string;
-  dentist: string;
+interface PatientRow {
+  patient_id: number;
+  f_name?: string;
+  m_name?: string;
+  l_name?: string;
 }
 
-interface Medication {
+interface Medicine {
+  medicine_id: number;
+  medicine_name: string;
+  unit_cost?: number;
+}
+
+interface Prescription {
+  prescription_id: number;
+  patient_id: number;
+  date: string;
+  medications: string; // JSON string of medications
+  instructions: string;
+  dentist: string;
+  status?: string;
+}
+
+interface MedicationItem {
   id: number;
   name: string;
   dosage: string;
@@ -45,67 +60,118 @@ interface Medication {
   quantity: string;
 }
 
-// --- Mock Data ---
-const INITIAL_PRESCRIPTIONS: Prescription[] = [
-  {
-    id: 1,
-    patientName: 'John Doe',
-    date: '2024-01-15',
-    medications: [
-      {
-        id: 1,
-        name: 'Amoxicillin',
-        dosage: '500mg',
-        frequency: '3 times a day',
-        duration: '7 days',
-        quantity: '21 tablets',
-      },
-      {
-        id: 2,
-        name: 'Ibuprofen',
-        dosage: '400mg',
-        frequency: 'As needed for pain',
-        duration: '5 days',
-        quantity: '10 tablets',
-      },
-    ],
-    instructions: 'Take Amoxicillin with food. Ibuprofen only when experiencing pain. Complete full course of antibiotics.',
-    dentist: 'Dr. Evelyn Reyes',
-  },
-];
-
-const COMMON_MEDICATIONS = [
-  'Amoxicillin',
-  'Clindamycin',
-  'Ibuprofen',
-  'Acetaminophen',
-  'Penicillin VK',
-  'Metronidazole',
-  'Cephalexin',
-  'Naproxen',
-];
-
 // --- Main Component ---
 const PrescriptionsPage = () => {
   const [searchParams] = useSearchParams();
-  const [selectedPatient, setSelectedPatient] = useState(searchParams.get('patient') || 'John Doe');
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(INITIAL_PRESCRIPTIONS);
+  const [patients, setPatients] = useState<PatientRow[]>([]);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<string>(searchParams.get('patient') || '');
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Load patients
+  useEffect(() => {
+    let mounted = true;
+    const loadPatients = async () => {
+      try {
+        const { data, error } = await patientRecordClient
+          .from('patient_tbl')
+          .select('patient_id, f_name, m_name, l_name')
+          .order('l_name', { ascending: true });
+
+        if (!mounted) return;
+        if (error) return console.error('Failed to fetch patients:', error);
+
+        setPatients(data ?? []);
+        if (!selectedPatient && data && data.length > 0) {
+          setSelectedPatient(String(data[0].patient_id));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadPatients();
+    return () => { mounted = false; };
+  }, [selectedPatient]);
+
+  // Load medicines from inventory
+  useEffect(() => {
+    const loadMedicines = async () => {
+      try {
+        const { data, error } = await inventoryClient
+          .from('medicine_tbl')
+          .select('medicine_id, medicine_name, unit_cost')
+          .order('medicine_name', { ascending: true });
+
+        if (error) return console.error('Failed to fetch medicines:', error);
+        setMedicines(data ?? []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadMedicines();
+  }, []);
+
+  // Load prescriptions
+  const loadPrescriptions = async () => {
+    if (!selectedPatient) return;
+    setLoading(true);
+    try {
+      const { data, error } = await patientRecordClient
+        .from('prescription_tbl')
+        .select('*')
+        .eq('patient_id', selectedPatient)
+        .order('date', { ascending: false });
+
+      if (error) {
+        console.error('Failed to fetch prescriptions:', error);
+        return;
+      }
+      setPrescriptions(data ?? []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const patient = searchParams.get('patient');
-    if (patient) setSelectedPatient(patient);
-  }, [searchParams]);
+    loadPrescriptions();
+  }, [selectedPatient]);
+
+  // Helper to get patient name by ID
+  const getPatientName = (patientId: number): string => {
+    const patient = patients.find(p => p.patient_id === patientId);
+    if (!patient) return 'Unknown';
+    return `${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim();
+  };
+
+  // Parse medications JSON
+  const parseMedications = (medicationsJson: string): MedicationItem[] => {
+    try {
+      return JSON.parse(medicationsJson || '[]');
+    } catch {
+      return [];
+    }
+  };
+
   const [isEditing, setIsEditing] = useState<number | null>(null);
-  const [formData, setFormData] = useState<Partial<Prescription>>({
-    patientName: '',
+  const [formData, setFormData] = useState<{
+    patient_id?: number;
+    date: string;
+    medications: MedicationItem[];
+    instructions: string;
+    dentist: string;
+  }>({
+    patient_id: undefined,
     date: new Date().toISOString().split('T')[0],
     medications: [],
     instructions: '',
     dentist: 'Dr. Evelyn Reyes',
   });
-  const [medicationForm, setMedicationForm] = useState<Partial<Medication>>({
+  const [medicationForm, setMedicationForm] = useState<Partial<MedicationItem>>({
     name: '',
     dosage: '',
     frequency: '',
@@ -114,18 +180,17 @@ const PrescriptionsPage = () => {
   });
 
   const filteredPrescriptions = prescriptions.filter((prescription) =>
-    (selectedPatient === 'All Patients' || prescription.patientName === selectedPatient) &&
-    prescription.patientName.toLowerCase().includes(searchTerm.toLowerCase())
+    prescription.instructions?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    prescription.dentist?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const patientPrescriptions = prescriptions.filter(p => p.patientName === selectedPatient);
-  const totalMedications = patientPrescriptions.reduce((sum, p) => sum + p.medications.length, 0);
+  const totalMedications = prescriptions.reduce((sum, p) => sum + parseMedications(p.medications).length, 0);
 
   const handleAdd = () => {
     setIsAdding(true);
     setIsEditing(null);
     setFormData({
-      patientName: selectedPatient !== 'All Patients' ? selectedPatient : '',
+      patient_id: selectedPatient ? Number(selectedPatient) : undefined,
       date: new Date().toISOString().split('T')[0],
       medications: [],
       instructions: '',
@@ -134,15 +199,21 @@ const PrescriptionsPage = () => {
   };
 
   const handleEdit = (prescription: Prescription) => {
-    setIsEditing(prescription.id);
+    setIsEditing(prescription.prescription_id);
     setIsAdding(false);
-    setFormData(prescription);
+    setFormData({
+      patient_id: prescription.patient_id,
+      date: prescription.date,
+      medications: parseMedications(prescription.medications),
+      instructions: prescription.instructions,
+      dentist: prescription.dentist,
+    });
   };
 
   const handleAddMedication = () => {
     if (!medicationForm.name || !medicationForm.dosage || !medicationForm.frequency) return;
 
-    const newMedication: Medication = {
+    const newMedication: MedicationItem = {
       id: Date.now(),
       name: medicationForm.name || '',
       dosage: medicationForm.dosage || '',
@@ -172,34 +243,60 @@ const PrescriptionsPage = () => {
     });
   };
 
-  const handleSave = () => {
-    if (isEditing) {
-      setPrescriptions(prescriptions.map(p =>
-        p.id === isEditing ? { ...formData, id: isEditing } as Prescription : p
-      ));
-      setIsEditing(null);
-    } else if (isAdding) {
-      const newPrescription: Prescription = {
-        ...formData,
-        id: Date.now(),
-      } as Prescription;
-      setPrescriptions([...prescriptions, newPrescription]);
-      setIsAdding(false);
+  const handleSave = async () => {
+    try {
+      const medicationsJson = JSON.stringify(formData.medications);
+
+      if (isEditing) {
+        const { error } = await patientRecordClient
+          .from('prescription_tbl')
+          .update({
+            date: formData.date,
+            medications: medicationsJson,
+            instructions: formData.instructions,
+            dentist: formData.dentist,
+          })
+          .eq('prescription_id', isEditing);
+
+        if (error) throw error;
+        setIsEditing(null);
+      } else if (isAdding) {
+        const { error } = await patientRecordClient
+          .from('prescription_tbl')
+          .insert({
+            patient_id: Number(selectedPatient),
+            date: formData.date,
+            medications: medicationsJson,
+            instructions: formData.instructions,
+            dentist: formData.dentist,
+            status: 'Pending',
+          });
+
+        if (error) throw error;
+        setIsAdding(false);
+      }
+
+      await loadPrescriptions();
+      alert('Prescription saved successfully!');
+
+      setFormData({
+        patient_id: undefined,
+        date: new Date().toISOString().split('T')[0],
+        medications: [],
+        instructions: '',
+        dentist: 'Dr. Evelyn Reyes',
+      });
+    } catch (err) {
+      console.error('Failed to save prescription:', err);
+      alert('Failed to save prescription');
     }
-    setFormData({
-      patientName: '',
-      date: new Date().toISOString().split('T')[0],
-      medications: [],
-      instructions: '',
-      dentist: 'Dr. Evelyn Reyes',
-    });
   };
 
   const handleCancel = () => {
     setIsAdding(false);
     setIsEditing(null);
     setFormData({
-      patientName: '',
+      patient_id: undefined,
       date: new Date().toISOString().split('T')[0],
       medications: [],
       instructions: '',
@@ -235,6 +332,7 @@ const PrescriptionsPage = () => {
       <PatientSelector
         selectedPatient={selectedPatient}
         onPatientChange={setSelectedPatient}
+        patients={patients}
       />
 
       {/* Header */}
@@ -244,7 +342,7 @@ const PrescriptionsPage = () => {
             <div>
               <CardTitle className="text-3xl mb-2 flex items-center gap-2">
                 <Pill className="w-8 h-8" />
-                Prescription Management - {selectedPatient}
+                Prescription Management - {selectedPatient ? getPatientName(Number(selectedPatient)) : 'Select Patient'}
               </CardTitle>
               <p className="text-muted-foreground">
                 Create and manage patient prescriptions
@@ -265,14 +363,14 @@ const PrescriptionsPage = () => {
       </Card>
 
       {/* Statistics */}
-      {selectedPatient !== 'All Patients' && (
+      {selectedPatient && (
         <div className="grid md:grid-cols-3 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Prescriptions</p>
-                  <p className="text-2xl font-bold">{patientPrescriptions.length}</p>
+                  <p className="text-2xl font-bold">{prescriptions.length}</p>
                 </div>
                 <Pill className="w-8 h-8 text-muted-foreground" />
               </div>
@@ -320,14 +418,14 @@ const PrescriptionsPage = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Patient Info */}
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-3 gap-4">
               <Field orientation="vertical">
-                <FieldLabel>Patient Name</FieldLabel>
+                <FieldLabel>Patient</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={currentForm.patientName}
-                    onChange={(e) => setFormData({ ...currentForm, patientName: e.target.value })}
-                    placeholder="Enter patient name"
+                    value={getPatientName(Number(selectedPatient))}
+                    disabled
+                    className="bg-muted"
                   />
                 </FieldContent>
               </Field>
@@ -375,14 +473,20 @@ const PrescriptionsPage = () => {
                         onValueChange={(value) => setMedicationForm({ ...medicationForm, name: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select or type medication" />
+                          <SelectValue placeholder={medicines.length === 0 ? "No medicines available" : "Select medication"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {COMMON_MEDICATIONS.map((med) => (
-                            <SelectItem key={med} value={med}>
-                              {med}
+                          {medicines.length === 0 ? (
+                            <SelectItem value="none" disabled>
+                              No medicines found in inventory
                             </SelectItem>
-                          ))}
+                          ) : (
+                            medicines.map((med) => (
+                              <SelectItem key={med.medicine_id} value={med.medicine_name}>
+                                {med.medicine_name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </FieldContent>
@@ -498,7 +602,15 @@ const PrescriptionsPage = () => {
 
       {/* Prescriptions List */}
       <div className="space-y-4">
-        {filteredPrescriptions.length === 0 ? (
+        {loading ? (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center text-muted-foreground">
+                <p className="text-lg font-medium">Loading prescriptions...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : filteredPrescriptions.length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
@@ -509,52 +621,68 @@ const PrescriptionsPage = () => {
             </CardContent>
           </Card>
         ) : (
-          filteredPrescriptions.map((prescription) => (
-            <Card key={prescription.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-xl mb-2">{prescription.patientName}</CardTitle>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        {prescription.date}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <User className="w-4 h-4" />
-                        {prescription.dentist}
+          filteredPrescriptions.map((prescription) => {
+            const medications = parseMedications(prescription.medications);
+            return (
+              <Card key={prescription.prescription_id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-xl mb-2">{getPatientName(prescription.patient_id)}</CardTitle>
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          {prescription.date}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <User className="w-4 h-4" />
+                          {prescription.dentist}
+                        </div>
+                        {prescription.status && (
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            prescription.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                            prescription.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {prescription.status}
+                          </span>
+                        )}
                       </div>
                     </div>
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(prescription)}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit
+                    </Button>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(prescription)}>
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Medications:</h4>
-                  <div className="space-y-2">
-                    {prescription.medications.map((med) => (
-                      <div key={med.id} className="p-3 bg-muted rounded-lg">
-                        <p className="font-medium">{med.name} - {med.dosage}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {med.frequency} for {med.duration} ({med.quantity})
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {prescription.instructions && (
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div>
-                    <h4 className="font-semibold mb-1">Instructions:</h4>
-                    <p className="text-sm text-muted-foreground">{prescription.instructions}</p>
+                    <h4 className="font-semibold mb-2">Medications:</h4>
+                    <div className="space-y-2">
+                      {medications.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No medications prescribed</p>
+                      ) : (
+                        medications.map((med) => (
+                          <div key={med.id} className="p-3 bg-muted rounded-lg">
+                            <p className="font-medium">{med.name} - {med.dosage}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {med.frequency} for {med.duration} ({med.quantity})
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))
+                  {prescription.instructions && (
+                    <div>
+                      <h4 className="font-semibold mb-1">Instructions:</h4>
+                      <p className="text-sm text-muted-foreground">{prescription.instructions}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
     </>
