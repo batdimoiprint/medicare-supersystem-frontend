@@ -10,18 +10,26 @@ import ServicesPage from '@/pages/public/ServicesPage';
 import Support from '@/pages/public/Support';
 import Terms from '@/pages/public/Terms';
 import { Route, Routes } from 'react-router-dom';
-import { adminRoutes } from './adminRoutes';
-import { cashierRoutes } from './cashierRoutes';
-import { dentistRoutes } from './dentistRoutes';
-import { inventoryRoutes } from './inventoryRoutes';
-import { patientRoutes } from './patientRoutes';
-import { receptionistRoutes } from './receptionistRoutes';
 import VerifyPage from "@/pages/public/VerifyPage";
+import { ProtectedRoute, PublicOnlyRoute } from '@/components/auth/ProtectedRoute';
+import { UserRole } from '@/types/auth';
+import PatientLayout from '@/layout/PatientLayout';
+import ReceptionistLayout from '@/layout/ReceptionistLayout';
+import CashierLayout from '@/layout/CashierLayout';
+import InventoryLayout from '@/layout/InventoryLayout';
+import DentistLayout from '@/layout/DentistLayout';
+import AdminLayout from '@/layout/AdminLayout';
+import { patientRouteData } from './patientRoutes';
+import { receptionistRouteData } from './receptionistRoutes';
+import { cashierRouteData } from './cashierRoutes';
+import { inventoryRouteData } from './inventoryRoutes';
+import { dentistRouteData } from './dentistRoutes';
+import { adminRouteData } from './adminRoutes';
 
 export default function AppRoutes() {
     return (
         <Routes>
-            {/* Public Routes - Nested under LandingPage */}
+            {/* Public Routes - Nested under PublicLayout */}
             <Route path='/' element={<PublicLayout />}>
                 <Route index element={<LandingPage />} />
                 <Route path='services' element={<ServicesPage />} />
@@ -31,29 +39,116 @@ export default function AppRoutes() {
                 <Route path='terms' element={<Terms />} />
                 <Route path='support' element={<Support />} />
                 <Route path='contact' element={<ContactPage />} />
-                <Route path='login' element={<LoginPage />} />
-                <Route path='register' element={<RegisterPage />} />
-                <Route path='verify' element={<VerifyPage />} /> 
 
+                {/* Auth pages - redirect to dashboard if already logged in */}
+                <Route path='login' element={
+                    <PublicOnlyRoute>
+                        <LoginPage />
+                    </PublicOnlyRoute>
+                } />
+                <Route path='register' element={
+                    <PublicOnlyRoute>
+                        <RegisterPage />
+                    </PublicOnlyRoute>
+                } />
+                <Route path='verify' element={<VerifyPage />} />
             </Route>
 
-            {/* Patient Dashboard */}
-            {patientRoutes}
+            {/* Patient Dashboard - Protected */}
+            <Route path='/patient' element={
+                <ProtectedRoute allowedRoles={[UserRole.Patient]}>
+                    <PatientLayout />
+                </ProtectedRoute>
+            }>
+                {patientRouteData.map((route, idx) => (
+                    <Route
+                        key={idx}
+                        index={route.index}
+                        path={route.path}
+                        element={route.element}
+                    />
+                ))}
+            </Route>
 
-            {/* Receptionist Dashboard */}
-            {receptionistRoutes}
+            {/* Receptionist Dashboard - Protected */}
+            <Route path='/receptionist' element={
+                <ProtectedRoute allowedRoles={[UserRole.Receptionist]}>
+                    <ReceptionistLayout />
+                </ProtectedRoute>
+            }>
+                {receptionistRouteData.map((route, idx) => (
+                    <Route
+                        key={idx}
+                        index={route.index}
+                        path={route.path}
+                        element={route.element}
+                    />
+                ))}
+            </Route>
 
-            {/* Cashier Dashboard */}
-            {cashierRoutes}
+            {/* Cashier Dashboard - Protected */}
+            <Route path='/cashier' element={
+                <ProtectedRoute allowedRoles={[UserRole.Cashier]}>
+                    <CashierLayout />
+                </ProtectedRoute>
+            }>
+                {cashierRouteData.map((route, idx) => (
+                    <Route
+                        key={idx}
+                        index={route.index}
+                        path={route.path}
+                        element={route.element}
+                    />
+                ))}
+            </Route>
 
-            {/* Inventory Dashboard */}
-            {inventoryRoutes}
+            {/* Inventory Dashboard - Protected */}
+            <Route path='/inventory' element={
+                <ProtectedRoute allowedRoles={[UserRole.Inventory]}>
+                    <InventoryLayout />
+                </ProtectedRoute>
+            }>
+                {inventoryRouteData.map((route, idx) => (
+                    <Route
+                        key={idx}
+                        index={route.index}
+                        path={route.path}
+                        element={route.element}
+                    />
+                ))}
+            </Route>
 
-            {/* Dentist Dashboard */}
-            {dentistRoutes}
+            {/* Dentist Dashboard - Protected */}
+            <Route path='/dentist' element={
+                <ProtectedRoute allowedRoles={[UserRole.Dentist]}>
+                    <DentistLayout />
+                </ProtectedRoute>
+            }>
+                {dentistRouteData.map((route, idx) => (
+                    <Route
+                        key={idx}
+                        index={route.index}
+                        path={route.path}
+                        element={route.element}
+                    />
+                ))}
+            </Route>
 
-            {/* Admin Dashboard */}
-            {adminRoutes}
+            {/* Admin Dashboard - Protected */}
+            <Route path='/admin' element={
+                <ProtectedRoute allowedRoles={[UserRole.Admin]}>
+                    <AdminLayout />
+                </ProtectedRoute>
+            }>
+                {adminRouteData.map((route, idx) => (
+                    <Route
+                        key={idx}
+                        index={route.index}
+                        path={route.path}
+                        element={route.element}
+                    />
+                ))}
+            </Route>
         </Routes>
     );
 }

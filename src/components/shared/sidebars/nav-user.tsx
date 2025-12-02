@@ -3,6 +3,7 @@
 import { BadgeCheck, ChevronsUpDown, LogOut as LogOutIcon } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/context/userContext"
 
 import {
     Avatar,
@@ -36,11 +37,20 @@ export function NavUser({
 }) {
     const { isMobile } = useSidebar()
     const navigate = useNavigate()
+    const { logout } = useAuth()
 
     function handleLogout() {
-        // TODO: hook up auth/logout flow — for now, route to `/`
-        navigate('/')
+        logout()
+        navigate('/login')
     }
+
+    // Get initials for avatar fallback
+    const initials = user.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
 
     return (
         <SidebarMenu>
@@ -52,7 +62,7 @@ export function NavUser({
                         >
                             <Avatar>
                                 <AvatarImage src={user.avatar} alt={user.name} />
-                                <AvatarFallback>CN</AvatarFallback>
+                                <AvatarFallback>{initials}</AvatarFallback>
                             </Avatar>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-medium">{user.name}</span>
@@ -70,7 +80,7 @@ export function NavUser({
                             <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                                 <Avatar>
                                     <AvatarImage src={user.avatar} alt={user.name} />
-                                    <AvatarFallback>CN</AvatarFallback>
+                                    <AvatarFallback>{initials}</AvatarFallback>
                                 </Avatar>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">{user.name}</span>
