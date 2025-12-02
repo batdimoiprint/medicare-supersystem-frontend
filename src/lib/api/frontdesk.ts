@@ -730,15 +730,40 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
     .eq('appointment_status_id', data.appointment_status_id)
     .single()
 
-  // Fetch patient info
+  // Fetch full patient info from patient_record schema
   const { data: patient } = await supabase
     .schema('patient_record')
     .from('patient_tbl')
-    .select('f_name, l_name, contact_number')
+    .select(`
+      f_name,
+      l_name,
+      m_name,
+      suffix,
+      email,
+      pri_contact_no,
+      sec_contact_no,
+      gender,
+      birthdate,
+      house_no,
+      street,
+      barangay,
+      city,
+      country
+    `)
     .eq('patient_id', data.patient_id)
     .single()
 
-  // Fetch personnel info
+  // Build full address
+  const addressParts = [
+    patient?.house_no,
+    patient?.street,
+    patient?.barangay,
+    patient?.city,
+    patient?.country
+  ].filter(Boolean)
+  const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null
+
+  // Fetch personnel info from public schema
   let personnelFirstName: string | null = null
   let personnelLastName: string | null = null
   if (data.personnel_id) {
@@ -754,19 +779,46 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
     }
   }
 
-  // Fetch service info
+  // Fetch service info from dentist schema
   let serviceName: string | null = null
+  let serviceDescription: string | null = null
   let serviceFee: number | null = null
+  let serviceDuration: string | null = null
+  let serviceCategoryName: string | null = null
+  
   if (data.service_id) {
     const { data: service } = await supabase
-      .from('service_tbl')
-      .select('service_name, service_fee')
+      .schema('dentist')
+      .from('services_tbl')
+      .select(`
+        service_name,
+        service_description,
+        service_fee,
+        service_duration,
+        service_category_id
+      `)
       .eq('service_id', data.service_id)
       .single()
     
     if (service) {
       serviceName = service.service_name
+      serviceDescription = service.service_description
       serviceFee = service.service_fee
+      serviceDuration = service.service_duration
+      
+      // Fetch category name
+      if (service.service_category_id) {
+        const { data: category } = await supabase
+          .schema('dentist')
+          .from('service_category_tbl')
+          .select('category_name')
+          .eq('service_category_id', service.service_category_id)
+          .single()
+        
+        if (category) {
+          serviceCategoryName = category.category_name
+        }
+      }
     }
   }
 
@@ -779,14 +831,28 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
     appointment_status_id: data.appointment_status_id,
     personnel_id: data.personnel_id,
     created_at: data.created_at,
+    // Status
     appointment_status_name: status?.appointment_status_name ?? null,
+    // Patient info
     patient_first_name: patient?.f_name ?? null,
     patient_last_name: patient?.l_name ?? null,
-    patient_contact: patient?.contact_number ?? null,
+    patient_middle_name: patient?.m_name ?? null,
+    patient_suffix: patient?.suffix ?? null,
+    patient_email: patient?.email ?? null,
+    patient_contact: patient?.pri_contact_no ?? null,
+    patient_secondary_contact: patient?.sec_contact_no ?? null,
+    patient_gender: patient?.gender ?? null,
+    patient_birthdate: patient?.birthdate ?? null,
+    patient_address: fullAddress,
+    // Personnel info
     personnel_first_name: personnelFirstName,
     personnel_last_name: personnelLastName,
+    // Service info
     service_name: serviceName,
+    service_description: serviceDescription,
     service_fee: serviceFee,
+    service_duration: serviceDuration,
+    service_category_name: serviceCategoryName,
   }
 }
 
@@ -905,13 +971,38 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     .eq('appointment_status_id', data.appointment_status_id)
     .single()
 
-  // Fetch patient info
+  // Fetch full patient info from patient_record schema
   const { data: patient } = await supabase
     .schema('patient_record')
     .from('patient_tbl')
-    .select('f_name, l_name, contact_number')
+    .select(`
+      f_name,
+      l_name,
+      m_name,
+      suffix,
+      email,
+      pri_contact_no,
+      sec_contact_no,
+      gender,
+      birthdate,
+      house_no,
+      street,
+      barangay,
+      city,
+      country
+    `)
     .eq('patient_id', data.patient_id)
     .single()
+
+  // Build full address
+  const addressParts = [
+    patient?.house_no,
+    patient?.street,
+    patient?.barangay,
+    patient?.city,
+    patient?.country
+  ].filter(Boolean)
+  const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null
 
   // Fetch personnel info
   let personnelFirstName: string | null = null
@@ -929,35 +1020,47 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     }
   }
 
-  // Fetch service info
+  // Fetch service info from dentist schema
   let serviceName: string | null = null
+  let serviceDescription: string | null = null
   let serviceFee: number | null = null
+  let serviceDuration: string | null = null
+  
   if (data.service_id) {
     const { data: service } = await supabase
       .schema('dentist')
       .from('services_tbl')
-      .select('service_name, service_fee')
+      .select(`
+        service_name,
+        service_description,
+        service_fee,
+        service_duration
+      `)
       .eq('service_id', data.service_id)
       .single()
     
     if (service) {
       serviceName = service.service_name
+      serviceDescription = service.service_description
       serviceFee = service.service_fee
+      serviceDuration = service.service_duration
     }
   }
 
   // Fetch original appointment info if exists
   let originalAppointmentDate: string | null = null
+  let originalAppointmentTime: string | null = null
   let originalAppointmentService: string | null = null
   if (data.appointment_id) {
     const { data: originalAppt } = await frontdesk()
       .from('appointment_tbl')
-      .select('appointment_date, service_id')
+      .select('appointment_date, appointment_time, service_id')
       .eq('appointment_id', data.appointment_id)
       .single()
     
     if (originalAppt) {
       originalAppointmentDate = originalAppt.appointment_date
+      originalAppointmentTime = originalAppt.appointment_time
       
       // Get original appointment service name
       if (originalAppt.service_id) {
@@ -981,15 +1084,30 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     service_id: data.service_id,
     appointment_status_id: data.appointment_status_id,
     personnel_id: data.personnel_id,
+    // Status
     appointment_status_name: status?.appointment_status_name ?? null,
+    // Patient info
     patient_first_name: patient?.f_name ?? null,
     patient_last_name: patient?.l_name ?? null,
-    patient_contact: patient?.contact_number ?? null,
+    patient_middle_name: patient?.m_name ?? null,
+    patient_suffix: patient?.suffix ?? null,
+    patient_email: patient?.email ?? null,
+    patient_contact: patient?.pri_contact_no ?? null,
+    patient_secondary_contact: patient?.sec_contact_no ?? null,
+    patient_gender: patient?.gender ?? null,
+    patient_birthdate: patient?.birthdate ?? null,
+    patient_address: fullAddress,
+    // Personnel info
     personnel_first_name: personnelFirstName,
     personnel_last_name: personnelLastName,
+    // Service info
     service_name: serviceName,
+    service_description: serviceDescription,
     service_fee: serviceFee,
+    service_duration: serviceDuration,
+    // Original appointment info
     original_appointment_date: originalAppointmentDate,
+    original_appointment_time: originalAppointmentTime,
     original_appointment_service: originalAppointmentService,
   }
 }
