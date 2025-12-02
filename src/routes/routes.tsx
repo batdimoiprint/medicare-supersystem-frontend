@@ -1,6 +1,4 @@
-import AdminLayout from '@/layout/AdminLayout';
 import PublicLayout from '@/layout/PublicLayout';
-import AdminPage from '@/pages/admin/AdminPage';
 import AboutUs from '@/pages/public/AboutUs';
 import ContactPage from '@/pages/public/ContactPage';
 import LandingPage from '@/pages/public/LandingPage';
@@ -12,11 +10,13 @@ import ServicesPage from '@/pages/public/ServicesPage';
 import Support from '@/pages/public/Support';
 import Terms from '@/pages/public/Terms';
 import { Route, Routes } from 'react-router-dom';
+import { adminRoutes } from './adminRoutes';
 import { cashierRoutes } from './cashierRoutes';
 import { dentistRoutes } from './dentistRoutes';
 import { inventoryRoutes } from './inventoryRoutes';
 import { patientRoutes } from './patientRoutes';
 import { receptionistRoutes } from './receptionistRoutes';
+import VerifyPage from "@/pages/public/VerifyPage";
 
 export default function AppRoutes() {
     return (
@@ -33,6 +33,7 @@ export default function AppRoutes() {
                 <Route path='contact' element={<ContactPage />} />
                 <Route path='login' element={<LoginPage />} />
                 <Route path='register' element={<RegisterPage />} />
+                <Route path='verify' element={<VerifyPage />} /> 
 
             </Route>
 
@@ -52,9 +53,7 @@ export default function AppRoutes() {
             {dentistRoutes}
 
             {/* Admin Dashboard */}
-            <Route path='/admin' element={<AdminLayout />}>
-                <Route index element={<AdminPage />} />
-            </Route>
+            {adminRoutes}
         </Routes>
     );
 }

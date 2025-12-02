@@ -20,7 +20,8 @@ import {
     ClipboardCheck,
     Truck,
     BarChart3,
-    FileStack
+    FileStack,
+    List
 } from "lucide-react"
 import { receptionistRouteData } from "@/routes/receptionistRoutes"
 import { adminRouteData } from "@/routes/adminRoutes"
@@ -83,6 +84,12 @@ export function NavMain() {
 
         // Dashboard icons
         if (titleLower.includes('dashboard')) return Home
+
+        // User Management
+        if (titleLower.includes('user management')) return Users
+
+        // Service Management
+        if (titleLower.includes('service management')) return List
 
         // Appointment related
         if (titleLower.includes('appointment')) return Calendar

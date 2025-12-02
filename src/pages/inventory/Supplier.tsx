@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel, FieldContent } from '@/components/ui/field'
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
 import { cn, formatCurrency } from '@/lib/utils'
 import { DownloadCloud, Funnel, Users, Package, Mail, Phone, MapPin, Star, Plus, X, Calendar, CheckCircle } from 'lucide-react'
+import supabase from '@/utils/supabase'
 
 function SupplierPage() {
     const [activeTab, setActiveTab] = useState<'directory' | 'orders'>('directory')
@@ -13,29 +14,84 @@ function SupplierPage() {
     const [showAddModal, setShowAddModal] = useState(false)
     const [form, setForm] = useState({ name: '', address: '', email: '', phone: '', contact: '', category: '' })
 
-    const initialSuppliers = [
-        {
-            id: 'SUP001', name: 'MedSupply Co.', address: '123 Medical St, Healthcare City, HC 12345',
-            contactName: 'John Smith', contactEmail: 'orders@medsupply.com', contactPhone: '+1 (555) 123-4567',
-            category: 'General Supplies', rating: 4.8, totalOrders: 45, lastOrder: '9/20/2024', status: 'Active'
-        },
-        {
-            id: 'SUP002', name: 'PharmaCorp', address: '456 Pharma Ave, Medicine Town, MT 67890',
-            contactName: 'Dr. Emily Davis', contactEmail: 'sales@pharmacorp.com', contactPhone: '+1 (555) 987-6543',
-            category: 'Pharmaceuticals', rating: 4.9, totalOrders: 28, lastOrder: '9/22/2024', status: 'Active'
-        },
-        {
-            id: 'SUP003', name: 'DentalTech Pro', address: '789 Tech Blvd, Innovation City, IC 13579',
-            contactName: 'Michael Chen', contactEmail: 'support@dentaltechpro.com', contactPhone: '+1 (555) 456-7890',
-            category: 'Equipment', rating: 4.7, totalOrders: 12, lastOrder: '9/18/2024', status: 'Active'
-        },
-        {
-            id: 'SUP004', name: 'SafeMed Inc.', address: '321 Safety St, Secure City, SC 24680',
-            contactName: 'Sarah Wilson', contactEmail: 'orders@safemed.com', contactPhone: '+1 (555) 321-0987',
-            category: 'Safety Equipment', rating: 4.6, totalOrders: 8, lastOrder: '8/15/2024', status: 'Inactive'
-        },
-    ]
-    const [suppliers, setSuppliers] = useState(initialSuppliers)
+    const [suppliers, setSuppliers] = useState<any[]>([])
+    const [purchaseOrders, setPurchaseOrders] = useState<any[]>([])
+
+    useEffect(() => {
+        fetchSuppliers();
+        fetchPurchaseOrders();
+    }, []);
+
+    const fetchPurchaseOrders = async () => {
+        try {
+            const { data: stockData, error: stockError } = await supabase
+                .schema('inventory')
+                .from('stock_in')
+                .select('*')
+                .eq('status', 'Received')
+                .order('created_at', { ascending: false });
+
+            if (stockError) throw stockError;
+
+            // Fetch current inventory details to sync updated Unit Cost / Expiry
+            const { data: consData } = await supabase.schema('inventory').from('consumables_tbl').select('consumable_name, unit_cost, expiry_date');
+            const { data: medData } = await supabase.schema('inventory').from('medicine_tbl').select('medicine_name, unit_cost, expiry_date');
+            const { data: equipData } = await supabase.schema('inventory').from('equipment_tbl').select('equipment_name, unit_cost, expiry_date');
+
+            const itemDetails: Record<string, any> = {};
+            (consData || []).forEach((i: any) => itemDetails[i.consumable_name] = i);
+            (medData || []).forEach((i: any) => itemDetails[i.medicine_name] = i);
+            (equipData || []).forEach((i: any) => itemDetails[i.equipment_name] = i);
+
+            const mappedOrders = (stockData || []).map((item: any) => {
+                const details = itemDetails[item.item_name] || {};
+                return {
+                    id: `PO-${item.id.toString().slice(0, 8).toUpperCase()}`,
+                    itemName: item.item_name,
+                    quantity: item.quantity,
+                    supplier: item.supplier || 'Unknown',
+                    unitCost: details.unit_cost || item.unit_cost || null,
+                    status: item.status,
+                    expiration: details.expiry_date || null,
+                    category: item.category || '--',
+                    dateDelivered: item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : '--',
+                };
+            });
+
+            setPurchaseOrders(mappedOrders);
+        } catch (error) {
+            console.error('Error fetching purchase orders:', error);
+        }
+    };
+
+    const fetchSuppliers = async () => {
+        try {
+            const { data, error } = await supabase
+                .schema('inventory')
+                .from('suppliers_tbl')
+                .select('*');
+
+            if (error) throw error;
+
+            const mappedSuppliers = (data || []).map((item: any) => ({
+                id: item.supplier_id,
+                name: item.supplier_name,
+                address: item.address,
+                contactName: item.contact_person,
+                contactEmail: item.contact_email,
+                contactPhone: item.contact_number,
+                category: item.category,
+                rating: item.rating || 0,
+                totalOrders: 0, // Not in table yet
+                lastOrder: '--', // Not in table yet
+                status: item.status || 'Active'
+            }));
+
+            setSuppliers(mappedSuppliers);
+        } catch (error) {
+            console.error('Error fetching suppliers:', error);
+        }
+    };
 
     // Edit modal state
     const [showEditModal, setShowEditModal] = useState(false)
@@ -50,12 +106,6 @@ function SupplierPage() {
     const [isAddSuccessOpen, setIsAddSuccessOpen] = useState(false)
     const [pendingSaveAction, setPendingSaveAction] = useState<'add'|'edit'|null>(null)
     const [formErrors, setFormErrors] = useState<{ name?: string } | null>(null)
-
-    const purchaseOrders = useMemo(() => ([
-        { id: 'PO-2024-0156', items: 'Latex Gloves, Dental Masks', supplier: 'MedSupply Co.', date: '2024-09-20', cost: 245.0 },
-        { id: 'PO-2024-0157', items: 'Lidocaine 2%', supplier: 'PharmaCorp', date: '2024-09-22', cost: 186.5 },
-        { id: 'PO-2024-0158', items: 'Amalgam Capsules', supplier: 'DentalTech Pro', date: '2024-09-25', cost: 420.8 },
-    ]), [])
 
     function printElementById(id: string, title = 'Supplier') {
         const el = document.getElementById(id)
@@ -79,48 +129,96 @@ function SupplierPage() {
         }, 250)
     }
 
-    function handleSaveEdit() {
+    async function handleSaveEdit() {
         if (!editForm) return
-        setSuppliers(prev => prev.map(s => s.id === editForm.id ? { ...editForm } : s))
-        setIsEditOpen(false)
-        setTimeout(() => setShowEditModal(false), 200)
+        
+        try {
+            const { error } = await supabase
+                .schema('inventory')
+                .from('suppliers_tbl')
+                .update({
+                    supplier_name: editForm.name,
+                    address: editForm.address,
+                    contact_person: editForm.contactName,
+                    contact_email: editForm.contactEmail,
+                    contact_number: editForm.contactPhone,
+                    category: editForm.category,
+                    rating: editForm.rating,
+                    status: editForm.status
+                })
+                .eq('supplier_id', editForm.id);
+
+            if (error) throw error;
+
+            fetchSuppliers();
+            setIsEditOpen(false)
+            setTimeout(() => setShowEditModal(false), 200)
+        } catch (error: any) {
+            console.error('Error updating supplier:', error);
+            alert(`Failed to update supplier: ${error.message}`);
+        }
     }
 
-    function handleRemove() {
+    async function handleRemove() {
         if (!editForm) return
-        setSuppliers(prev => prev.filter(s => s.id !== editForm.id))
-        setIsEditOpen(false)
-        setIsConfirmRemoveOpen(false)
-        setTimeout(() => setShowEditModal(false), 200)
-        setTimeout(() => setShowConfirmRemove(false), 300)
+
+        try {
+            const { error } = await supabase
+                .schema('inventory')
+                .from('suppliers_tbl')
+                .delete()
+                .eq('supplier_id', editForm.id);
+
+            if (error) throw error;
+
+            fetchSuppliers();
+            setIsEditOpen(false)
+            setIsConfirmRemoveOpen(false)
+            setTimeout(() => setShowEditModal(false), 200)
+            setTimeout(() => setShowConfirmRemove(false), 300)
+        } catch (error: any) {
+            console.error('Error removing supplier:', error);
+            alert(`Failed to remove supplier: ${error.message}`);
+        }
     }
 
-    function performSave() {
+    async function performSave() {
         if (pendingSaveAction === 'add') {
-            const newSupplier = {
-                id: `SUP${Date.now()}`,
-                name: form.name,
-                address: form.address,
-                contactName: form.contact,
-                contactEmail: form.email,
-                contactPhone: form.phone,
-                category: form.category || 'General Supplies',
-                rating: 0,
-                totalOrders: 0,
-                lastOrder: '',
-                status: 'Active'
+            try {
+                const { error } = await supabase
+                    .schema('inventory')
+                    .from('suppliers_tbl')
+                    .insert({
+                        supplier_name: form.name,
+                        address: form.address,
+                        contact_person: form.contact,
+                        contact_email: form.email,
+                        contact_number: form.phone,
+                        category: form.category || 'Consumables',
+                        rating: 0,
+                        status: 'Active'
+                    });
+
+                if (error) throw error;
+
+                fetchSuppliers();
+
+                setIsAddOpen(false)
+                setIsConfirmSaveOpen(false)
+                setTimeout(() => setShowConfirmSave(false), 200)
+                setTimeout(() => setShowAddModal(false), 300)
+                // show success modal for add
+                setShowAddSuccess(true)
+                setTimeout(() => setIsAddSuccessOpen(true), 10)
+                setForm({ name: '', address: '', email: '', phone: '', contact: '', category: '' })
+            } catch (error: any) {
+                console.error('Error adding supplier:', error);
+                alert(`Failed to add supplier: ${error.message}`);
+                setIsConfirmSaveOpen(false);
+                setShowConfirmSave(false);
             }
-            setSuppliers(prev => [newSupplier, ...prev])
-            setIsAddOpen(false)
-            setIsConfirmSaveOpen(false)
-            setTimeout(() => setShowConfirmSave(false), 200)
-            setTimeout(() => setShowAddModal(false), 300)
-            // show success modal for add
-            setShowAddSuccess(true)
-            setTimeout(() => setIsAddSuccessOpen(true), 10)
-            setForm({ name: '', address: '', email: '', phone: '', contact: '', category: '' })
         } else if (pendingSaveAction === 'edit') {
-            handleSaveEdit()
+            await handleSaveEdit()
             setIsConfirmSaveOpen(false)
             setTimeout(() => setShowConfirmSave(false), 200)
         }
@@ -275,19 +373,31 @@ function SupplierPage() {
                                                         <tr className="text-xs text-slate-400 dark:text-slate-300">
                                                             <th className="pl-6 py-4 text-left">Order ID</th>
                                                             <th className="px-6 py-4 text-left">Item Name</th>
+                                                            <th className="px-6 py-4 text-left">Quantity</th>
                                                             <th className="px-6 py-4 text-left">Supplier</th>
-                                                            <th className="px-6 py-4 text-left">Date Delivered</th>
-                                                            <th className="pr-6 py-4 text-left">Total Cost</th>
+                                                            <th className="px-6 py-4 text-left">Unit Cost</th>
+                                                            <th className="px-6 py-4 text-left">Status</th>
+                                                            <th className="px-6 py-4 text-left">Expiration</th>
+                                                            <th className="px-6 py-4 text-left">Category</th>
+                                                            <th className="pr-6 py-4 text-left">Date Delivered</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="bg-white dark:bg-transparent divide-y divide-slate-200 dark:divide-slate-800">
                                                         {purchaseOrders.map((po, idx) => (
                                                             <tr key={po.id} className={cn('group hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors', idx === 0 ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-transparent')}>
-                                                                <td className="pl-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.id}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200 whitespace-normal">{po.items}</td>
+                                                                <td className="pl-6 py-6 text-sm text-slate-700 dark:text-slate-200 font-medium">{po.id}</td>
+                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.itemName}</td>
+                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.quantity}</td>
                                                                 <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.supplier}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.date}</td>
-                                                                <td className="pr-6 py-6 text-sm text-slate-700 dark:text-slate-200">{formatCurrency(po.cost)}</td>
+                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.unitCost ? formatCurrency(po.unitCost) : '--'}</td>
+                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">
+                                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                                                        {po.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.expiration || '--'}</td>
+                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.category}</td>
+                                                                <td className="pr-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.dateDelivered}</td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -343,9 +453,9 @@ function SupplierPage() {
 
                                 <div className="grid grid-cols-2 gap-3 mt-3">
                                     <Field orientation="vertical">
-                                        <FieldLabel>Address</FieldLabel>
+                                        <FieldLabel>Company Address</FieldLabel>
                                         <FieldContent>
-                                            <Input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                                            <Input placeholder="Company Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
                                         </FieldContent>
                                     </Field>
                                     <Field orientation="vertical">
@@ -364,15 +474,6 @@ function SupplierPage() {
                                         </FieldContent>
                                     </Field>
                                     <Field orientation="vertical">
-                                        <FieldLabel>Company Address</FieldLabel>
-                                        <FieldContent>
-                                            <Input placeholder="Address" />
-                                        </FieldContent>
-                                    </Field>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3 mt-3">
-                                    <Field orientation="vertical">
                                         <FieldLabel>Category</FieldLabel>
                                         <FieldContent>
                                             <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
@@ -380,10 +481,9 @@ function SupplierPage() {
                                                     <SelectValue placeholder="Select Category" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="General Supplies">General Supplies</SelectItem>
-                                                    <SelectItem value="Pharmaceuticals">Pharmaceuticals</SelectItem>
+                                                    <SelectItem value="Consumables">Consumables</SelectItem>
+                                                    <SelectItem value="Medicines">Medicines</SelectItem>
                                                     <SelectItem value="Equipment">Equipment</SelectItem>
-                                                    <SelectItem value="Safety Equipment">Safety Equipment</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </FieldContent>
@@ -471,10 +571,9 @@ function SupplierPage() {
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="General Supplies">General Supplies</SelectItem>
-                                                    <SelectItem value="Pharmaceuticals">Pharmaceuticals</SelectItem>
+                                                    <SelectItem value="Consumables">Consumables</SelectItem>
+                                                    <SelectItem value="Medicines">Medicines</SelectItem>
                                                     <SelectItem value="Equipment">Equipment</SelectItem>
-                                                    <SelectItem value="Safety Equipment">Safety Equipment</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </FieldContent>
