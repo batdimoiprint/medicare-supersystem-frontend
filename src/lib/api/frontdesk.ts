@@ -40,24 +40,12 @@ const getDateDaysAgo = (days: number) => {
 export async function fetchTodaysAppointmentCount(): Promise<number> {
   const today = getTodayDate()
   
-  // First, let's see what data exists in the table
-  const { data: allData } = await frontdesk()
-    .from('appointment_tbl')
-    .select('appointment_id, appointment_date')
-    .limit(10)
-  
-  console.log('All appointments (first 10):', allData)
-  console.log('Today date:', today)
-  
   const { count, error } = await frontdesk()
     .from('appointment_tbl')
     .select('*', { count: 'exact', head: true })
     .eq('appointment_date', today)
 
-  console.log('fetchTodaysAppointmentCount:', { today, count, error })
-
   if (error) {
-    console.error('Error fetching today\'s appointments:', error)
     throw error
   }
 
@@ -82,7 +70,6 @@ export async function fetchPendingFollowupsCount(): Promise<number> {
     .in('appointment_status_id', statusIds)
 
   if (error) {
-    console.error('Error fetching pending followups:', error)
     throw error
   }
 
@@ -111,7 +98,6 @@ export async function fetchCancelRequestsCount(): Promise<number> {
     .in('appointment_status_id', statusIds)
 
   if (error) {
-    console.error('Error fetching cancel requests:', error)
     throw error
   }
 
@@ -154,7 +140,6 @@ export async function fetchAppointmentsLast7Days(): Promise<AppointmentsByDay[]>
     .lte('appointment_date', endDate)
 
   if (error) {
-    console.error('Error fetching appointments last 7 days:', error)
     throw error
   }
 
@@ -204,10 +189,7 @@ export async function fetchAppointmentStatusDistribution(): Promise<AppointmentS
     .select('appointment_status_id')
     .eq('appointment_date', today)
 
-  console.log('fetchAppointmentStatusDistribution:', { today, appointments, statuses, error })
-
   if (error) {
-    console.error('Error fetching appointment status distribution:', error)
     throw error
   }
 
@@ -252,7 +234,6 @@ export async function fetchRecentActivity(): Promise<RecentActivity[]> {
     .limit(10)
 
   if (error) {
-    console.error('Error fetching recent activity:', error)
     throw error
   }
 
@@ -294,7 +275,6 @@ export async function fetchAppointmentStatuses(): Promise<AppointmentStatus[]> {
     .order('appointment_status_id')
 
   if (error) {
-    console.error('Error fetching appointment statuses:', error)
     throw error
   }
 
@@ -320,7 +300,6 @@ export async function fetchTodaysAppointments(): Promise<Appointment[]> {
     .order('appointment_time', { ascending: true })
 
   if (error) {
-    console.error('Error fetching today\'s appointments:', error)
     throw error
   }
 
@@ -363,7 +342,6 @@ export async function fetchAllAppointments(): Promise<AppointmentTableRow[]> {
     .order('appointment_time', { ascending: true })
 
   if (error) {
-    console.error('Error fetching all appointments:', error)
     throw error
   }
 
@@ -453,7 +431,6 @@ export async function fetchAppointmentsFiltered(options?: {
     .order('appointment_time', { ascending: true })
 
   if (error) {
-    console.error('Error fetching filtered appointments:', error)
     throw error
   }
 
@@ -526,7 +503,6 @@ export async function fetchPendingFollowups(): Promise<Followup[]> {
     .order('followup_date', { ascending: true })
 
   if (error) {
-    console.error('Error fetching pending followups:', error)
     throw error
   }
 
@@ -551,7 +527,6 @@ export async function updateAppointmentStatus(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error updating appointment status:', error)
     throw error
   }
 }
@@ -571,7 +546,6 @@ export async function updateAppointmentStatusByName(
     .single()
 
   if (statusError || !statusData) {
-    console.error('Error finding status:', statusError)
     throw new Error(`Status "${statusName}" not found`)
   }
 
@@ -582,7 +556,6 @@ export async function updateAppointmentStatusByName(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error updating appointment status:', error)
     throw error
   }
 }
@@ -628,7 +601,6 @@ export async function assignDoctorToAppointment(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error assigning doctor:', error)
     throw error
   }
 }
@@ -655,7 +627,6 @@ export async function rescheduleAppointment(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error rescheduling appointment:', error)
     throw error
   }
 }
@@ -680,7 +651,6 @@ export async function getAppointmentById(appointmentId: number): Promise<Appoint
     .single()
 
   if (error) {
-    console.error('Error fetching appointment:', error)
     throw error
   }
 
@@ -748,7 +718,6 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
     .single()
 
   if (error) {
-    console.error('Error fetching appointment details:', error)
     throw error
   }
 
@@ -829,8 +798,6 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
  * Fetch all followups for the list view
  */
 export async function fetchAllFollowups(): Promise<FollowupTableRow[]> {
-  console.log('Fetching followups from followup_tbl...')
-  
   const { data, error } = await frontdesk()
     .from('followup_tbl')
     .select(`
@@ -845,15 +812,11 @@ export async function fetchAllFollowups(): Promise<FollowupTableRow[]> {
     `)
     .order('followup_date', { ascending: false })
 
-  console.log('Followups query result:', { data, error })
-
   if (error) {
-    console.error('Error fetching followups:', error)
     throw error
   }
 
   if (!data || data.length === 0) {
-    console.log('No followups found in database')
     return []
   }
 
@@ -930,7 +893,6 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     .single()
 
   if (error) {
-    console.error('Error fetching followup details:', error)
     throw error
   }
 
@@ -1042,7 +1004,6 @@ export async function updateFollowupStatus(followupId: number, statusId: number)
     .eq('followup_id', followupId)
 
   if (error) {
-    console.error('Error updating followup status:', error)
     throw error
   }
 }
@@ -1062,7 +1023,6 @@ export async function updateFollowupStatusByName(
     .single()
 
   if (statusError || !statusData) {
-    console.error('Error finding status:', statusError)
     throw new Error(`Status "${statusName}" not found`)
   }
 
@@ -1073,7 +1033,6 @@ export async function updateFollowupStatusByName(
     .eq('followup_id', followupId)
 
   if (error) {
-    console.error('Error updating followup status:', error)
     throw error
   }
 }
@@ -1117,8 +1076,6 @@ const CANCELLED_STATUS_ID = 5
  * Fetch all cancelled appointments (cancel requests)
  */
 export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[]> {
-  console.log('Fetching cancelled appointments with status ID:', CANCELLED_STATUS_ID)
-
   const { data, error } = await frontdesk()
     .from('appointment_tbl')
     .select(`
@@ -1134,15 +1091,11 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
     .eq('appointment_status_id', CANCELLED_STATUS_ID)
     .order('appointment_date', { ascending: false })
 
-  console.log('Cancelled appointments result:', { data, error })
-
   if (error) {
-    console.error('Error fetching cancelled appointments:', error)
     throw error
   }
 
   if (!data || data.length === 0) {
-    console.log('No cancelled appointments found')
     return []
   }
 
@@ -1193,8 +1146,8 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
 export async function approveCancellation(appointmentId: number): Promise<void> {
   // The appointment is already cancelled, this is just for workflow confirmation
   // In a real system, this might trigger refund processing
-  console.log(`Cancellation approved for appointment ${appointmentId}`)
   // Could add additional logic here like updating a cancellation_approved flag
+  void appointmentId
 }
 
 /**
@@ -1203,4 +1156,79 @@ export async function approveCancellation(appointmentId: number): Promise<void> 
 export async function rejectCancellation(appointmentId: number): Promise<void> {
   // Restore the appointment to Confirmed status
   return updateAppointmentStatusByName(appointmentId, 'Confirmed')
+}
+
+// ============================================
+// PERSONNEL (DOCTORS) API FUNCTIONS
+// ============================================
+
+export interface Personnel {
+  personnel_id: number
+  f_name: string
+  l_name: string
+  role?: string
+}
+
+/**
+ * Fetch all personnel (doctors) for assignment dropdown
+ */
+export async function fetchAllPersonnel(): Promise<Personnel[]> {
+  const { data, error } = await supabase
+    .from('personnel_tbl')
+    .select('personnel_id, f_name, l_name')
+    .order('l_name', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  return data ?? []
+}
+
+// ============================================
+// FOLLOWUP CREATION API
+// ============================================
+
+export interface CreateFollowupInput {
+  patient_id: number
+  appointment_id?: number
+  followup_date: string
+  followup_time?: string
+  service_id?: number
+  personnel_id?: number
+  notes?: string
+}
+
+/**
+ * Create a new followup appointment
+ */
+export async function createFollowup(input: CreateFollowupInput): Promise<number> {
+  // Get the 'Pending' status ID
+  const { data: statusData } = await frontdesk()
+    .from('appointment_status_tbl')
+    .select('appointment_status_id')
+    .eq('appointment_status_name', 'Pending')
+    .single()
+
+  const pendingStatusId = statusData?.appointment_status_id ?? 1
+
+  const { data, error } = await frontdesk()
+    .from('followup_tbl')
+    .insert({
+      patient_id: input.patient_id,
+      appointment_id: input.appointment_id ?? null,
+      followup_date: input.followup_date,
+      followup_time: input.followup_time ?? null,
+      service_id: input.service_id ?? null,
+      personnel_id: input.personnel_id ?? null,
+      appointment_status_id: pendingStatusId,
+    })
+    .select('followup_id')
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return data?.followup_id ?? 0
 }
