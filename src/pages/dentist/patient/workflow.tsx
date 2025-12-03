@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Calendar,
   ClipboardList,
@@ -2264,19 +2264,8 @@ const PatientWorkflow = () => {
               </FieldLabel>
               <FieldContent>
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    asChild
-                    className="flex-1"
-                  >
-                    <Link to={`/dentist/patient/charting?patient=${selectedPatientId}`} target="_blank">
-                      <Activity className="w-4 h-4 mr-2" />
-                      Add/Edit Charting
-                    </Link>
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Open charting page to record tooth conditions and procedures
+                  <p className="text-sm text-muted-foreground">
+                    Dental charting is available in Step 3 of the workflow. Navigate back to Step 3 to add or edit charting data.
                   </p>
                 </div>
               </FieldContent>
