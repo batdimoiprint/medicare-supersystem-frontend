@@ -13,6 +13,7 @@ import {
   getAppointmentById,
   getAppointmentDetails,
   fetchAppointmentStatuses,
+  fetchAllPersonnel,
 } from '@/lib/api/frontdesk'
 
 /**
@@ -200,5 +201,16 @@ export function useRescheduleAppointment() {
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'appointments'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'dashboard'] })
     },
+  })
+}
+
+/**
+ * Hook to fetch all personnel (doctors) for assignment
+ */
+export function usePersonnel() {
+  return useQuery({
+    queryKey: ['receptionist', 'personnel'],
+    queryFn: fetchAllPersonnel,
+    staleTime: 1000 * 60 * 10, // 10 minutes - personnel list doesn't change often
   })
 }
