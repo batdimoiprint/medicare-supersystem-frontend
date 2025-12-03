@@ -28,8 +28,9 @@ interface BillDetails {
     description: string;
     total_amount: number;
     due_date: string;
-    status: 'Pending' | 'Overdue';
+    status: 'Pending' | 'Overdue' | 'Paid' | 'Partially Paid' | 'Refunded';
 }
+
 
 interface PaymentModalProps {
     isOpen: boolean;

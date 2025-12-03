@@ -11,7 +11,10 @@ import {
     X,
     ArrowLeft,
     Camera,
-    Contact
+    Contact,
+    Home,
+    Navigation,
+    Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,7 +38,12 @@ interface PatientProfile {
     birthdate: string;
     gender: 'Male' | 'Female' | 'LGBTQIA+' | 'Prefer Not to Say';
     email?: string;
-    address: string;
+    // Updated address fields
+    house_no?: string;
+    street: string;
+    barangay?: string;
+    city: string;
+    country?: string;
     blood_type?: 'A+' | 'A-' | 'AB+' | 'AB-' | 'B+' | 'B-' | 'O+' | 'O-' | 'Unspecified';
     pri_contact_no: string;
     sec_contact_no?: string;
@@ -145,7 +153,12 @@ export default function PatientProfilePage() {
                     birthdate: profile.birthdate,
                     gender: profile.gender,
                     email: profile.email,
-                    address: profile.address,
+                    // Updated address fields
+                    house_no: profile.house_no,
+                    street: profile.street,
+                    barangay: profile.barangay,
+                    city: profile.city,
+                    country: profile.country,
                     blood_type: profile.blood_type,
                     pri_contact_no: profile.pri_contact_no,
                     sec_contact_no: profile.sec_contact_no
@@ -191,6 +204,21 @@ export default function PatientProfilePage() {
             case 'Suspended': return 'bg-red-100 text-red-700 border-red-200';
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
         }
+    };
+
+    // Helper function to display full address
+    const getFullAddress = () => {
+        if (!profile) return '';
+        
+        const parts = [
+            profile.house_no,
+            profile.street,
+            profile.barangay,
+            profile.city,
+            profile.country
+        ].filter(Boolean);
+        
+        return parts.join(', ');
     };
 
     if (loading) return (
@@ -396,15 +424,66 @@ export default function PatientProfilePage() {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="space-y-2">
+                                    <div className="space-y-4">
                                         <Label className="flex items-center gap-2"><MapPin className="w-4 h-4 text-muted-foreground" /> Home Address</Label>
-                                        <Textarea
-                                            className="resize-none"
-                                            disabled={!isEditing}
-                                            value={profile.address}
-                                            onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                                        />
+                                        
+                                        {/* Display full address when not editing */}
+                                        {!isEditing ? (
+                                            <div className="p-3 border rounded-md bg-muted/50">
+                                                <p className="text-sm">{getFullAddress()}</p>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <Label className="flex items-center gap-2 text-xs"><Home className="w-3 h-3" /> House/Bldg No.</Label>
+                                                    <Input 
+                                                        disabled={!isEditing} 
+                                                        value={profile.house_no || ''} 
+                                                        onChange={(e) => setProfile({ ...profile, house_no: e.target.value })} 
+                                                        placeholder="e.g. 123"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2 md:col-span-2">
+                                                    <Label className="flex items-center gap-2 text-xs"><Navigation className="w-3 h-3" /> Street</Label>
+                                                    <Input 
+                                                        disabled={!isEditing} 
+                                                        value={profile.street} 
+                                                        onChange={(e) => setProfile({ ...profile, street: e.target.value })} 
+                                                        placeholder="e.g. Main Street"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="flex items-center gap-2 text-xs">Barangay</Label>
+                                                    <Input 
+                                                        disabled={!isEditing} 
+                                                        value={profile.barangay || ''} 
+                                                        onChange={(e) => setProfile({ ...profile, barangay: e.target.value })} 
+                                                        placeholder="e.g. Barangay 1"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="flex items-center gap-2 text-xs">City/Municipality</Label>
+                                                    <Input 
+                                                        disabled={!isEditing} 
+                                                        value={profile.city} 
+                                                        onChange={(e) => setProfile({ ...profile, city: e.target.value })} 
+                                                        placeholder="e.g. Manila"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="flex items-center gap-2 text-xs"><Globe className="w-3 h-3" /> Country</Label>
+                                                    <Input 
+                                                        disabled={!isEditing} 
+                                                        value={profile.country || ''} 
+                                                        onChange={(e) => setProfile({ ...profile, country: e.target.value })} 
+                                                        placeholder="e.g. Philippines"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
+
+                                    <Separator />
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-2">
