@@ -1231,9 +1231,12 @@ export async function setPendingFollowup(followupId: number): Promise<void> {
 const CANCELLED_STATUS_ID = 5
 
 /**
- * Fetch all cancelled appointments (cancel requests)
+ * Fetch all cancelled appointments (cancel requests) that don't have a refund yet
  */
 export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[]> {
+  console.log('fetchCancelledAppointments: Starting...')
+  
+  // First, get all cancelled appointments
   const { data, error } = await frontdesk()
     .from('appointment_tbl')
     .select(`
@@ -1249,6 +1252,8 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
     .eq('appointment_status_id', CANCELLED_STATUS_ID)
     .order('appointment_date', { ascending: false })
 
+  console.log('fetchCancelledAppointments: Cancelled appointments', { data, error })
+
   if (error) {
     throw error
   }
@@ -1257,9 +1262,27 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
     return []
   }
 
+  // Get all refunds to filter out already processed cancellations
+  const { data: refunds, error: refundError } = await frontdesk()
+    .from('refund_tbl')
+    .select('appointment_id')
+
+  console.log('fetchCancelledAppointments: Refunds', { refunds, refundError })
+
+  const refundedAppointmentIds = new Set(refunds?.map(r => r.appointment_id) || [])
+  console.log('fetchCancelledAppointments: Refunded IDs', Array.from(refundedAppointmentIds))
+
+  // Filter out appointments that already have a refund
+  const pendingCancelRequests = data.filter(apt => !refundedAppointmentIds.has(apt.appointment_id))
+  console.log('fetchCancelledAppointments: Pending requests after filter', pendingCancelRequests.length)
+
+  if (pendingCancelRequests.length === 0) {
+    return []
+  }
+
   // Fetch related data for each appointment
   const appointmentsWithDetails = await Promise.all(
-    data.map(async (apt) => {
+    pendingCancelRequests.map(async (apt) => {
       // Fetch patient name
       let patientName = `Patient #${apt.patient_id}`
       const { data: patient } = await supabase
@@ -1299,13 +1322,72 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
 }
 
 /**
- * Approve a cancellation request (keeps status as Cancelled, could trigger refund logic)
+ * Approve a cancellation request - inserts into refund_tbl for processing
  */
 export async function approveCancellation(appointmentId: number): Promise<void> {
-  // The appointment is already cancelled, this is just for workflow confirmation
-  // In a real system, this might trigger refund processing
-  // Could add additional logic here like updating a cancellation_approved flag
-  void appointmentId
+  console.log('approveCancellation: Starting for appointment', appointmentId)
+  
+  // First, get the appointment details to get reservation_fee
+  const { data: appointment, error: aptError } = await frontdesk()
+    .from('appointment_tbl')
+    .select('appointment_id, reservation_fee, patient_id')
+    .eq('appointment_id', appointmentId)
+    .single()
+
+  console.log('approveCancellation: Appointment data', { appointment, aptError })
+
+  if (aptError || !appointment) {
+    console.error('approveCancellation: Failed to fetch appointment', aptError)
+    throw new Error('Failed to fetch appointment details')
+  }
+
+  // Check if a refund already exists for this appointment
+  const { data: existingRefund, error: existingError } = await frontdesk()
+    .from('refund_tbl')
+    .select('refund_id')
+    .eq('appointment_id', appointmentId)
+    .maybeSingle()
+
+  console.log('approveCancellation: Existing refund check', { existingRefund, existingError })
+
+  if (existingRefund) {
+    // Refund already exists, no need to create another
+    console.log('approveCancellation: Refund already exists for this appointment')
+    return
+  }
+
+  // Get the reservation_fee_id if it exists
+  const { data: reservationFee } = await frontdesk()
+    .from('reservation_fee_tbl')
+    .select('reservation_fee_id')
+    .eq('appointment_id', appointmentId)
+    .maybeSingle()
+
+  console.log('approveCancellation: Reservation fee', reservationFee)
+
+  // Insert into refund_tbl - note: reason and refund_status may be enums
+  const insertData = {
+    appointment_id: appointmentId,
+    reservation_fee_id: reservationFee?.reservation_fee_id || null,
+    notes: 'Cancellation approved by receptionist',
+    refund_amount: appointment.reservation_fee || 300,
+  }
+  
+  console.log('approveCancellation: Inserting refund', insertData)
+
+  const { data: insertedRefund, error: refundError } = await frontdesk()
+    .from('refund_tbl')
+    .insert(insertData)
+    .select()
+
+  console.log('approveCancellation: Insert result', { insertedRefund, refundError })
+
+  if (refundError) {
+    console.error('approveCancellation: Error creating refund:', refundError)
+    throw new Error(`Failed to create refund record: ${refundError.message}`)
+  }
+  
+  console.log('approveCancellation: Success!')
 }
 
 /**

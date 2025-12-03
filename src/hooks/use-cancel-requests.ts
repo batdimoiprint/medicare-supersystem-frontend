@@ -54,6 +54,7 @@ export function useApproveCancellation() {
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'cancel-requests'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'appointments'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['cashier', 'refunds'] }) // Invalidate refunds for cashier
     },
   })
 }
