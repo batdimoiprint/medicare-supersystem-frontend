@@ -86,11 +86,8 @@ export default function RegisterPage() {
 
       localStorage.setItem("pending_registration", JSON.stringify(tempData))
 
-      // ✅ Use VITE_SITE_URL for redirect
-      const redirectUrl =
-        import.meta.env.MODE === "development"
-          ? "http://localhost:5173/verify"
-          : `${import.meta.env.VITE_SITE_URL}/verify`
+      // ✅ Use current origin for redirect (works for both localhost and production)
+      const redirectUrl = `${window.location.origin}/verify`
 
       const { error: authError } = await supabase.auth.signUp({
         email: data.email!,
