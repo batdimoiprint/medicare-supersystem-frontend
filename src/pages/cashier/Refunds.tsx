@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import CashierTable from '@/components/cashier/RefundTable'
 import supabase from '@/utils/supabase'
+import { Card } from '@/components/ui/card'
 
 type RefundItem = {
-    refund_id: string
-    appointment_id: number
-    refund_amount?: number
-    refund_status?: string
-    notes?: string
-    patientName?: string 
-  }
+  refund_id: string
+  appointment_id: number
+  refund_amount?: number
+  refund_status?: string
+  notes?: string
+  patientName?: string
+}
 
 export default function Refunds() {
   const [refunds, setRefunds] = useState<RefundItem[]>([])
@@ -77,9 +78,9 @@ export default function Refunds() {
   }
 
   return (
-    <div>
+    <Card className='p-4'>
       {loading && <p>Loading...</p>}
       <CashierTable items={refunds} basePath="/cashier/refunds" />
-    </div>
+    </Card>
   )
 }
