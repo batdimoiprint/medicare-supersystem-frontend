@@ -2,9 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import {
     ArrowLeft,
-    FileText,
     Activity,
-    ImageIcon,
     Calendar,
     AlertTriangle,
     CheckCircle2,
@@ -15,7 +13,6 @@ import {
     Info,
     Loader2,
     Clock,
-    User,
     ClipboardList,
     FileSearch,
     Zap,
@@ -471,7 +468,8 @@ export default function MedicalRecordsPage() {
             'gingivitis': 'bg-yellow-400',
         };
         
-        return conditionMap[conditionName?.toLowerCase()] || 'bg-gray-400';
+        const key = conditionName?.toLowerCase();
+        return key ? conditionMap[key] || 'bg-gray-400' : 'bg-gray-400';
     };
 
     // Helper to get condition name from ID

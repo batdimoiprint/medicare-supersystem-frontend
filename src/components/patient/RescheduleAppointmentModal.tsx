@@ -57,7 +57,7 @@ interface Slot {
     Utility Functions
 -------------------------- */
 
-const parseTimeToDuration = (timeStr: string): number => {
+const _parseTimeToDuration = (timeStr: string): number => {
     if (!timeStr) return 30;
     try {
         const [h, m] = timeStr.split(":").map(Number);
@@ -66,14 +66,16 @@ const parseTimeToDuration = (timeStr: string): number => {
         return 30;
     }
 };
+void _parseTimeToDuration;
 
-const formatDurationDisplay = (minutes: number): string => {
+const _formatDurationDisplay = (minutes: number): string => {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     if (h > 0 && m > 0) return `${h} hr${h > 1 ? "s" : ""} ${m} mins`;
     if (h > 0) return `${h} hr${h > 1 ? "s" : ""}`;
     return `${m} mins`;
 };
+void _formatDurationDisplay;
 
 const generateTimeSlots = (
     durationMinutes: number,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     ArrowLeft, 
@@ -221,7 +221,6 @@ export default function PatientNotificationsPage() {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [treatmentPlans, setTreatmentPlans] = useState<TreatmentPlan[]>([]);
     const [patient, setPatient] = useState<Patient | null>(null);
-    const [readStatus, setReadStatus] = useState<Record<string, boolean>>({});
 
   
     // Fetch all data on component mount
@@ -360,7 +359,6 @@ export default function PatientNotificationsPage() {
             
             // 3. Fetch read status
             const readStatusData = await fetchReadStatus(currentPatientId);
-            setReadStatus(readStatusData);
             
             // 4. Fetch data in parallel
             const [
@@ -447,7 +445,8 @@ export default function PatientNotificationsPage() {
             if (apt.appointment_status_id) {
                 const status = APPOINTMENT_STATUS[apt.appointment_status_id] || 'Updated';
                 const phDate = aptDate ? formatPHDate(apt.appointment_date!) : '';
-                const phTime = apt.appointment_time ? formatPHTimeOnly(apt.appointment_time) : '';
+                const _phTime = apt.appointment_time ? formatPHTimeOnly(apt.appointment_time) : '';
+                void _phTime;
                 const notificationId = generateNotificationId('apt', apt.appointment_id);
                 
                 notifications.push({

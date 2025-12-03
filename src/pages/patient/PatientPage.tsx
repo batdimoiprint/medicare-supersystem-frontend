@@ -84,22 +84,46 @@ interface AppointmentHistory {
     appointment_history_id: string;
     patient_id: string;
     appointment_id: string;
-    appointment_tbl: {
+    appointment_tbl: Array<{
         appointment_date: string;
         appointment_time: string;
         appointment_status_id: number;
         service_id: string;
         personnel_id?: string;
-        services_tbl?: {
+        services_tbl?: Array<{
             service_name: string;
             service_fee: number;
-        };
-        personnel_tbl?: {
+        }>;
+        personnel_tbl?: Array<{
             first_name: string;
             last_name: string;
             specialization: string;
-        };
-    };
+        }>;
+    }>;
+}
+
+// Transformed appointment type for display
+interface TransformedAppointment {
+    id: string;
+    treatment: string;
+    doctor: string;
+    date: string;
+    time: string;
+    location: string;
+    status: string;
+    type: string;
+    rawData: Appointment;
+    statusId: number;
+}
+
+// Type for RescheduleAppointmentModal
+interface RescheduleAppointmentData {
+    id: number;
+    treatment: string;
+    doctor: string;
+    date: string;
+    time: string;
+    status: string;
 }
 
 // Status Badge Component
@@ -123,7 +147,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 // Scroll buttons component
-const ScrollButtons = ({ scrollRef, itemsLength }: { scrollRef: React.RefObject<HTMLDivElement>, itemsLength: number }) => {
+const ScrollButtons = ({ scrollRef, itemsLength }: { scrollRef: React.RefObject<HTMLDivElement | null>, itemsLength: number }) => {
     const scrollLeft = () => {
         if (scrollRef.current) {
             scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' });
@@ -171,7 +195,7 @@ export default function PatientPage() {
 
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
-    const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+    const [selectedAppointment, setSelectedAppointment] = useState<RescheduleAppointmentData | null>(null);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
     // Scroll refs - initialize with proper type
@@ -508,11 +532,19 @@ export default function PatientPage() {
         if (!appointmentHistory || appointmentHistory.length === 0) return [];
 
         return appointmentHistory.map(history => {
-            const apt = history.appointment_tbl;
+            const aptArray = history.appointment_tbl;
+            if (!aptArray || aptArray.length === 0) return null;
+            
+            const apt = aptArray[0]; // Get first element from array
             if (!apt) return null;
 
-            const serviceName = apt.services_tbl?.service_name || 'Dental Service';
-            const personnel = apt.personnel_tbl;
+            const servicesArray = apt.services_tbl;
+            const serviceName = (servicesArray && servicesArray.length > 0) 
+                ? servicesArray[0].service_name 
+                : 'Dental Service';
+            
+            const personnelArray = apt.personnel_tbl;
+            const personnel = personnelArray && personnelArray.length > 0 ? personnelArray[0] : null;
             const doctorName = personnel 
                 ? `Dr. ${personnel.first_name || ''} ${personnel.last_name || ''}`.trim()
                 : 'Dentist';
@@ -626,8 +658,17 @@ export default function PatientPage() {
         return filteredUpcomingAppointments.length > 0 ? filteredUpcomingAppointments[0] : null;
     }, [filteredUpcomingAppointments]);
 
-    const handleRescheduleClick = (apt: any) => {
-        setSelectedAppointment(apt);
+    const handleRescheduleClick = (apt: TransformedAppointment) => {
+        // Convert to modal's expected type
+        const rescheduleData: RescheduleAppointmentData = {
+            id: parseInt(apt.id) || 0,
+            treatment: apt.treatment,
+            doctor: apt.doctor,
+            date: apt.date,
+            time: apt.time,
+            status: apt.status
+        };
+        setSelectedAppointment(rescheduleData);
         setIsRescheduleModalOpen(true);
     };
 
@@ -1175,7 +1216,16 @@ export default function PatientPage() {
             <AppointmentCalendarModal 
                 isOpen={isCalendarOpen}
                 onClose={() => setIsCalendarOpen(false)}
-                appointments={transformedAppointments}
+                appointments={transformedAppointments.map(apt => ({
+                    id: parseInt(apt.id) || 0,
+                    treatment: apt.treatment,
+                    doctor: apt.doctor,
+                    date: apt.date,
+                    time: apt.time,
+                    location: apt.location,
+                    status: apt.status,
+                    type: apt.type
+                }))}
             />
         </div>
     );
