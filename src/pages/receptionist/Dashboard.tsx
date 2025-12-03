@@ -13,13 +13,11 @@ import {
     ArrowRight,
     RefreshCw,
     Loader2,
-    Users,
     CalendarCheck,
     CalendarX,
     Receipt,
     TrendingUp,
     AlertCircle,
-    UserCheck
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -77,7 +75,6 @@ export default function Dashboard() {
     // Default stats when loading
     const displayStats = stats ?? {
         todaysAppointments: 0,
-        pendingFollowups: 0,
         cancelRequests: 0,
         avgWaitMinutes: 0,
     }
@@ -247,24 +244,6 @@ export default function Dashboard() {
                             </div>
                             <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/30">
                                 <CalendarCheck className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <p className="text-sm font-medium text-muted-foreground">Pending Followups</p>
-                                {isStatsLoading ? (
-                                    <Skeleton className="h-9 w-16" />
-                                ) : (
-                                    <p className="text-3xl font-bold">{displayStats.pendingFollowups}</p>
-                                )}
-                            </div>
-                            <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
-                                <UserCheck className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                             </div>
                         </div>
                     </CardContent>
@@ -466,21 +445,6 @@ export default function Dashboard() {
                                 </div>
                             </Link>
 
-                            <Link to="/receptionist/followup">
-                                <div className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/50 transition-all group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 group-hover:scale-110 transition-transform">
-                                            <UserCheck className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                                        </div>
-                                        <div>
-                                            <p className="font-medium">Followup Schedule</p>
-                                            <p className="text-xs text-muted-foreground">Manage patient followup appointments</p>
-                                        </div>
-                                    </div>
-                                    <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                                </div>
-                            </Link>
-
                             <Link to="/receptionist/cancel-requests">
                                 <div className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/50 transition-all group">
                                     <div className="flex items-center gap-4">
@@ -490,21 +454,6 @@ export default function Dashboard() {
                                         <div>
                                             <p className="font-medium">Cancellation Requests</p>
                                             <p className="text-xs text-muted-foreground">Process patient cancellation requests</p>
-                                        </div>
-                                    </div>
-                                    <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                                </div>
-                            </Link>
-
-                            <Link to="/receptionist/patients">
-                                <div className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/50 transition-all group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 group-hover:scale-110 transition-transform">
-                                            <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                        </div>
-                                        <div>
-                                            <p className="font-medium">Patient Directory</p>
-                                            <p className="text-xs text-muted-foreground">Search and view patient information</p>
                                         </div>
                                     </div>
                                     <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />

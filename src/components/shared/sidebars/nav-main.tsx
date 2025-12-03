@@ -22,7 +22,8 @@ import {
     BarChart3,
     FileStack,
     List,
-    Settings
+    Settings,
+    Trash2
 } from "lucide-react"
 import { receptionistRouteData } from "@/routes/receptionistRoutes"
 import { adminRouteData } from "@/routes/adminRoutes"
@@ -116,6 +117,8 @@ export function NavMain() {
         if (titleLower.includes('stock')) return Activity
         if (titleLower.includes('supplier')) return Truck
         if (titleLower.includes('report') || titleLower.includes('reports')) return BarChart3
+        if (titleLower.includes('alert')) return Bell
+        if (titleLower.includes('waste') || titleLower.includes('disposal')) return Trash2
 
         // Schedule & Logging
         if (titleLower.includes('schedule')) return Calendar
@@ -133,7 +136,23 @@ export function NavMain() {
     }
 
     const finalItems: MainItem[] = selectedRouteData
-        .filter(route => !route.path?.includes(':') && !route.title?.includes('Details'))
+        .filter(route => {
+            // Filter out routes with dynamic params or Details pages
+            if (route.path?.includes(':') || route.title?.includes('Details')) return false
+            
+            // Filter out patient pages from dentist sidebar (keep only workflow)
+            if (basePath === '/dentist') {
+                const path = route.path || ''
+                if (path.includes('patient/charting') || 
+                    path.includes('patient/records') || 
+                    path.includes('patient/prescriptions') || 
+                    path.includes('patient/treatment/plan')) {
+                    return false
+                }
+            }
+            
+            return true
+        })
         .map((route) => ({
             title: route.title || 'Untitled',
             url: route.index ? basePath : `${basePath}/${route.path}`,

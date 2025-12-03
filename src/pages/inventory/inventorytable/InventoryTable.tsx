@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Bell, MessageSquare, List, Minus, Plus, Package, Calendar, AlertTriangle } from 'lucide-react'
+import { Bell, MessageSquare, List, Minus, Plus, Package, Calendar, AlertTriangle, Trash2, Pencil, Check } from 'lucide-react'
 import { X, CheckCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -62,6 +62,18 @@ export default function InventoryTable() {
     const [batches, setBatches] = useState<any[]>([]);
     const [batchesLoading, setBatchesLoading] = useState(false);
 
+    // Batch Editing State
+    const [editingBatchId, setEditingBatchId] = useState<number | null>(null);
+    const [editingBatchExpiry, setEditingBatchExpiry] = useState<string>('');
+    const [savingBatchExpiry, setSavingBatchExpiry] = useState(false);
+
+    // Delete Confirmation Modal State
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+    const [deleteItemName, setDeleteItemName] = useState<string>('');
+    const [isDeleting, setIsDeleting] = useState(false);
+
     useEffect(() => {
         fetchInventory();
         fetchSuppliers();
@@ -113,9 +125,10 @@ export default function InventoryTable() {
 
             // Map Equipment
             const mappedEquipment = (equipmentData || []).map((item: any) => ({
-                id: item.equipment_id, // Assuming ID column
+                id: `EQP-${String(item.equipment_id).padStart(5, '0')}`, // Formatted unique ID
+                dbId: item.equipment_id, // Original database ID for DB operations
                 name: item.equipment_name,
-                quantity: `${item.quantity} units`, // Format quantity
+                quantity: `${item.quantity} boxes`, // Format quantity
                 exp: item.expiry_date || '--',
                 supplier: item.supplier_name || '--', 
                 unitCost: item.unit_cost,
@@ -126,9 +139,10 @@ export default function InventoryTable() {
 
             // Map Medicines
             const mappedMedicines = (medicineData || []).map((item: any) => ({
-                id: item.medicine_id, // Assuming ID column
+                id: `MED-${String(item.medicine_id).padStart(5, '0')}`, // Formatted unique ID
+                dbId: item.medicine_id, // Original database ID for DB operations
                 name: item.medicine_name,
-                quantity: `${item.quantity} units`,
+                quantity: `${item.quantity} boxes`,
                 exp: item.expiry_date || '--',
                 supplier: item.supplier_name || '--',
                 unitCost: item.unit_cost,
@@ -142,9 +156,10 @@ export default function InventoryTable() {
                 // Debug log to see what we are getting
                 // console.log('Mapping item:', item); 
                 return {
-                    id: item.consumables_id, // Use the exact column name from DB
+                    id: `CON-${String(item.consumables_id).padStart(5, '0')}`, // Formatted unique ID
+                    dbId: item.consumables_id, // Original database ID for DB operations
                     name: item.consumable_name,
-                    quantity: `${item.quantity} units`,
+                    quantity: `${item.quantity} boxes`,
                     exp: item.expiry_date || '--',
                     supplier: item.supplier_name || '--',
                     unitCost: item.unit_cost,
@@ -198,7 +213,7 @@ export default function InventoryTable() {
                             expiry_date: item.exp === '--' ? null : item.exp,
                             unit_cost: item.unitCost
                         })
-                        .eq(idCol, id);
+                        .eq(idCol, item.dbId); // Use dbId for database operations
 
                     if (error) throw error;
                 }
@@ -211,6 +226,70 @@ export default function InventoryTable() {
         } catch (error: any) {
             console.error('Error saving changes:', error);
             alert(`Failed to save changes: ${error.message}`);
+        }
+    };
+
+    const openDeleteConfirm = (id: string, name: string) => {
+        setDeleteItemId(id);
+        setDeleteItemName(name);
+        setShowDeleteModal(true);
+        setTimeout(() => setIsDeleteOpen(true), 10);
+    };
+
+    const closeDeleteModal = () => {
+        setIsDeleteOpen(false);
+        setTimeout(() => {
+            setShowDeleteModal(false);
+            setDeleteItemId(null);
+            setDeleteItemName('');
+        }, 200);
+    };
+
+    const handleDeleteItem = async () => {
+        if (!deleteItemId) return;
+
+        setIsDeleting(true);
+        try {
+            // Find the item to get the dbId
+            const item = inventory[activeTab].find((it: any) => it.id === deleteItemId);
+            if (!item) {
+                throw new Error('Item not found');
+            }
+
+            let table = '';
+            let idCol = '';
+            
+            if (activeTab === 'Consumables') { 
+                table = 'consumables_tbl'; 
+                idCol = 'consumables_id'; 
+            } else if (activeTab === 'Medicines') { 
+                table = 'medicine_tbl'; 
+                idCol = 'medicine_id'; 
+            } else if (activeTab === 'Equipment') { 
+                table = 'equipment_tbl'; 
+                idCol = 'equipment_id'; 
+            }
+
+            const { error } = await supabase
+                .schema('inventory')
+                .from(table)
+                .delete()
+                .eq(idCol, item.dbId); // Use dbId for database operations
+
+            if (error) throw error;
+
+            // Remove from local state
+            setInventory((prev: any) => ({
+                ...prev,
+                [activeTab]: prev[activeTab].filter((it: any) => it.id !== deleteItemId)
+            }));
+
+            closeDeleteModal();
+        } catch (error: any) {
+            console.error('Error deleting item:', error);
+            alert(`Failed to delete item: ${error.message}`);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -348,7 +427,7 @@ export default function InventoryTable() {
                         .schema('inventory')
                         .from(table)
                         .update({ quantity: newQty })
-                        .eq(idCol, item.id);
+                        .eq(idCol, item.dbId); // Use dbId for database operations
 
                     if (updateError) throw updateError;
                 }
@@ -386,7 +465,7 @@ export default function InventoryTable() {
                         item_name: item.name,
                         category: activeTab,
                         quantity: qtyToAdd,
-                        units: 'units', // Default unit
+                        units: 'boxes', // Default unit
                         unit_cost: item.unitCost || 0,
                         status: 'Received', // Auto-received since it's a direct restock
                         supplier: item.supplier,
@@ -414,7 +493,7 @@ export default function InventoryTable() {
                             quantity: newQty,
                             status: newQty > 0 ? 'In Stock' : 'Critical'
                         })
-                        .eq(idCol, item.id);
+                        .eq(idCol, item.dbId); // Use dbId for database operations
 
                     if (error) throw error;
                 }
@@ -475,7 +554,45 @@ export default function InventoryTable() {
 
     function closeBatchModal() {
         setIsBatchOpen(false);
+        setEditingBatchId(null);
+        setEditingBatchExpiry('');
         setTimeout(() => setShowBatchModal(false), 200);
+    }
+
+    function startEditingBatchExpiry(batchId: number, currentExpiry: string | null) {
+        setEditingBatchId(batchId);
+        setEditingBatchExpiry(currentExpiry || '');
+    }
+
+    function cancelEditingBatchExpiry() {
+        setEditingBatchId(null);
+        setEditingBatchExpiry('');
+    }
+
+    async function saveBatchExpiry(batchId: number) {
+        setSavingBatchExpiry(true);
+        try {
+            const { error } = await supabase
+                .schema('inventory')
+                .from('stock_in')
+                .update({ expiry_date: editingBatchExpiry || null })
+                .eq('id', batchId);
+
+            if (error) throw error;
+
+            // Update local state
+            setBatches(prev => prev.map(b => 
+                b.id === batchId ? { ...b, expiry_date: editingBatchExpiry || null } : b
+            ));
+
+            setEditingBatchId(null);
+            setEditingBatchExpiry('');
+        } catch (error: any) {
+            console.error('Error updating batch expiry:', error);
+            alert(`Failed to update expiry date: ${error.message}`);
+        } finally {
+            setSavingBatchExpiry(false);
+        }
     }
 
     // Helper to check if a date is expired or expiring soon
@@ -498,6 +615,12 @@ export default function InventoryTable() {
             // Inventory note: save to DB (personal notes)
             if (noteModalType === 'inventory') {
                 try {
+                    // Find the item to get the dbId
+                    const item = inventory[noteItemTab].find((it: any) => it.id === noteItemId);
+                    if (!item) {
+                        throw new Error('Item not found');
+                    }
+
                     let table = '';
                     let idCol = '';
                     if (noteItemTab === 'Consumables') { table = 'consumables_tbl'; idCol = 'consumables_id'; }
@@ -509,7 +632,7 @@ export default function InventoryTable() {
                             .schema('inventory')
                             .from(table)
                             .update({ notes: noteContent })
-                            .eq(idCol, noteItemId);
+                            .eq(idCol, item.dbId); // Use dbId for database operations
                         if (error) throw error;
                         setInventory(prev => ({
                             ...prev,
@@ -530,14 +653,19 @@ export default function InventoryTable() {
 
         function openStockOut() {
             if (selectedIds.length === 0) return
-            // set default quantities to 0 for each selected item
+            // Filter to only items in the current tab
+            const currentTabItemIds = inventory[activeTab].map((it: any) => it.id);
+            const selectedCurrentTabIds = selectedIds.filter(id => currentTabItemIds.includes(id));
+            if (selectedCurrentTabIds.length === 0) return;
+            
+            // set default quantities to 0 for each selected item in current tab
             const defaults: Record<string, number> = {}
-            selectedIds.forEach(id => defaults[id] = 0)
+            selectedCurrentTabIds.forEach(id => defaults[id] = 0)
             setStockQuantities(defaults)
             // initialize per-item notes map using existing item.notes or empty
             const perNotes: Record<string, string> = {};
-            selectedIds.forEach(id => {
-                const item = allItems.find(it => it.id === id);
+            selectedCurrentTabIds.forEach(id => {
+                const item = inventory[activeTab].find((it: any) => it.id === id);
                 perNotes[id] = item?.notes || '';
             })
             setStockNotesPerItem(perNotes);
@@ -551,9 +679,14 @@ export default function InventoryTable() {
 
         function openRestock() {
             if (selectedIds.length === 0) return
+            // Filter to only items in the current tab
+            const currentTabItemIds = inventory[activeTab].map((it: any) => it.id);
+            const selectedCurrentTabIds = selectedIds.filter(id => currentTabItemIds.includes(id));
+            if (selectedCurrentTabIds.length === 0) return;
+            
             const defaults: Record<string, number> = {}
             const defaultExpiry: Record<string, string> = {}
-            selectedIds.forEach(id => {
+            selectedCurrentTabIds.forEach(id => {
                 defaults[id] = 1
                 defaultExpiry[id] = ''
             })
@@ -570,6 +703,9 @@ export default function InventoryTable() {
 
     const allItems = (Object.values(inventory) as any[]).flat();
     const selectedItems = allItems.filter(it => selectedIds.includes(it.id));
+    
+    // Selected items filtered to current tab only (for Stock Out and Restock modals)
+    const selectedItemsCurrentTab = items.filter((it: any) => selectedIds.includes(it.id));
 
     useEffect(() => {
         // clear selection when switching tabs or when switching out of select mode
@@ -780,6 +916,24 @@ export default function InventoryTable() {
                                                             </TooltipContent>
                                                         </Tooltip>
                                                     </TooltipProvider>
+                                                    {actionMode === 'edit' && (
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <button
+                                                                        onClick={() => openDeleteConfirm(item.id, item.name)}
+                                                                        className="inline-flex items-center p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 hover:text-red-600"
+                                                                        aria-label={`delete-${item.id}`}
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>
+                                                                    <span className="text-sm">Delete this item</span>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -1081,7 +1235,7 @@ export default function InventoryTable() {
                                             <div className="col-span-3 text-center">Quantity <span className="text-red-500">*</span></div>
                                         </div>
                                         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {selectedItems.map(it => (
+                                            {selectedItemsCurrentTab.map(it => (
                                                 <div key={it.id} className="px-6 py-4 grid grid-cols-12 gap-4 items-center bg-white dark:bg-[#0f2e30]">
                                                     <div className="col-span-6">
                                                         <div className="flex items-center gap-2">
@@ -1136,7 +1290,7 @@ export default function InventoryTable() {
                                                     </SelectTrigger>
                                                     <SelectContent className="z-[9999]">
                                                         <SelectItem value="batch">Entire batch (default)</SelectItem>
-                                                        {selectedItems.map(it => (
+                                                        {selectedItemsCurrentTab.map(it => (
                                                             <SelectItem key={it.id} value={it.id}>{it.name}</SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -1333,7 +1487,7 @@ export default function InventoryTable() {
                                 {/* Header Info */}
                                 <div className="flex items-center justify-between">
                                     <h4 className="text-lg font-bold text-cyan-500 dark:text-cyan-400">
-                                        {selectedItems[0]?.supplier || 'Unknown Supplier'}
+                                        {selectedItemsCurrentTab[0]?.supplier || 'Unknown Supplier'}
                                     </h4>
                                     <div className="text-sm text-slate-500 dark:text-slate-400 font-medium flex items-center gap-2">
                                         {new Date().toLocaleDateString()}
@@ -1344,19 +1498,18 @@ export default function InventoryTable() {
                                 {/* Items List */}
                                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                                     <div className="bg-slate-50 dark:bg-[#0b2527] px-4 py-2.5 grid grid-cols-12 gap-3 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                                        <div className="col-span-4">Item Name</div>
-                                        <div className="col-span-4 text-center">Quantity <span className="text-red-500">*</span></div>
-                                        <div className="col-span-4 text-center">Expiry Date</div>
+                                        <div className="col-span-6">Item Name</div>
+                                        <div className="col-span-6 text-center">Quantity <span className="text-red-500">*</span></div>
                                     </div>
                                     <ScrollArea className="max-h-[280px]">
                                         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {selectedItems.map(it => (
+                                            {selectedItemsCurrentTab.map(it => (
                                                 <div key={it.id} className="px-4 py-4 grid grid-cols-12 gap-3 items-center bg-white dark:bg-[#0f2e30]">
-                                                    <div className="col-span-4">
+                                                    <div className="col-span-6">
                                                         <div className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{it.name}</div>
                                                         <div className="text-xs text-slate-500 dark:text-slate-400">Current: {it.quantity}</div>
                                                     </div>
-                                                    <div className="col-span-4 flex justify-center">
+                                                    <div className="col-span-6 flex justify-center">
                                                         <div className="flex items-center gap-1.5">
                                                             <Button 
                                                                 variant="outline" 
@@ -1391,24 +1544,11 @@ export default function InventoryTable() {
                                                             </Button>
                                                         </div>
                                                     </div>
-                                                    <div className="col-span-4 flex justify-center">
-                                                        <Input 
-                                                            type="date" 
-                                                            value={restockExpiryDates[it.id] || ''} 
-                                                            onChange={(e) => setRestockExpiryDates(prev => ({ ...prev, [it.id]: e.target.value }))}
-                                                            className="w-full h-8 text-sm border-slate-200 dark:border-slate-700"
-                                                        />
-                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </ScrollArea>
                                 </div>
-
-                                {/* Info text */}
-                                <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                                    Set expiry date for each batch to track inventory freshness
-                                </p>
 
                                 {/* Footer Actions */}
                                 <div className="flex justify-center gap-3 pt-2">
@@ -1505,33 +1645,33 @@ export default function InventoryTable() {
                         )} 
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="w-full max-w-2xl rounded-2xl overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl border border-slate-200 dark:border-slate-700">
+                        <div className="w-full max-w-3xl rounded-2xl overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl border border-slate-200 dark:border-slate-700">
                             {/* Header */}
-                            <div className="bg-gradient-to-r from-[#00a8a8] to-[#008a8a] px-5 py-4 flex items-center justify-between text-white">
+                            <div className="bg-gradient-to-r from-[#00a8a8] to-[#008a8a] px-6 py-5 flex items-center justify-between text-white">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-1.5 bg-white/20 rounded-lg">
-                                        <Package className="w-5 h-5" />
+                                    <div className="p-2 bg-white/20 rounded-lg">
+                                        <Package className="w-6 h-6" />
                                     </div>
                                     <div>
-                                        <h3 className="text-base font-bold">{batchItem?.name}</h3>
-                                        <p className="text-xs text-white/70">Batch History</p>
+                                        <h3 className="text-lg font-bold">{batchItem?.name}</h3>
+                                        <p className="text-sm text-white/70">Batch History & Expiry Management</p>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={closeBatchModal} 
                                     aria-label="Close" 
-                                    className="hover:bg-white/20 rounded-full p-1.5 transition-colors"
+                                    className="hover:bg-white/20 rounded-full p-2 transition-colors"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
 
                             {/* Content */}
-                            <div className="p-5 space-y-4">
+                            <div className="p-6 space-y-5">
                                 {/* Item Summary */}
                                 {batchItem && (
-                                    <div className="flex flex-wrap items-center gap-3 text-sm bg-slate-50 dark:bg-[#0b2527] rounded-xl p-3">
-                                        <span className="px-2.5 py-1 bg-white dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 font-medium">
+                                    <div className="flex flex-wrap items-center gap-4 text-sm bg-slate-50 dark:bg-[#0b2527] rounded-xl p-4">
+                                        <span className="px-3 py-1.5 bg-white dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 font-medium">
                                             {batchItem.category || activeTab}
                                         </span>
                                         <span className="text-slate-600 dark:text-slate-400">
@@ -1545,42 +1685,43 @@ export default function InventoryTable() {
                                 )}
 
                                 {/* Batches List */}
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                            <Calendar className="w-4 h-4 text-cyan-600" />
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 text-base">
+                                            <Calendar className="w-5 h-5 text-cyan-600" />
                                             Stock-In Batches
                                         </span>
                                         <span className="text-sm text-slate-500">{batches.length} batch{batches.length !== 1 ? 'es' : ''} found</span>
                                     </div>
 
                                     {batchesLoading ? (
-                                        <div className="flex items-center justify-center py-10">
-                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-500"></div>
+                                        <div className="flex items-center justify-center py-14">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
                                         </div>
                                     ) : batches.length === 0 ? (
-                                        <div className="text-center py-10 bg-slate-50 dark:bg-[#0b2527] rounded-xl">
-                                            <Package className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                                            <p className="text-sm text-slate-500">No batch records found</p>
-                                            <p className="text-xs text-slate-400 mt-1">Records appear when items are restocked</p>
+                                        <div className="text-center py-14 bg-slate-50 dark:bg-[#0b2527] rounded-xl">
+                                            <Package className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                                            <p className="text-base text-slate-500">No batch records found</p>
+                                            <p className="text-sm text-slate-400 mt-1">Records appear when items are restocked</p>
                                         </div>
                                     ) : (
-                                        <ScrollArea className="h-[280px] rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <ScrollArea className="h-[380px] rounded-xl border border-slate-200 dark:border-slate-700">
                                             <div className="divide-y divide-slate-100 dark:divide-slate-800">
                                                 {batches.map((batch, index) => {
                                                     const expiryStatus = getExpiryStatus(batch.expiry_date);
+                                                    const isEditing = editingBatchId === batch.id;
                                                     return (
                                                         <div 
                                                             key={batch.id || index} 
                                                             className={cn(
-                                                                "px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-[#0b2527] transition-colors",
+                                                                "px-5 py-4 hover:bg-slate-50 dark:hover:bg-[#0b2527] transition-colors",
                                                                 expiryStatus === 'expired' && "bg-red-50/50 dark:bg-red-900/10",
                                                                 expiryStatus === 'expiring-soon' && "bg-amber-50/50 dark:bg-amber-900/10"
                                                             )}
                                                         >
-                                                            <div className="flex items-center justify-between gap-3 mb-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="font-mono text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                                            <div className="flex items-center justify-between gap-3 mb-3">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="font-mono text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded">
                                                                         Batch #{batches.length - index}
                                                                     </span>
                                                                     <Badge 
@@ -1607,18 +1748,72 @@ export default function InventoryTable() {
                                                                     )}
                                                                 </div>
                                                                 <span className="text-xs text-slate-400">
-                                                                    {new Date(batch.created_at).toLocaleDateString()}
+                                                                    Added: {new Date(batch.created_at).toLocaleDateString()}
                                                                 </span>
                                                             </div>
-                                                            <div className="flex items-center gap-6 text-sm text-slate-700 dark:text-slate-300">
-                                                                <span>Qty: <span className="font-semibold">{batch.quantity}</span></span>
-                                                                <span>Cost: <span className="font-semibold">{formatCurrency(batch.unit_cost || 0)}</span></span>
-                                                                <span className={cn(
-                                                                    expiryStatus === 'expired' && "text-red-600 dark:text-red-400",
-                                                                    expiryStatus === 'expiring-soon' && "text-amber-600 dark:text-amber-400"
-                                                                )}>
-                                                                    Expiry: <span className="font-semibold">{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '--'}</span>
-                                                                </span>
+                                                            <div className="flex items-center justify-between gap-4">
+                                                                <div className="flex items-center gap-6 text-sm text-slate-700 dark:text-slate-300">
+                                                                    <span>Qty: <span className="font-semibold">{batch.quantity}</span></span>
+                                                                    <span>Cost: <span className="font-semibold">{formatCurrency(batch.unit_cost || 0)}</span></span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {isEditing ? (
+                                                                        <>
+                                                                            <Input 
+                                                                                type="date"
+                                                                                value={editingBatchExpiry}
+                                                                                onChange={(e) => setEditingBatchExpiry(e.target.value)}
+                                                                                className="h-8 w-40 text-sm"
+                                                                            />
+                                                                            <button
+                                                                                onClick={() => saveBatchExpiry(batch.id)}
+                                                                                disabled={savingBatchExpiry}
+                                                                                className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50"
+                                                                                title="Save"
+                                                                            >
+                                                                                {savingBatchExpiry ? (
+                                                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-600"></div>
+                                                                                ) : (
+                                                                                    <Check className="w-4 h-4" />
+                                                                                )}
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={cancelEditingBatchExpiry}
+                                                                                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                                                title="Cancel"
+                                                                            >
+                                                                                <X className="w-4 h-4" />
+                                                                            </button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span className={cn(
+                                                                                "text-sm",
+                                                                                expiryStatus === 'expired' && "text-red-600 dark:text-red-400",
+                                                                                expiryStatus === 'expiring-soon' && "text-amber-600 dark:text-amber-400",
+                                                                                expiryStatus === 'ok' && "text-slate-700 dark:text-slate-300",
+                                                                                expiryStatus === 'none' && "text-slate-500 dark:text-slate-400"
+                                                                            )}>
+                                                                                Expiry: <span className="font-semibold">{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '--'}</span>
+                                                                            </span>
+                                                                            <TooltipProvider>
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <button
+                                                                                            onClick={() => startEditingBatchExpiry(batch.id, batch.expiry_date)}
+                                                                                            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                                                                                        >
+                                                                                            <Pencil className="w-4 h-4" />
+                                                                                        </button>
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent>
+                                                                                        <span className="text-sm">Edit expiry date</span>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            </TooltipProvider>
+                                                                        </>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     );
@@ -1629,15 +1824,91 @@ export default function InventoryTable() {
                                 </div>
 
                                 {/* Footer */}
-                                <div className="flex justify-end pt-2">
+                                <div className="flex justify-end pt-3">
                                     <Button 
                                         variant="outline" 
                                         onClick={closeBatchModal}
-                                        className="rounded-full px-6"
+                                        className="rounded-full px-8"
                                     >
                                         Close
                                     </Button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div 
+                        className={cn(
+                            "fixed inset-0 bg-black/60 transition-opacity duration-200",
+                            isDeleteOpen ? "opacity-100" : "opacity-0"
+                        )}
+                        onClick={closeDeleteModal}
+                    />
+                    <div className={cn(
+                        "relative z-10 w-full max-w-md transition-all duration-200",
+                        isDeleteOpen ? "opacity-100 scale-100" : "opacity-0 scale-95"
+                    )}>
+                        <div className="rounded-2xl bg-white dark:bg-[#0a2829] shadow-2xl overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700/50">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                        <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-800 dark:text-slate-100">Delete Item</h3>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={closeDeleteModal}
+                                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    <X className="w-4 h-4 text-slate-500" />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-5">
+                                <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 mb-4">
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                                        Are you sure you want to delete <span className="font-semibold text-slate-900 dark:text-white">"{deleteItemName}"</span> from the {activeTab.toLowerCase()} inventory?
+                                    </p>
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    This will permanently remove the item and all associated records from the database.
+                                </p>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 dark:border-slate-700/50">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={closeDeleteModal}
+                                    className="rounded-full px-5"
+                                    disabled={isDeleting}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    onClick={handleDeleteItem}
+                                    className="rounded-full px-5 bg-red-600 hover:bg-red-700 text-white"
+                                    disabled={isDeleting}
+                                >
+                                    {isDeleting ? (
+                                        <span className="flex items-center gap-2">
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                            Deleting...
+                                        </span>
+                                    ) : (
+                                        'Delete Item'
+                                    )}
+                                </Button>
                             </div>
                         </div>
                     </div>

@@ -14,8 +14,7 @@ import {
   Clock,
   CheckCircle2,
   ChevronRight,
-  Users,
-  Star
+  Users
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,150 +29,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, formatCurrency } from "@/lib/utils";
+import {
+  useDentistManagementStats,
+  useAllDentists,
+  useDentistPatients,
+  useDentistTreatmentLogs,
+  useDentistPrescriptions,
+} from "@/hooks/use-dentist-management";
+import type { DentistInfo } from "@/types/dentist";
 
-// Dentist Data
-const dentists = [
-  {
-    id: 'DEN-001',
-    name: 'Dr. Michael Smith',
-    email: 'michael.smith@medicare.com',
-    phone: '+63 917 111 2222',
-    specialization: 'General Dentistry',
-    services: ['Dental Cleaning', 'Dental Filling', 'Tooth Extraction'],
-    status: 'active',
-    schedule: [
-      { day: 'Monday', time: '9:00 AM - 5:00 PM' },
-      { day: 'Tuesday', time: '9:00 AM - 5:00 PM' },
-      { day: 'Wednesday', time: '9:00 AM - 12:00 PM' },
-      { day: 'Friday', time: '9:00 AM - 5:00 PM' },
-    ],
-    totalPatients: 156,
-    totalTreatments: 423,
-    rating: 4.8,
-    joinedDate: '2022-03-15'
-  },
-  {
-    id: 'DEN-002',
-    name: 'Dr. Sarah Johnson',
-    email: 'sarah.johnson@medicare.com',
-    phone: '+63 918 222 3333',
-    specialization: 'Endodontics',
-    services: ['Root Canal', 'Pulpotomy', 'Apicoectomy'],
-    status: 'active',
-    schedule: [
-      { day: 'Monday', time: '10:00 AM - 6:00 PM' },
-      { day: 'Wednesday', time: '10:00 AM - 6:00 PM' },
-      { day: 'Thursday', time: '10:00 AM - 6:00 PM' },
-      { day: 'Saturday', time: '9:00 AM - 2:00 PM' },
-    ],
-    totalPatients: 98,
-    totalTreatments: 287,
-    rating: 4.9,
-    joinedDate: '2021-08-20'
-  },
-  {
-    id: 'DEN-003',
-    name: 'Dr. James Lee',
-    email: 'james.lee@medicare.com',
-    phone: '+63 919 333 4444',
-    specialization: 'Orthodontics',
-    services: ['Braces', 'Retainers', 'Invisalign', 'Orthodontic Adjustment'],
-    status: 'active',
-    schedule: [
-      { day: 'Tuesday', time: '8:00 AM - 4:00 PM' },
-      { day: 'Thursday', time: '8:00 AM - 4:00 PM' },
-      { day: 'Saturday', time: '8:00 AM - 12:00 PM' },
-    ],
-    totalPatients: 134,
-    totalTreatments: 512,
-    rating: 4.7,
-    joinedDate: '2020-11-10'
-  },
-  {
-    id: 'DEN-004',
-    name: 'Dr. Emily Chen',
-    email: 'emily.chen@medicare.com',
-    phone: '+63 920 444 5555',
-    specialization: 'Cosmetic Dentistry',
-    services: ['Teeth Whitening', 'Veneers', 'Dental Bonding'],
-    status: 'on-leave',
-    schedule: [
-      { day: 'Monday', time: '9:00 AM - 5:00 PM' },
-      { day: 'Wednesday', time: '9:00 AM - 5:00 PM' },
-      { day: 'Friday', time: '9:00 AM - 5:00 PM' },
-    ],
-    totalPatients: 87,
-    totalTreatments: 198,
-    rating: 4.9,
-    joinedDate: '2023-01-05'
-  },
-  {
-    id: 'DEN-005',
-    name: 'Dr. Robert Garcia',
-    email: 'robert.garcia@medicare.com',
-    phone: '+63 921 555 6666',
-    specialization: 'Prosthodontics',
-    services: ['Crowns', 'Bridges', 'Dentures', 'Dental Implants'],
-    status: 'active',
-    schedule: [
-      { day: 'Monday', time: '8:00 AM - 4:00 PM' },
-      { day: 'Tuesday', time: '8:00 AM - 4:00 PM' },
-      { day: 'Thursday', time: '8:00 AM - 4:00 PM' },
-      { day: 'Friday', time: '8:00 AM - 12:00 PM' },
-    ],
-    totalPatients: 112,
-    totalTreatments: 345,
-    rating: 4.6,
-    joinedDate: '2021-05-18'
-  },
-];
-
-// Assigned Patients
-const assignedPatients = [
-  { id: 1, dentistId: 'DEN-001', patientName: 'Maria Santos', patientId: 'PAT-001', lastVisit: '2025-11-28', nextAppointment: '2025-12-28', status: 'active' },
-  { id: 2, dentistId: 'DEN-001', patientName: 'Juan Dela Cruz', patientId: 'PAT-002', lastVisit: '2025-12-01', nextAppointment: '2026-01-15', status: 'active' },
-  { id: 3, dentistId: 'DEN-001', patientName: 'Sofia Martinez', patientId: 'PAT-005', lastVisit: '2025-12-02', nextAppointment: null, status: 'completed' },
-  { id: 4, dentistId: 'DEN-002', patientName: 'Ana Reyes', patientId: 'PAT-003', lastVisit: '2025-11-15', nextAppointment: '2025-12-20', status: 'active' },
-  { id: 5, dentistId: 'DEN-002', patientName: 'Pedro Garcia', patientId: 'PAT-004', lastVisit: '2025-10-20', nextAppointment: null, status: 'inactive' },
-  { id: 6, dentistId: 'DEN-003', patientName: 'Maria Santos', patientId: 'PAT-001', lastVisit: '2025-09-10', nextAppointment: '2026-03-10', status: 'active' },
-];
-
-// Treatment Logs
-const treatmentLogs = [
-  { id: 1, dentistId: 'DEN-001', patientName: 'Maria Santos', service: 'Dental Cleaning', date: '2025-11-28', notes: 'Regular cleaning completed. No issues found. Recommended flossing twice daily.', status: 'completed', cost: 2500 },
-  { id: 2, dentistId: 'DEN-001', patientName: 'Juan Dela Cruz', service: 'Dental Filling', date: '2025-12-01', notes: 'Composite filling on tooth #14. Patient tolerated procedure well.', status: 'completed', cost: 3500 },
-  { id: 3, dentistId: 'DEN-001', patientName: 'Sofia Martinez', service: 'Tooth Extraction', date: '2025-12-02', notes: 'Extracted tooth #38. Prescribed antibiotics and pain medication.', status: 'completed', cost: 2000 },
-  { id: 4, dentistId: 'DEN-002', patientName: 'Ana Reyes', service: 'Root Canal', date: '2025-11-15', notes: 'Root canal treatment on tooth #36. Two more sessions needed.', status: 'in-progress', cost: 8500 },
-  { id: 5, dentistId: 'DEN-002', patientName: 'Pedro Garcia', service: 'Root Canal', date: '2025-10-20', notes: 'Completed root canal treatment. Crown placement scheduled.', status: 'completed', cost: 8500 },
-  { id: 6, dentistId: 'DEN-003', patientName: 'Maria Santos', service: 'Orthodontic Adjustment', date: '2025-09-10', notes: 'Monthly braces adjustment. Good progress noted.', status: 'completed', cost: 1500 },
-];
-
-// Prescriptions
-const prescriptions = [
-  { id: 1, dentistId: 'DEN-001', patientName: 'Sofia Martinez', medication: 'Amoxicillin 500mg', dosage: '3x daily for 7 days', date: '2025-12-02', reason: 'Post-extraction antibiotic' },
-  { id: 2, dentistId: 'DEN-001', patientName: 'Sofia Martinez', medication: 'Mefenamic Acid 500mg', dosage: 'Every 8 hours as needed', date: '2025-12-02', reason: 'Pain management' },
-  { id: 3, dentistId: 'DEN-002', patientName: 'Ana Reyes', medication: 'Ibuprofen 400mg', dosage: 'Every 6 hours as needed', date: '2025-11-15', reason: 'Post-procedure pain' },
-  { id: 4, dentistId: 'DEN-001', patientName: 'Maria Santos', medication: 'Chlorhexidine Mouthwash', dosage: 'Twice daily for 2 weeks', date: '2025-11-28', reason: 'Gum health maintenance' },
-];
-
-// Follow-up Recommendations
-const followUps = [
-  { id: 1, dentistId: 'DEN-001', patientName: 'Maria Santos', service: 'Dental Cleaning', recommendedDate: '2026-05-28', notes: '6-month regular checkup', priority: 'routine' },
-  { id: 2, dentistId: 'DEN-001', patientName: 'Sofia Martinez', service: 'Post-Extraction Checkup', recommendedDate: '2025-12-09', notes: 'Check healing progress after extraction', priority: 'high' },
-  { id: 3, dentistId: 'DEN-002', patientName: 'Ana Reyes', service: 'Root Canal Continuation', recommendedDate: '2025-12-20', notes: 'Second session of root canal treatment', priority: 'high' },
-  { id: 4, dentistId: 'DEN-002', patientName: 'Pedro Garcia', service: 'Crown Placement', recommendedDate: '2025-12-15', notes: 'Install permanent crown after root canal', priority: 'medium' },
-  { id: 5, dentistId: 'DEN-003', patientName: 'Maria Santos', service: 'Orthodontic Adjustment', recommendedDate: '2025-12-10', notes: 'Monthly braces adjustment', priority: 'routine' },
-];
-
-// Stats
-const dentistStats = [
-  { title: 'Total Dentists', value: '5', icon: Stethoscope, color: 'text-primary', bg: 'bg-primary/10' },
-  { title: 'Active Dentists', value: '4', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { title: 'Total Treatments', value: '1,765', icon: ClipboardList, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
-  { title: 'Patients Served', value: '587', icon: Users, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-];
-
-type DetailTab = 'overview' | 'patients' | 'treatments' | 'prescriptions' | 'followups';
+type DetailTab = 'overview' | 'patients' | 'treatments' | 'prescriptions';
 
 export default function DentistManagement() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -181,10 +46,28 @@ export default function DentistManagement() {
   const [specializationFilter, setSpecializationFilter] = useState('all');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [selectedDentist, setSelectedDentist] = useState<typeof dentists[0] | null>(null);
+  const [selectedDentist, setSelectedDentist] = useState<DentistInfo | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
 
-  const openDetailModal = (dentist: typeof dentists[0]) => {
+  // Fetch data from backend
+  const { data: stats, isLoading: isLoadingStats } = useDentistManagementStats();
+  const { data: dentists = [] } = useAllDentists();
+  
+  // Fetch selected dentist's data
+  const selectedPersonnelId = selectedDentist?.personnelId ?? null;
+  const { data: dentistPatients = [] } = useDentistPatients(selectedPersonnelId);
+  const { data: dentistTreatments = [] } = useDentistTreatmentLogs(selectedPersonnelId);
+  const { data: dentistPrescriptions = [] } = useDentistPrescriptions(selectedPersonnelId);
+
+  // Stats for the dashboard - using real data
+  const dentistStats = [
+    { title: 'Total Dentists', value: isLoadingStats ? '...' : String(stats?.totalDentists ?? 0), icon: Stethoscope, color: 'text-primary', bg: 'bg-primary/10' },
+    { title: 'Pending Treatments', value: isLoadingStats ? '...' : String(stats?.pendingTreatments ?? 0), icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    { title: 'Total Treatments', value: isLoadingStats ? '...' : String(stats?.totalTreatments ?? 0).replace(/\B(?=(\d{3})+(?!\d))/g, ','), icon: ClipboardList, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+    { title: 'Patients Served', value: isLoadingStats ? '...' : String(stats?.patientsServed ?? 0).replace(/\B(?=(\d{3})+(?!\d))/g, ','), icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  ];
+
+  const openDetailModal = (dentist: DentistInfo) => {
     setSelectedDentist(dentist);
     setDetailTab('overview');
     setShowDetailModal(true);
@@ -201,38 +84,21 @@ export default function DentistManagement() {
 
   const filteredDentists = dentists.filter(d => {
     const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.specialization.toLowerCase().includes(searchQuery.toLowerCase());
+      (d.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+      (d.specialization?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
     const matchesStatus = statusFilter === 'all' || d.status === statusFilter;
     const matchesSpec = specializationFilter === 'all' || d.specialization === specializationFilter;
     return matchesSearch && matchesStatus && matchesSpec;
   });
 
-  const getDentistPatients = (dentistId: string) => assignedPatients.filter(p => p.dentistId === dentistId);
-  const getDentistTreatments = (dentistId: string) => treatmentLogs.filter(t => t.dentistId === dentistId);
-  const getDentistPrescriptions = (dentistId: string) => prescriptions.filter(p => p.dentistId === dentistId);
-  const getDentistFollowUps = (dentistId: string) => followUps.filter(f => f.dentistId === dentistId);
-
-  const specializations = [...new Set(dentists.map(d => d.specialization))];
+  const specializations = [...new Set(dentists.map(d => d.specialization).filter((s): s is string => Boolean(s)))];
 
   const detailTabs = [
     { id: 'overview', label: 'Overview', icon: User },
     { id: 'patients', label: 'Patients', icon: Users },
     { id: 'treatments', label: 'Treatments', icon: ClipboardList },
     { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
-    { id: 'followups', label: 'Follow-ups', icon: Calendar },
   ];
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'medium':
-        return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      default:
-        return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 space-y-6">
@@ -356,10 +222,6 @@ export default function DentistManagement() {
                           )}>
                             {dentist.status === 'active' ? 'Active' : 'On Leave'}
                           </Badge>
-                          <div className="flex items-center gap-1 text-amber-500">
-                            <Star className="w-3 h-3 fill-amber-500" />
-                            <span className="text-xs font-medium">{dentist.rating}</span>
-                          </div>
                         </div>
                         <p className="text-sm text-muted-foreground">{dentist.specialization}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
@@ -452,6 +314,60 @@ export default function DentistManagement() {
                   {/* Overview Tab */}
                   {detailTab === 'overview' && (
                     <div className="space-y-6">
+                      {/* Personal Info */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-3">Personal Information</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Employee No.</p>
+                              <p className="text-sm font-medium">{selectedDentist.employeeNo ?? 'N/A'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Full Name</p>
+                              <p className="text-sm font-medium">
+                                {selectedDentist.firstName} {selectedDentist.middleName ? `${selectedDentist.middleName} ` : ''}{selectedDentist.lastName}{selectedDentist.suffix ? `, ${selectedDentist.suffix}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                            <Calendar className="w-4 h-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Birthdate</p>
+                              <p className="text-sm font-medium">{selectedDentist.birthdate ? new Date(selectedDentist.birthdate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Gender</p>
+                              <p className="text-sm font-medium capitalize">{selectedDentist.gender ?? 'N/A'}</p>
+                            </div>
+                          </div>
+                          {selectedDentist.address && (selectedDentist.address.city || selectedDentist.address.barangay) && (
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 md:col-span-2">
+                              <User className="w-4 h-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Address</p>
+                                <p className="text-sm font-medium">
+                                  {[
+                                    selectedDentist.address.houseNo,
+                                    selectedDentist.address.street,
+                                    selectedDentist.address.barangay,
+                                    selectedDentist.address.city,
+                                    selectedDentist.address.country,
+                                  ].filter(Boolean).join(', ') || 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Contact Info */}
                       <div>
                         <h4 className="text-sm font-semibold text-muted-foreground mb-3">Contact Information</h4>
@@ -460,14 +376,14 @@ export default function DentistManagement() {
                             <Mail className="w-4 h-4 text-muted-foreground" />
                             <div>
                               <p className="text-xs text-muted-foreground">Email</p>
-                              <p className="text-sm font-medium">{selectedDentist.email}</p>
+                              <p className="text-sm font-medium">{selectedDentist.email ?? 'N/A'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                             <Phone className="w-4 h-4 text-muted-foreground" />
                             <div>
                               <p className="text-xs text-muted-foreground">Phone</p>
-                              <p className="text-sm font-medium">{selectedDentist.phone}</p>
+                              <p className="text-sm font-medium">{selectedDentist.phone ?? 'N/A'}</p>
                             </div>
                           </div>
                         </div>
@@ -514,15 +430,12 @@ export default function DentistManagement() {
                             <p className="text-lg font-bold text-cyan-500">{selectedDentist.totalTreatments}</p>
                           </div>
                           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                            <p className="text-xs text-muted-foreground">Rating</p>
-                            <div className="flex items-center gap-1">
-                              <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-                              <p className="text-lg font-bold text-amber-500">{selectedDentist.rating}</p>
-                            </div>
+                            <p className="text-xs text-muted-foreground">License #</p>
+                            <p className="text-sm font-bold text-amber-500">{selectedDentist.licenseNumber ?? 'N/A'}</p>
                           </div>
                           <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                             <p className="text-xs text-muted-foreground">Since</p>
-                            <p className="text-sm font-bold text-emerald-500">{new Date(selectedDentist.joinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</p>
+                            <p className="text-sm font-bold text-emerald-500">{selectedDentist.joinedDate ? new Date(selectedDentist.joinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'}</p>
                           </div>
                         </div>
                       </div>
@@ -535,25 +448,25 @@ export default function DentistManagement() {
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-semibold text-muted-foreground">Assigned & Treated Patients</h4>
                         <Badge variant="outline" className="bg-primary/10 text-primary">
-                          {getDentistPatients(selectedDentist.id).length} patients
+                          {dentistPatients.length} patients
                         </Badge>
                       </div>
-                      {getDentistPatients(selectedDentist.id).length === 0 ? (
+                      {dentistPatients.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <Users className="w-10 h-10 mx-auto mb-2 opacity-50" />
                           <p>No patients assigned</p>
                         </div>
                       ) : (
-                        getDentistPatients(selectedDentist.id).map((patient, idx) => (
+                        dentistPatients.map((patient, idx) => (
                           <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                                  {patient.patientName.split(' ').map(n => n[0]).join('')}
+                                  {patient.patientName.split(' ').map((n: string) => n[0]).join('')}
                                 </div>
                                 <div>
                                   <p className="font-semibold">{patient.patientName}</p>
-                                  <p className="text-xs text-muted-foreground">{patient.patientId}</p>
+                                  <p className="text-xs text-muted-foreground">PAT-{String(patient.patientId).padStart(3, '0')}</p>
                                 </div>
                               </div>
                               <div className="text-right">
@@ -566,9 +479,11 @@ export default function DentistManagement() {
                                 )}>
                                   {patient.status}
                                 </Badge>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  Last: {new Date(patient.lastVisit).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </p>
+                                {patient.lastVisit && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Last: {new Date(patient.lastVisit).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </p>
+                                )}
                                 {patient.nextAppointment && (
                                   <p className="text-xs text-primary">
                                     Next: {new Date(patient.nextAppointment).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -588,16 +503,16 @@ export default function DentistManagement() {
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-semibold text-muted-foreground">Treatment Logs</h4>
                         <Badge variant="outline" className="bg-cyan-500/10 text-cyan-500">
-                          {getDentistTreatments(selectedDentist.id).length} treatments
+                          {dentistTreatments.length} treatments
                         </Badge>
                       </div>
-                      {getDentistTreatments(selectedDentist.id).length === 0 ? (
+                      {dentistTreatments.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <ClipboardList className="w-10 h-10 mx-auto mb-2 opacity-50" />
                           <p>No treatment logs</p>
                         </div>
                       ) : (
-                        getDentistTreatments(selectedDentist.id).map((treatment, idx) => (
+                        dentistTreatments.map((treatment, idx) => (
                           <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex-1">
@@ -613,13 +528,13 @@ export default function DentistManagement() {
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">Patient: {treatment.patientName}</p>
-                                <p className="text-sm text-muted-foreground mt-1">{treatment.notes}</p>
+                                {treatment.notes && <p className="text-sm text-muted-foreground mt-1">{treatment.notes}</p>}
                               </div>
                               <div className="text-right shrink-0">
                                 <p className="text-sm text-muted-foreground">
                                   {new Date(treatment.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                 </p>
-                                <p className="font-semibold text-primary mt-1">{formatCurrency(treatment.cost)}</p>
+                                {treatment.cost && <p className="font-semibold text-primary mt-1">{formatCurrency(treatment.cost)}</p>}
                               </div>
                             </div>
                           </div>
@@ -634,16 +549,16 @@ export default function DentistManagement() {
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-semibold text-muted-foreground">Prescriptions Issued</h4>
                         <Badge variant="outline" className="bg-purple-500/10 text-purple-500">
-                          {getDentistPrescriptions(selectedDentist.id).length} prescriptions
+                          {dentistPrescriptions.length} prescriptions
                         </Badge>
                       </div>
-                      {getDentistPrescriptions(selectedDentist.id).length === 0 ? (
+                      {dentistPrescriptions.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <Pill className="w-10 h-10 mx-auto mb-2 opacity-50" />
                           <p>No prescriptions</p>
                         </div>
                       ) : (
-                        getDentistPrescriptions(selectedDentist.id).map((prescription, idx) => (
+                        dentistPrescriptions.map((prescription, idx) => (
                           <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex-1">
@@ -652,8 +567,9 @@ export default function DentistManagement() {
                                   <p className="font-semibold">{prescription.medication}</p>
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">Patient: {prescription.patientName}</p>
-                                <p className="text-sm mt-1">Dosage: {prescription.dosage}</p>
-                                <p className="text-xs text-muted-foreground mt-1">Reason: {prescription.reason}</p>
+                                {prescription.dosage && <p className="text-sm mt-1">Dosage: {prescription.dosage}</p>}
+                                {prescription.frequency && <p className="text-sm mt-1">Frequency: {prescription.frequency}</p>}
+                                {prescription.reason && <p className="text-xs text-muted-foreground mt-1">Reason: {prescription.reason}</p>}
                               </div>
                               <p className="text-sm text-muted-foreground shrink-0">
                                 {new Date(prescription.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -665,46 +581,7 @@ export default function DentistManagement() {
                     </div>
                   )}
 
-                  {/* Follow-ups Tab */}
-                  {detailTab === 'followups' && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold text-muted-foreground">Follow-up Recommendations</h4>
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500">
-                          {getDentistFollowUps(selectedDentist.id).length} follow-ups
-                        </Badge>
-                      </div>
-                      {getDentistFollowUps(selectedDentist.id).length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Calendar className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                          <p>No follow-up recommendations</p>
-                        </div>
-                      ) : (
-                        getDentistFollowUps(selectedDentist.id).map((followUp, idx) => (
-                          <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-semibold">{followUp.service}</p>
-                                  <Badge variant="outline" className={cn("text-xs", getPriorityColor(followUp.priority))}>
-                                    {followUp.priority} priority
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">Patient: {followUp.patientName}</p>
-                                <p className="text-sm text-muted-foreground mt-1">{followUp.notes}</p>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className="text-xs text-muted-foreground">Recommended</p>
-                                <p className="text-sm font-medium text-primary">
-                                  {new Date(followUp.recommendedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
+
                 </div>
               </ScrollArea>
 

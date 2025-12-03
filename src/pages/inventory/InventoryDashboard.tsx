@@ -344,7 +344,7 @@ function InventoryDashboard() {
                             <StatCard title="Pending Orders" value={<span>{pendingOrdersCount}</span>} icon={<Package className="w-8 h-8 text-gray-600" />} desc="Orders waiting for delivery" />
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
                             <Card className="lg:col-span-2">
                                 <CardHeader>
                                     <div className="flex items-center justify-between">
@@ -378,7 +378,7 @@ function InventoryDashboard() {
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="flex flex-col h-full">
                                 <CardHeader>
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -393,9 +393,9 @@ function InventoryDashboard() {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="flex-1 overflow-hidden">
                                     <Separator className="mb-4" />
-                                    <div className="h-56 overflow-auto pr-2">
+                                    <div className="h-full max-h-[400px] overflow-auto pr-2">
                                         <div className="space-y-3">
                                             {stockAlerts.length === 0 ? (
                                                 <p className="text-sm text-muted-foreground text-center py-4">No stock alerts</p>

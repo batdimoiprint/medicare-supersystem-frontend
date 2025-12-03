@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import PaymentTable from '@/components/cashier/PaymentTable'
 import supabase from '@/utils/supabase'
+import { Card } from '@/components/ui/card'
 
 type BillingItem = {
   bill_id: string
@@ -23,7 +24,7 @@ export default function Billing() {
     setLoading(true)
     try {
       const { data: paymentData, error: paymentError } = await supabase
-        .from('billing_view') 
+        .from('billing_view')
         .select('bill_id, appointment_id, payable_amount, payment_option, payment_status_id')
 
       if (paymentError) throw paymentError
@@ -79,9 +80,9 @@ export default function Billing() {
   }
 
   return (
-    <div>
+    <Card className='p-4'>
       {loading && <p>Loading...</p>}
       <PaymentTable items={billing} basePath="/cashier/payments" />
-    </div>
+    </Card>
   )
 }
