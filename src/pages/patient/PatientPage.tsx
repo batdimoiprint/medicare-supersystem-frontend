@@ -25,12 +25,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate } from 'react-router-dom';
 import BookAppointmentModal from '@/components/patient/BookAppointmentModal';
 import RescheduleAppointmentModal from '@/components/patient/RescheduleAppointmentModal';
 import AppointmentCalendarModal from '@/components/patient/AppointmentCalendarModal';
 import { useState, useEffect, useMemo } from 'react';
 import supabase from '@/utils/supabase';
+import { useAuth } from '@/context/userContext';
 
 const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
@@ -49,6 +50,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export default function PatientPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [currentPatient, setCurrentPatient] = useState<any>(null);
     const [appointments, setAppointments] = useState<any[]>([]);
     const [appointmentHistory, setAppointmentHistory] = useState<any[]>([]);
@@ -65,8 +67,7 @@ export default function PatientPage() {
     useEffect(() => {
         const fetchPatientData = async () => {
             try {
-                const { data: { user }, error: userError } = await supabase.auth.getUser();
-                if (userError || !user) {
+                if (!user) {
                     navigate('/login');
                     return;
                 }
@@ -74,7 +75,7 @@ export default function PatientPage() {
                     .schema('patient_record')
                     .from('patient_tbl')
                     .select('patient_id, email, f_name, l_name, pri_contact_no, house_no, street, barangay, city, account_status')
-                    .eq('email', user.email)
+                    .eq('patient_id', user.id)
                     .single();
                 if (patientError) return;
                 setCurrentPatient(patientData);
@@ -236,7 +237,7 @@ export default function PatientPage() {
         };
 
         fetchPatientData();
-    }, [navigate]);
+    }, [navigate, user]);
 
     const formatTimeToAMPM = (timeStr: string) => {
         if (!timeStr) return '';
@@ -267,7 +268,7 @@ export default function PatientPage() {
     const getAppointmentStatus = (statusId: number) => {
         const statusMap: Record<number, string> = {
             1: 'Pending',
-            2: 'Confirmed', 
+            2: 'Confirmed',
             3: 'Completed',
             4: 'Cancelled'
         };
@@ -309,7 +310,7 @@ export default function PatientPage() {
             if (!apt) return null;
             const serviceName = apt.services_tbl?.service_name || 'Dental Service';
             const personnel = apt.personnel_tbl;
-            const doctorName = personnel 
+            const doctorName = personnel
                 ? `Dr. ${personnel.first_name || ''} ${personnel.last_name || ''}`.trim()
                 : 'Dentist';
             return {
@@ -422,26 +423,26 @@ export default function PatientPage() {
                     <div className="flex items-center gap-2 mb-1">
                         <span className="text-muted-foreground text-sm">Overview</span>
                     </div>
-                    <BlurText 
-                        text={`Welcome back, ${currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}`} 
-                        delay={100} 
-                        className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100" 
+                    <BlurText
+                        text={`Welcome back, ${currentPatient ? `${currentPatient.f_name} ${currentPatient.l_name}` : 'Loading...'}`}
+                        delay={100}
+                        className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100"
                     />
                     <p className="text-muted-foreground mt-1 text-sm md:text-base">
                         Here's what's happening with your dental health today.
                     </p>
                 </div>
-                <Button 
-                    size="lg" 
+                <Button
+                    size="lg"
                     className="shadow-lg w-full md:w-auto"
                     onClick={() => setIsBookingModalOpen(true)}
                 >
                     <Calendar className="mr-2 h-4 w-4" /> Book Appointment
                 </Button>
             </div>
-        
+
             <div className="grid gap-4 md:grid-cols-3 mb-6">
-                <Card 
+                <Card
                     className="cursor-pointer hover:bg-accent/40 transition-all hover:shadow-md relative overflow-hidden"
                     onClick={() => setIsCalendarOpen(true)}
                     title="Click to view full calendar"
@@ -504,7 +505,7 @@ export default function PatientPage() {
                                 Appointments
                             </CardTitle>
                             <CardDescription>
-                                {upcomingAppointments.length > 0 
+                                {upcomingAppointments.length > 0
                                     ? `You have ${upcomingAppointments.length} upcoming appointment${upcomingAppointments.length > 1 ? 's' : ''}`
                                     : 'No upcoming appointments'
                                 }
@@ -516,14 +517,14 @@ export default function PatientPage() {
                                     <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
                                     <TabsTrigger value="history">History</TabsTrigger>
                                 </TabsList>
-                                
+
                                 {/* Upcoming Appointments - Fixed height with 5 items */}
                                 <TabsContent value="upcoming" className="m-0 p-0">
                                     <div className="mb-4">
                                         <Select value={upcomingStatusFilter} onValueChange={setUpcomingStatusFilter}>
                                             <SelectTrigger className="w-full md:w-[200px]">
                                                 <SelectValue placeholder="Filter by status" />
-                            </SelectTrigger>
+                                            </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="All">All Statuses</SelectItem>
                                                 <SelectItem value="Pending">Pending</SelectItem>
@@ -555,9 +556,9 @@ export default function PatientPage() {
                                                         </div>
                                                         <div className="mt-2 sm:mt-0 flex gap-2 self-end sm:self-center">
                                                             <StatusBadge status={apt.status} />
-                                                            <Button 
-                                                                size="sm" 
-                                                                variant="ghost" 
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
                                                                 className="h-7 text-xs whitespace-nowrap"
                                                                 onClick={() => handleRescheduleClick(apt)}
                                                             >
@@ -571,8 +572,8 @@ export default function PatientPage() {
                                             <div className="text-center py-8 text-muted-foreground h-full flex flex-col items-center justify-center">
                                                 <Calendar className="w-12 h-12 mx-auto mb-2 opacity-20" />
                                                 <p>No upcoming appointments.</p>
-                                                <Button 
-                                                    variant="outline" 
+                                                <Button
+                                                    variant="outline"
                                                     className="mt-2 text-sm"
                                                     onClick={() => setIsBookingModalOpen(true)}
                                                 >
@@ -582,7 +583,7 @@ export default function PatientPage() {
                                         )}
                                     </div>
                                 </TabsContent>
-                                
+
                                 {/* Past Appointments - Fixed height with 5 items */}
                                 <TabsContent value="history" className="m-0 p-0">
                                     <div className="mb-4">
@@ -636,7 +637,7 @@ export default function PatientPage() {
                                 Current Medications
                             </CardTitle>
                             <CardDescription>
-                                {transformedPrescriptions.length > 0 
+                                {transformedPrescriptions.length > 0
                                     ? `${transformedPrescriptions.length} active prescription${transformedPrescriptions.length > 1 ? 's' : ''}`
                                     : 'No current medications'
                                 }
@@ -668,9 +669,9 @@ export default function PatientPage() {
                                                 <p className="text-sm text-muted-foreground">
                                                     Showing 5 of {transformedPrescriptions.length} prescriptions
                                                 </p>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     className="mt-2 text-xs"
                                                     onClick={() => navigate('/patient/prescriptions')}
                                                 >
@@ -707,16 +708,16 @@ export default function PatientPage() {
                                 </h3>
                                 <p className="text-xs md:text-sm text-muted-foreground mb-3">Member since 2024</p>
                                 <div className="w-full space-y-2">
-                                    <Button 
-                                        variant="outline" 
+                                    <Button
+                                        variant="outline"
                                         className="w-full justify-between bg-background text-sm"
                                         onClick={() => navigate('/patient/profile')}
                                     >
                                         View Profile <ChevronRight className="w-4 h-4" />
                                     </Button>
-                                    
-                                    <Button 
-                                        variant="outline" 
+
+                                    <Button
+                                        variant="outline"
                                         className="w-full justify-between bg-background text-sm"
                                         onClick={() => navigate('/patient/records')}
                                     >
@@ -761,8 +762,8 @@ export default function PatientPage() {
                                         </div>
                                     )}
                                 </div>
-                                <Button 
-                                    variant="ghost" 
+                                <Button
+                                    variant="ghost"
                                     className="w-full mt-4 text-primary text-sm"
                                     onClick={() => navigate('/patient/transactions')}
                                 >
@@ -774,18 +775,18 @@ export default function PatientPage() {
                 </div>
             </div>
 
-            <BookAppointmentModal 
-                isOpen={isBookingModalOpen} 
-                onClose={() => setIsBookingModalOpen(false)} 
+            <BookAppointmentModal
+                isOpen={isBookingModalOpen}
+                onClose={() => setIsBookingModalOpen(false)}
             />
-            
-            <RescheduleAppointmentModal 
+
+            <RescheduleAppointmentModal
                 isOpen={isRescheduleModalOpen}
                 onClose={() => setIsRescheduleModalOpen(false)}
                 appointment={selectedAppointment}
             />
 
-            <AppointmentCalendarModal 
+            <AppointmentCalendarModal
                 isOpen={isCalendarOpen}
                 onClose={() => setIsCalendarOpen(false)}
                 appointments={transformedAppointments}

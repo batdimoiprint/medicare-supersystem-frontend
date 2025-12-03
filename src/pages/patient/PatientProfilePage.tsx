@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { 
-    User, 
-    Phone, 
-    Mail, 
-    MapPin, 
-    Droplet, 
-    Shield, 
-    Edit2, 
-    Save, 
-    X, 
+import {
+    User,
+    Phone,
+    Mail,
+    MapPin,
+    Droplet,
+    Shield,
+    Edit2,
+    Save,
+    X,
     ArrowLeft,
     Camera,
     Contact
@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import supabase from '@/utils/supabase';
+import { useAuth } from '@/context/userContext';
 
 interface PatientProfile {
     patient_id: number;
@@ -52,6 +53,7 @@ interface EmergencyContact {
 }
 
 export default function PatientProfilePage() {
+    const { user } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [profile, setProfile] = useState<PatientProfile | null>(null);
     const [ec, setEc] = useState<EmergencyContact | null>(null);
@@ -63,26 +65,19 @@ export default function PatientProfilePage() {
         const fetchPatientData = async () => {
             setLoading(true);
             setError(null);
-            
-            try {
-                const { data: user, error: userError } = await supabase.auth.getUser();
-                
-                if (userError) {
-                    setError('Authentication error: ' + userError.message);
-                    return;
-                }
 
-                if (!user?.user) {
+            try {
+                if (!user) {
                     setError('No user logged in');
                     return;
                 }
 
-                // Fetch patient profile from patient_record schema
+                // Fetch patient profile from patient_record schema using user id from auth context
                 const { data: patientData, error: patientError } = await supabase
                     .schema('patient_record')
                     .from('patient_tbl')
                     .select('*')
-                    .eq('email', user.user.email)
+                    .eq('patient_id', user.id)
                     .single();
 
                 if (patientError) {
@@ -92,7 +87,7 @@ export default function PatientProfilePage() {
                 }
 
                 if (!patientData) {
-                    setError('Patient profile not found for email: ' + user.user.email);
+                    setError('Patient profile not found');
                     return;
                 }
 
@@ -123,7 +118,7 @@ export default function PatientProfilePage() {
         };
 
         fetchPatientData();
-    }, []);
+    }, [user]);
 
     const calculateAge = (birthdate: string) => {
         const birthDate = new Date(birthdate);
@@ -168,9 +163,9 @@ export default function PatientProfilePage() {
                 const { error: updateEcError } = await supabase
                     .schema('patient_record')
                     .from('emergency_contact_tbl')
-                    .upsert({ 
-                        ...ec, 
-                        patient_id: profile.patient_id 
+                    .upsert({
+                        ...ec,
+                        patient_id: profile.patient_id
                     })
                     .eq('patient_id', profile.patient_id);
 
@@ -190,7 +185,7 @@ export default function PatientProfilePage() {
     };
 
     const getStatusColor = (status: string) => {
-        switch(status) {
+        switch (status) {
             case 'Active': return 'bg-green-100 text-green-700 border-green-200';
             case 'Pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
             case 'Suspended': return 'bg-red-100 text-red-700 border-red-200';
@@ -223,7 +218,7 @@ export default function PatientProfilePage() {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 p-6 max-w-6xl mx-auto">
-            
+
             {/* Navigation / Header */}
             <div className="flex items-center justify-between">
                 <Button variant="ghost" className="gap-2 pl-0 hover:bg-transparent hover:text-primary">
@@ -248,7 +243,7 @@ export default function PatientProfilePage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
+
                 {/* Left Column: ID Card Style */}
                 <div className="lg:col-span-4 space-y-6">
                     <Card className="overflow-hidden border-none shadow-lg">
@@ -265,7 +260,7 @@ export default function PatientProfilePage() {
                                     </Button>
                                 )}
                             </div>
-                            
+
                             <div className="mt-4">
                                 <h2 className="text-2xl font-bold text-gray-900">
                                     {profile.f_name} {profile.m_name} {profile.l_name} {profile.suffix}
@@ -330,33 +325,33 @@ export default function PatientProfilePage() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label>First Name</Label>
-                                            <Input disabled={!isEditing} value={profile.f_name} onChange={(e) => setProfile({...profile, f_name: e.target.value})} />
+                                            <Input disabled={!isEditing} value={profile.f_name} onChange={(e) => setProfile({ ...profile, f_name: e.target.value })} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Last Name</Label>
-                                            <Input disabled={!isEditing} value={profile.l_name} onChange={(e) => setProfile({...profile, l_name: e.target.value})} />
+                                            <Input disabled={!isEditing} value={profile.l_name} onChange={(e) => setProfile({ ...profile, l_name: e.target.value })} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Middle Name</Label>
-                                            <Input disabled={!isEditing} value={profile.m_name || ''} onChange={(e) => setProfile({...profile, m_name: e.target.value})} />
+                                            <Input disabled={!isEditing} value={profile.m_name || ''} onChange={(e) => setProfile({ ...profile, m_name: e.target.value })} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Suffix</Label>
-                                            <Input disabled={!isEditing} placeholder="e.g. Jr, III" value={profile.suffix || ''} onChange={(e) => setProfile({...profile, suffix: e.target.value})} />
+                                            <Input disabled={!isEditing} placeholder="e.g. Jr, III" value={profile.suffix || ''} onChange={(e) => setProfile({ ...profile, suffix: e.target.value })} />
                                         </div>
                                     </div>
-                                    
+
                                     <Separator />
-                                    
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label>Birthdate</Label>
-                                            <Input type="date" disabled={!isEditing} value={profile.birthdate} onChange={(e) => setProfile({...profile, birthdate: e.target.value})} />
+                                            <Input type="date" disabled={!isEditing} value={profile.birthdate} onChange={(e) => setProfile({ ...profile, birthdate: e.target.value })} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Gender</Label>
                                             {isEditing ? (
-                                                <Select value={profile.gender} onValueChange={(val: any) => setProfile({...profile, gender: val})}>
+                                                <Select value={profile.gender} onValueChange={(val: any) => setProfile({ ...profile, gender: val })}>
                                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="Male">Male</SelectItem>
@@ -372,7 +367,7 @@ export default function PatientProfilePage() {
                                         <div className="space-y-2">
                                             <Label>Blood Type</Label>
                                             {isEditing ? (
-                                                <Select value={profile.blood_type || 'Unspecified'} onValueChange={(val: any) => setProfile({...profile, blood_type: val})}>
+                                                <Select value={profile.blood_type || 'Unspecified'} onValueChange={(val: any) => setProfile({ ...profile, blood_type: val })}>
                                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                                     <SelectContent>
                                                         {['A+', 'A-', 'AB+', 'AB-', 'B+', 'B-', 'O+', 'O-', 'Unspecified'].map(t => (
@@ -403,26 +398,26 @@ export default function PatientProfilePage() {
                                 <CardContent className="space-y-4">
                                     <div className="space-y-2">
                                         <Label className="flex items-center gap-2"><MapPin className="w-4 h-4 text-muted-foreground" /> Home Address</Label>
-                                        <Textarea 
+                                        <Textarea
                                             className="resize-none"
-                                            disabled={!isEditing} 
-                                            value={profile.address} 
-                                            onChange={(e) => setProfile({...profile, address: e.target.value})} 
+                                            disabled={!isEditing}
+                                            value={profile.address}
+                                            onChange={(e) => setProfile({ ...profile, address: e.target.value })}
                                         />
                                     </div>
-                                    
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label className="flex items-center gap-2"><Mail className="w-4 h-4 text-muted-foreground" /> Email Address</Label>
-                                            <Input disabled={!isEditing} type="email" value={profile.email || ''} onChange={(e) => setProfile({...profile, email: e.target.value})} />
+                                            <Input disabled={!isEditing} type="email" value={profile.email || ''} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground" /> Primary Mobile</Label>
-                                            <Input disabled={!isEditing} value={profile.pri_contact_no} onChange={(e) => setProfile({...profile, pri_contact_no: e.target.value})} />
+                                            <Input disabled={!isEditing} value={profile.pri_contact_no} onChange={(e) => setProfile({ ...profile, pri_contact_no: e.target.value })} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground" /> Secondary Mobile</Label>
-                                            <Input disabled={!isEditing} value={profile.sec_contact_no || ''} onChange={(e) => setProfile({...profile, sec_contact_no: e.target.value})} />
+                                            <Input disabled={!isEditing} value={profile.sec_contact_no || ''} onChange={(e) => setProfile({ ...profile, sec_contact_no: e.target.value })} />
                                         </div>
                                     </div>
                                 </CardContent>
@@ -446,16 +441,16 @@ export default function PatientProfilePage() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div className="space-y-2">
                                                     <Label>Contact First Name</Label>
-                                                    <Input disabled={!isEditing} value={ec.ec_f_name} onChange={(e) => setEc({...ec, ec_f_name: e.target.value})} />
+                                                    <Input disabled={!isEditing} value={ec.ec_f_name} onChange={(e) => setEc({ ...ec, ec_f_name: e.target.value })} />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label>Contact Last Name</Label>
-                                                    <Input disabled={!isEditing} value={ec.ec_l_name} onChange={(e) => setEc({...ec, ec_l_name: e.target.value})} />
+                                                    <Input disabled={!isEditing} value={ec.ec_l_name} onChange={(e) => setEc({ ...ec, ec_l_name: e.target.value })} />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label>Relationship</Label>
                                                     {isEditing ? (
-                                                        <Select value={ec.ec_relationship} onValueChange={(val: any) => setEc({...ec, ec_relationship: val})}>
+                                                        <Select value={ec.ec_relationship} onValueChange={(val: any) => setEc({ ...ec, ec_relationship: val })}>
                                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                                             <SelectContent>
                                                                 {['Parent', 'Child', 'Relative', 'Spouse', 'Friend', 'Sibling', 'Guardian', 'Others', 'Unspecified'].map(r => (
@@ -469,19 +464,19 @@ export default function PatientProfilePage() {
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label>Emergency Mobile No.</Label>
-                                                    <Input disabled={!isEditing} value={ec.ec_contact_no} onChange={(e) => setEc({...ec, ec_contact_no: e.target.value})} />
+                                                    <Input disabled={!isEditing} value={ec.ec_contact_no} onChange={(e) => setEc({ ...ec, ec_contact_no: e.target.value })} />
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Emergency Email (Optional)</Label>
-                                                <Input disabled={!isEditing} value={ec.ec_email || ''} onChange={(e) => setEc({...ec, ec_email: e.target.value})} />
+                                                <Input disabled={!isEditing} value={ec.ec_email || ''} onChange={(e) => setEc({ ...ec, ec_email: e.target.value })} />
                                             </div>
                                         </>
                                     ) : (
                                         <div className="text-center py-8">
                                             <p className="text-muted-foreground mb-4">No emergency contact found.</p>
                                             {isEditing && (
-                                                <Button 
+                                                <Button
                                                     onClick={() => setEc({
                                                         ec_f_name: '',
                                                         ec_l_name: '',

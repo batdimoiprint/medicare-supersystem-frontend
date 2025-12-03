@@ -49,11 +49,13 @@ export function useApproveCancellation() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: approveCancellation,
+    mutationFn: ({ appointmentId, notes }: { appointmentId: number; notes?: string }) => 
+      approveCancellation(appointmentId, notes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'cancel-requests'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'appointments'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['cashier', 'refunds'] }) // Invalidate refunds for cashier
     },
   })
 }
