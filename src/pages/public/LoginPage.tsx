@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import supabase from '@/utils/supabase';
 import bcrypt from 'bcryptjs';
+import { useAuth } from '@/context/userContext';
+import { UserRole, type UserRoleType } from '@/types/auth';
+import { getRoleRoute } from '@/lib/auth';
 
 type LoginFormValues = {
   email: string;
@@ -20,6 +23,7 @@ export default function LoginPage() {
 
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const emailRules = {
     required: 'Email is required',
@@ -36,6 +40,29 @@ export default function LoginPage() {
 
   function normalizeHash(hash: string) {
     return hash.replace(/^\$2y\$/, '$2a$');
+  }
+
+  /**
+   * Check if a string looks like a bcrypt hash
+   */
+  function isBcryptHash(str: string): boolean {
+    return /^\$2[aby]?\$\d{1,2}\$.{53}$/.test(str);
+  }
+
+  /**
+   * Compare password - handles both bcrypt hashes and plain text
+   * Returns true if password matches
+   */
+  async function comparePassword(inputPassword: string, storedPassword: string): Promise<boolean> {
+    if (isBcryptHash(storedPassword)) {
+      // Password is hashed - use bcrypt compare
+      const normalizedHash = normalizeHash(storedPassword);
+      return await bcrypt.compare(inputPassword, normalizedHash);
+    } else {
+      // Password is plain text - direct comparison
+      // TODO: Migrate all passwords to bcrypt hashes
+      return inputPassword === storedPassword;
+    }
   }
 
   async function onSubmit(formData: LoginFormValues) {
@@ -63,20 +90,22 @@ export default function LoginPage() {
           return;
         }
 
-        const normalizedHash = normalizeHash(patientData.password);
-        const hashedMatch = await bcrypt.compare(formData.password, normalizedHash);
+        const passwordMatch = await comparePassword(formData.password, patientData.password);
 
-        if (!hashedMatch) {
+        if (!passwordMatch) {
           setError('Invalid email or password');
           return;
         }
 
-        // Use sessionStorage instead of localStorage
-        sessionStorage.setItem('user_role', '6');
-        sessionStorage.setItem('user_name', `${patientData.f_name} ${patientData.l_name}`);
-        sessionStorage.setItem('user_id', patientData.patient_id.toString());
+        // Login via auth context
+        login({
+          id: patientData.patient_id,
+          name: `${patientData.f_name} ${patientData.l_name}`,
+          email: patientData.email,
+          role: UserRole.Patient,
+        });
 
-        navigate('/patient');
+        navigate(getRoleRoute(UserRole.Patient));
         return;
       }
 
@@ -103,37 +132,32 @@ export default function LoginPage() {
         return;
       }
 
-      const normalizedPersonnelHash = normalizeHash(personnelData.password);
-      const hashedMatchPersonnel = await bcrypt.compare(
+      const passwordMatchPersonnel = await comparePassword(
         formData.password,
-        normalizedPersonnelHash
+        personnelData.password
       );
 
-      if (!hashedMatchPersonnel) {
+      if (!passwordMatchPersonnel) {
         setError('Invalid email or password');
         return;
       }
 
-      // Use sessionStorage
-      sessionStorage.setItem('user_role', personnelData.role_id.toString());
-      sessionStorage.setItem('user_name', `${personnelData.f_name} ${personnelData.l_name}`);
-      sessionStorage.setItem('user_id', personnelData.personnel_id.toString());
-
-      // 3️⃣ REDIRECT BY ROLE
-      const roleRoutes: { [key: number]: string } = {
-        1: '/dentist',
-        2: '/receptionist',
-        3: '/cashier',
-        4: '/inventory',
-        5: '/admin',
-      };
-
-      const route = roleRoutes[personnelData.role_id];
-      if (route) {
-        navigate(route);
-      } else {
+      // Validate role ID
+      const roleId = personnelData.role_id as UserRoleType;
+      if (![1, 2, 3, 4, 5].includes(roleId)) {
         setError('Unauthorized role. Please contact administrator.');
+        return;
       }
+
+      // Login via auth context
+      login({
+        id: personnelData.personnel_id,
+        name: `${personnelData.f_name} ${personnelData.l_name}`,
+        email: personnelData.email,
+        role: roleId,
+      });
+
+      navigate(getRoleRoute(roleId));
 
     } catch (error) {
       console.error('Login error:', error);

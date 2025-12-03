@@ -1,6 +1,6 @@
 import BlurText from '@/components/ui/BlurText'
 import { Button } from '@/components/ui/button'
-
+import { Link } from 'react-router-dom'
 import imgBubble1 from '@/components/assets/img_patient_1.png'
 import imgBubble2 from '@/components/assets/img_patient_2.png'
 import imgBubble3 from '@/components/assets/img_patient_3.png'
@@ -20,8 +20,8 @@ export default function LandingHero() {
                 <p className="text-foreground md:text-lg">
                     Personalized dental care that blends modern technology with compassionate service so you smile with confidence every day.
                 </p>
-                <Button size="lg" className="font-bold text-lg min-w-72">
-                    Book Now
+                <Button size="lg" className="font-bold text-lg min-w-72" asChild>
+                    <Link to="/register">Register Now!</Link>
                 </Button>
             </div>
 
