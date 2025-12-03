@@ -18,8 +18,9 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<User | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [isInitialized, setIsInitialized] = useState(false)
 
-    // Validate session on mount
+    // Validate session on mount (only once)
     const validateSession = useCallback(async (): Promise<boolean> => {
         const session = getSession()
 
@@ -47,15 +48,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false
     }, [])
 
-    // Run validation on mount
+    // Run validation only on initial mount
     useEffect(() => {
-        validateSession()
-    }, [validateSession])
+        if (!isInitialized) {
+            setIsInitialized(true)
+            validateSession()
+        }
+    }, [isInitialized, validateSession])
 
     // Login function - stores user in context and session
     const login = useCallback((userData: User) => {
         saveSession(userData)
         setUser(userData)
+        // Ensure loading is false so ProtectedRoute doesn't redirect
+        setIsLoading(false)
     }, [])
 
     // Logout function - clears session and user
