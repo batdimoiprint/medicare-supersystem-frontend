@@ -1,31 +1,18 @@
-import React, { useState, useReducer, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useReducer, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar as CalendarIcon,
   CheckCircle,
   User,
   Coins,
-  ClipboardCheck,
   Zap,
   Check,
   X,
-  Loader2,
   List,
-  Clock,
-  AlertCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatCurrency } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -37,12 +24,6 @@ const frontdeskClient = createClient(supabaseUrl, supabaseKey, { db: { schema: '
 const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
 
 // --- Type Definitions ---
-interface Service {
-  service_id: number;
-  service_name: string;
-  service_fee: number;
-}
-
 interface Dentist {
   personnel_id: string;
   f_name?: string;
@@ -65,9 +46,10 @@ interface Appointment {
   time: string;
   fee: number;
   patient: string;
-  status: 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'CANCELLED';
+  status: 'Pending' | 'Scheduled' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled';
   statusHistory: StatusHistoryItem[];
   approvedBy?: string;
+  appointment_status_id?: number; // Store the status ID from database
 }
 
 type AppointmentAction =
@@ -75,18 +57,8 @@ type AppointmentAction =
   | { type: 'CONFIRM_PAYMENT'; payload: { id: number } }
   | { type: 'APPROVE_APPOINTMENT'; payload: { id: number } }
   | { type: 'CANCEL_APPOINTMENT'; payload: { id: number } }
+  | { type: 'ACCEPT_APPOINTMENT'; payload: { id: number } }
   | { type: 'SET_APPOINTMENTS'; payload: Appointment[] };
-
-// Available time slots for appointments
-const AVAILABLE_TIME_SLOTS = [
-  '9:00 AM',
-  '10:00 AM',
-  '11:00 AM',
-  '1:00 PM',
-  '2:00 PM',
-  '3:00 PM',
-  '4:00 PM',
-];
 
 const INITIAL_APPOINTMENTS: Appointment[] = [];
 
@@ -108,7 +80,7 @@ const appointmentReducer = (state: Appointment[], action: AppointmentAction): Ap
         {
           id: Date.now(),
           ...action.payload,
-          status: 'PENDING_PAYMENT',
+          status: 'Pending',
           statusHistory: [
             { step: 1, label: 'Service & Schedule Selected (Patient)', timestamp: new Date(), completed: true },
           ],
@@ -120,7 +92,7 @@ const appointmentReducer = (state: Appointment[], action: AppointmentAction): Ap
         app.id === action.payload.id
           ? {
               ...app,
-              status: 'PENDING_APPROVAL',
+              status: 'Scheduled',
               statusHistory: [
                 ...app.statusHistory,
                 { step: 2, label: 'Dentist Availability Confirmed (System)', timestamp: new Date(), completed: true },
@@ -136,7 +108,7 @@ const appointmentReducer = (state: Appointment[], action: AppointmentAction): Ap
         app.id === action.payload.id
           ? {
               ...app,
-              status: 'CONFIRMED',
+              status: 'Confirmed',
               approvedBy: 'Front Desk',
               statusHistory: [
                 ...app.statusHistory,
@@ -150,7 +122,7 @@ const appointmentReducer = (state: Appointment[], action: AppointmentAction): Ap
     case 'CANCEL_APPOINTMENT':
       return state.map((app: Appointment) =>
         app.id === action.payload.id
-          ? { ...app, status: 'CANCELLED', statusHistory: [...app.statusHistory, { step: 5, label: 'Cancelled', timestamp: new Date(), completed: true }] }
+          ? { ...app, status: 'Cancelled', statusHistory: [...app.statusHistory, { step: 5, label: 'Cancelled', timestamp: new Date(), completed: true }] }
           : app
       );
 
@@ -158,22 +130,6 @@ const appointmentReducer = (state: Appointment[], action: AppointmentAction): Ap
       return state;
   }
 };
-
-// --- Helper Component for Card with Title ---
-interface CardWithTitleProps {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}
-
-const CardWithTitle = ({ title, children, className = '' }: CardWithTitleProps) => (
-  <Card className={className}>
-    <CardHeader>
-      <CardTitle>{title}</CardTitle>
-    </CardHeader>
-    <CardContent>{children}</CardContent>
-  </Card>
-);
 
 // --- Component: Appointment Stepper (Step 6 Visualization) ---
 
@@ -187,17 +143,17 @@ const AppointmentStepper = ({ appointment }: AppointmentStepperProps) => {
     { id: '2', label: 'Dentist Availability Confirmed (System)', icon: CheckCircle },
     { id: '3', label: 'PayMongo Payment Initiated (Patient)', icon: Coins },
     { id: '4', label: 'Payment Confirmed / Record Created (Webhook)', icon: Zap },
-    { id: '5', label: 'Front Desk Approval (Group 1)', icon: ClipboardCheck },
+    { id: '5', label: 'Front Desk Approval (Group 1)', icon: CheckCircle },
     { id: '6', label: 'Status Synced (Core & Group 3)', icon: List },
   ];
 
   let currentStepIndex = appointment.statusHistory.length > 0 ? steps.findIndex(s => s.label.includes(appointment.statusHistory[appointment.statusHistory.length - 1].label)) : -1;
 
-  if (appointment.status === 'CONFIRMED') {
+  if (appointment.status === 'Confirmed' || appointment.status === 'Completed') {
     currentStepIndex = 5; // All steps completed
-  } else if (appointment.status === 'PENDING_APPROVAL') {
+  } else if (appointment.status === 'Scheduled') {
     currentStepIndex = 3;
-  } else if (appointment.status === 'PENDING_PAYMENT') {
+  } else if (appointment.status === 'Pending') {
     currentStepIndex = 0;
   }
 
@@ -205,7 +161,7 @@ const AppointmentStepper = ({ appointment }: AppointmentStepperProps) => {
     <div className="space-y-4 pt-4">
       {steps.map((step, index) => {
         const isCompleted = index <= currentStepIndex;
-        const isActive = index === currentStepIndex + 1 && appointment.status !== 'CONFIRMED';
+        const isActive = index === currentStepIndex + 1 && appointment.status !== 'Confirmed' && appointment.status !== 'Completed';
         
         // Define status icons based on the actual status flow
         let icon: LucideIcon = step.icon;
@@ -223,15 +179,15 @@ const AppointmentStepper = ({ appointment }: AppointmentStepperProps) => {
           iconColor = 'text-primary';
           borderColor = 'border-primary';
           ringColor = 'ring-primary/20';
-        } else if (appointment.status === 'CANCELLED') {
+        } else if (appointment.status === 'Cancelled' || appointment.status === 'No Show') {
           icon = X;
           iconColor = 'text-destructive';
           borderColor = 'border-destructive';
           ringColor = 'ring-destructive/20';
         }
 
-        if (index === 3 && appointment.status === 'PENDING_APPROVAL') {
-             icon = Zap; // Special status for webhook
+        if (index === 3 && appointment.status === 'Scheduled') {
+             icon = Zap; // Special status for scheduled
              iconColor = 'text-yellow-600 dark:text-yellow-400';
         }
 
@@ -269,348 +225,85 @@ const AppointmentStepper = ({ appointment }: AppointmentStepperProps) => {
 interface PatientDashboardProps {
   appointments: Appointment[];
   dispatch: React.Dispatch<AppointmentAction>;
-  services: Service[];
-  dentists: Dentist[];
   appointmentStatuses: { appointment_status_id: number; appointment_status_name: string }[];
-  currentPatientId: number | null;
 }
 
-const PatientDashboard = ({ appointments, dispatch, services, dentists, appointmentStatuses, currentPatientId }: PatientDashboardProps) => {
-  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
-  const [selectedDentistId, setSelectedDentistId] = useState<string>('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
-  const [isBooking, setIsBooking] = useState(false);
-  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const pendingAppointmentRef = useRef<{ patient: string; date: string; time: string; dentist: string; service: string } | null>(null);
+const PatientDashboard = ({ appointments, dispatch, appointmentStatuses }: PatientDashboardProps) => {
+  const navigate = useNavigate();
+  // All appointments are already filtered by dentist in loadAppointments
+  const dentistAppointments = appointments;
 
-  // Set defaults when data loads
-  useEffect(() => {
-    if (services.length > 0 && !selectedServiceId) {
-      setSelectedServiceId(String(services[0].service_id));
-    }
-  }, [services, selectedServiceId]);
-
-  useEffect(() => {
-    if (dentists.length > 0 && !selectedDentistId) {
-      setSelectedDentistId(dentists[0].personnel_id);
-    }
-  }, [dentists, selectedDentistId]);
-
-  const service = services.find(s => String(s.service_id) === selectedServiceId);
-  const dentist = dentists.find(d => d.personnel_id === selectedDentistId);
-  const fee = service?.service_fee || 0;
-  const dentistName = dentist ? getDentistName(dentist) : '';
-
-  // Check dentist availability for selected date and dentist (Step 2)
-  const getAvailableTimeSlots = useCallback((date: string, dentistId: string): string[] => {
-    // Get all booked appointments for this dentist and date
-    const selectedDentist = dentists.find(d => d.personnel_id === dentistId);
-    const dentistFullName = selectedDentist ? getDentistName(selectedDentist) : '';
-    
-    const bookedSlots = appointments
-      .filter((app: Appointment) => 
-        app.dentist === dentistFullName &&
-        app.date === date &&
-        app.status !== 'CANCELLED'
-      )
-      .map((app: Appointment) => app.time);
-
-    // Return available slots (not booked)
-    return AVAILABLE_TIME_SLOTS.filter(slot => !bookedSlots.includes(slot));
-  }, [appointments, dentists]);
-
-  // Get available time slots for current selection
-  const availableTimeSlots = getAvailableTimeSlots(selectedDate, selectedDentistId);
-
-  // Reset selected time slot when date or dentist changes
-  useEffect(() => {
-    if (!availableTimeSlots.includes(selectedTimeSlot)) {
-      setSelectedTimeSlot(availableTimeSlots[0] || '');
-    }
-  }, [selectedDate, selectedDentistId, availableTimeSlots, selectedTimeSlot]);
-
-  // Check if a specific time slot is available
-  const isTimeSlotAvailable = useCallback((date: string, timeSlot: string, dentistId: string): boolean => {
-    return getAvailableTimeSlots(date, dentistId).includes(timeSlot);
-  }, [getAvailableTimeSlots]);
-
-  const handleBooking = async () => {
-    setError('');
-    setMessage('');
-    setIsBooking(true);
-
-    // Step 1: Validate selections
-    if (!service || !dentist) {
-      setError('Please select a service and dentist.');
-      setIsBooking(false);
-      return;
-    }
-
-    if (!selectedTimeSlot) {
-      setError('Please select a time slot.');
-      setIsBooking(false);
-      return;
-    }
-
-    if (!currentPatientId) {
-      setError('Patient not found. Please ensure you are logged in.');
-      setIsBooking(false);
-      return;
-    }
-
-    // Step 2: System checks dentist availability
-    setIsCheckingAvailability(true);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-    
-    if (!isTimeSlotAvailable(selectedDate, selectedTimeSlot, selectedDentistId)) {
-      setError('Selected time slot is no longer available. Please choose another slot.');
-      setIsBooking(false);
-      setIsCheckingAvailability(false);
-      return;
-    }
-    setIsCheckingAvailability(false);
-
+  const handleAcceptAppointment = async (appointmentId: number) => {
     try {
-      // Find PENDING_PAYMENT status ID
-      const pendingPaymentStatus = appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => 
-        s.appointment_status_name.toLowerCase().includes('pending') && 
-        s.appointment_status_name.toLowerCase().includes('payment')
-      ) || appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => s.appointment_status_name === 'Pending Payment');
-
-      if (!pendingPaymentStatus) {
-        throw new Error('Pending Payment status not found in database');
-      }
-
-      // Step 1 & 2: Create appointment in database with PENDING_PAYMENT status
-      setMessage('✓ Availability confirmed (Step 2). Creating appointment...');
+      // Debug: Log available statuses
+      console.log('Available appointment statuses:', appointmentStatuses);
       
-      const { data: appointmentData, error: createError } = await frontdeskClient
-        .from('appointment_tbl')
-        .insert({
-          patient_id: currentPatientId,
-          service_id: service.service_id,
-          personnel_id: selectedDentistId,
-          appointment_date: selectedDate,
-          appointment_time: selectedTimeSlot,
-          appointment_status_id: pendingPaymentStatus.appointment_status_id,
-        })
-        .select()
-        .single();
-
-      if (createError) {
-        throw createError;
+      // Find CONFIRMED status ID (status_id = 3)
+      // Try multiple methods: exact match, case-insensitive, trimmed, or by ID
+      let confirmedStatus = appointmentStatuses.find(s => 
+        s.appointment_status_name === 'Confirmed'
+      );
+      
+      // If not found, try case-insensitive match
+      if (!confirmedStatus) {
+        confirmedStatus = appointmentStatuses.find(s => 
+          s.appointment_status_name?.trim().toLowerCase() === 'confirmed'
+        );
+      }
+      
+      // If still not found, try by status_id = 3
+      if (!confirmedStatus) {
+        confirmedStatus = appointmentStatuses.find(s => 
+          s.appointment_status_id === 3
+        );
       }
 
-      if (!appointmentData) {
-        throw new Error('Failed to create appointment');
+      if (!confirmedStatus) {
+        console.error('Available statuses:', appointmentStatuses);
+        alert(`Confirmed status not found in database. Available statuses: ${appointmentStatuses.map(s => s.appointment_status_name).join(', ')}`);
+        return;
       }
-
-      // Update local state
-      const newAppointment: Appointment = {
-        id: appointmentData.appointment_id,
-        service: service.service_name,
-        dentist: dentistName,
-        date: selectedDate,
-        time: selectedTimeSlot,
-        fee: fee,
-        patient: 'Current Patient',
-        status: 'PENDING_PAYMENT',
-        statusHistory: [
-          { step: 1, label: 'Service & Schedule Selected (Patient)', timestamp: new Date(), completed: true },
-        ],
-      };
-
-      dispatch({ type: 'CREATE_APPOINTMENT', payload: newAppointment });
-      setMessage('✓ Availability confirmed (Step 2). Appointment slot reserved. Redirecting to PayMongo for payment (Step 3)...');
-
-      // Step 3: Simulate PayMongo Payment
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate payment processing
-      setMessage('Processing payment with PayMongo...');
-
-      // Step 4: Simulate PayMongo Webhook - automatically confirms payment and updates status
-      await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate webhook processing time
-
-      // Find PENDING_APPROVAL status ID
-      const pendingApprovalStatus = appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => 
-        s.appointment_status_name.toLowerCase().includes('pending') && 
-        s.appointment_status_name.toLowerCase().includes('approval')
-      ) || appointmentStatuses.find((s: { appointment_status_id: number; appointment_status_name: string }) => s.appointment_status_name === 'Pending Approval');
-
-      if (!pendingApprovalStatus) {
-        throw new Error('Pending Approval status not found in database');
-      }
+      
+      console.log('Found confirmed status:', confirmedStatus);
 
       // Update appointment status in database
-      const { error: updateError } = await frontdeskClient
+      const { error } = await frontdeskClient
         .from('appointment_tbl')
-        .update({ appointment_status_id: pendingApprovalStatus.appointment_status_id })
-        .eq('appointment_id', appointmentData.appointment_id);
+        .update({ appointment_status_id: confirmedStatus.appointment_status_id })
+        .eq('appointment_id', appointmentId);
 
-      if (updateError) {
-        throw updateError;
+      if (error) {
+        throw error;
       }
 
       // Update local state
-      dispatch({ type: 'CONFIRM_PAYMENT', payload: { id: appointmentData.appointment_id } });
-      setMessage(`✓ Payment confirmed via PayMongo webhook (Step 4)! Appointment #${appointmentData.appointment_id} has been automatically created and sent to Front Desk for approval (Step 5).`);
-      pendingAppointmentRef.current = null;
+      dispatch({ type: 'ACCEPT_APPOINTMENT', payload: { id: appointmentId } });
+      
+      // Navigate to workflow with the appointment ID
+      navigate(`/dentist/patient/workflow?appointment=${appointmentId}`);
     } catch (err: any) {
-      console.error('Error creating appointment:', err);
-      setError(err.message || 'Failed to create appointment. Please try again.');
-    } finally {
-      setIsBooking(false);
+      console.error('Error accepting appointment:', err);
+      alert('Failed to accept appointment. Please try again.');
     }
   };
 
-  const patientAppointments = appointments.filter((a: Appointment) => a.patient === 'Current Patient');
-
   return (
     <div className="space-y-6">
-      <CardWithTitle title="Book New Appointment" className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Field orientation="vertical">
-          <FieldLabel>1. Select Service (Step 1)</FieldLabel>
-          <FieldContent>
-            <Select value={selectedServiceId} onValueChange={setSelectedServiceId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={services.length === 0 ? "Loading services..." : "Select a service"} />
-              </SelectTrigger>
-              <SelectContent>
-                {services.length === 0 ? (
-                  <SelectItem value="none" disabled>No services available</SelectItem>
-                ) : (
-                  services.map(s => (
-                    <SelectItem key={s.service_id} value={String(s.service_id)}>
-                      {s.service_name} (Fee: {formatCurrency(s.service_fee || 0)})
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </FieldContent>
-        </Field>
-        <Field orientation="vertical">
-          <FieldLabel>2. Select Dentist</FieldLabel>
-          <FieldContent>
-            <Select value={selectedDentistId} onValueChange={setSelectedDentistId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={dentists.length === 0 ? "Loading dentists..." : "Select a dentist"} />
-              </SelectTrigger>
-              <SelectContent>
-                {dentists.length === 0 ? (
-                  <SelectItem value="none" disabled>No dentists available</SelectItem>
-                ) : (
-                  dentists.map(d => (
-                    <SelectItem key={d.personnel_id} value={d.personnel_id}>
-                      {getDentistName(d)}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </FieldContent>
-        </Field>
-        <Field orientation="vertical">
-          <FieldLabel>3. Select Date</FieldLabel>
-          <FieldContent>
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedDate(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
-            />
-          </FieldContent>
-        </Field>
-        <Field orientation="vertical">
-          <FieldLabel>
-            4. Select Time Slot {isCheckingAvailability && <Loader2 className="w-3 h-3 inline ml-2 animate-spin" />}
-          </FieldLabel>
-          <FieldContent>
-            {availableTimeSlots.length === 0 ? (
-              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm border border-destructive/20 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                No available time slots for this dentist on {selectedDate}
-              </div>
-            ) : (
-              <Select 
-                value={selectedTimeSlot} 
-                onValueChange={setSelectedTimeSlot}
-                disabled={isCheckingAvailability}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a time slot" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTimeSlots.map(slot => (
-                    <SelectItem key={slot} value={slot}>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        {slot}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {availableTimeSlots.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {availableTimeSlots.length} slot{availableTimeSlots.length !== 1 ? 's' : ''} available
-              </p>
-            )}
-          </FieldContent>
-        </Field>
-        <div className="lg:col-span-4 pt-4 border-t">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Total Reservation Fee</p>
-              <p className="text-2xl font-bold">
-                <span className="text-primary">{formatCurrency(fee)}</span>
-              </p>
-            </div>
-            <Button
-              onClick={handleBooking}
-              disabled={isBooking || !selectedTimeSlot || availableTimeSlots.length === 0 || isCheckingAvailability}
-              size="lg"
-              className="w-full sm:w-auto min-w-[200px]"
-            >
-              {isBooking ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing Payment...
-                </>
-              ) : (
-                <>
-                  <Coins className="w-4 h-4 mr-2" />
-                  Proceed to PayMongo
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-        {(message || error) && (
-          <div className={`lg:col-span-4 p-4 rounded-lg text-sm font-medium border ${error ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
-            {error || message}
-          </div>
-        )}
-      </CardWithTitle>
-
       <div className="space-y-4">
         <h2 className="text-2xl font-bold">Your Appointments</h2>
-        {patientAppointments.length === 0 ? (
+        {dentistAppointments.length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
                 <CalendarIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg font-medium">No appointments booked yet</p>
-                <p className="text-sm mt-2">Book your first appointment using the form above</p>
+                <p className="text-sm mt-2">No appointments assigned to you</p>
               </div>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
-            {patientAppointments.sort((a: Appointment, b: Appointment) => b.id - a.id).map((app: Appointment) => (
+            {dentistAppointments.sort((a: Appointment, b: Appointment) => b.id - a.id).map((app: Appointment) => (
               <Card key={app.id}>
                 <CardHeader>
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -629,13 +322,27 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists, appointm
                     </div>
                     <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
                       <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
-                        app.status === 'CONFIRMED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        app.status === 'PENDING_APPROVAL' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                        app.status === 'PENDING_PAYMENT' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        app.status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        app.status === 'Scheduled' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        app.status === 'Pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                        app.status === 'Completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                        app.status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        app.status === 'No Show' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                        app.status === 'Rescheduled' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                        'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
                       }`}>
-                        {app.status.replace(/_/g, ' ')}
+                        {app.status}
                       </span>
+                      {(app.status === 'Pending' || app.status === 'Scheduled') && (
+                        <Button
+                          onClick={() => handleAcceptAppointment(app.id)}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <Check className="w-4 h-4 mr-2" />
+                          Accept
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -654,132 +361,6 @@ const PatientDashboard = ({ appointments, dispatch, services, dentists, appointm
   );
 };
 
-// --- Component: Front Desk View (Group 1) ---
-
-interface FrontDeskViewProps {
-  appointments: Appointment[];
-  dispatch: React.Dispatch<AppointmentAction>;
-  appointmentStatuses: { appointment_status_id: number; appointment_status_name: string }[];
-}
-
-const FrontDeskView = ({ appointments, dispatch, appointmentStatuses }: FrontDeskViewProps) => {
-  const pendingAppointments = appointments.filter((a: Appointment) => a.status === 'PENDING_APPROVAL');
-  
-  const handleApprove = async (id: number) => {
-    try {
-      // Find CONFIRMED status ID
-      const confirmedStatus = appointmentStatuses.find(s => 
-        s.appointment_status_name.toLowerCase() === 'confirmed'
-      );
-
-      if (!confirmedStatus) {
-        alert('Confirmed status not found in database');
-        return;
-      }
-
-      // Update appointment status in database
-      const { error } = await frontdeskClient
-        .from('appointment_tbl')
-        .update({ appointment_status_id: confirmedStatus.appointment_status_id })
-        .eq('appointment_id', id);
-
-      if (error) {
-        throw error;
-      }
-
-      // Update local state
-      dispatch({ type: 'APPROVE_APPOINTMENT', payload: { id } });
-    } catch (err: any) {
-      console.error('Error approving appointment:', err);
-      alert('Failed to approve appointment. Please try again.');
-    }
-  };
-
-  const handleCancel = async (id: number) => {
-    try {
-      // Find CANCELLED status ID
-      const cancelledStatus = appointmentStatuses.find(s => 
-        s.appointment_status_name.toLowerCase() === 'cancelled'
-      );
-
-      if (!cancelledStatus) {
-        alert('Cancelled status not found in database');
-        return;
-      }
-
-      // Update appointment status in database
-      const { error } = await frontdeskClient
-        .from('appointment_tbl')
-        .update({ appointment_status_id: cancelledStatus.appointment_status_id })
-        .eq('appointment_id', id);
-
-      if (error) {
-        throw error;
-      }
-
-      // Update local state
-      dispatch({ type: 'CANCEL_APPOINTMENT', payload: { id } });
-    } catch (err: any) {
-      console.error('Error cancelling appointment:', err);
-      alert('Failed to cancel appointment. Please try again.');
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Appointments Pending Approval</h2>
-        <p className="text-muted-foreground text-sm">Review and approve appointment requests from patients</p>
-      </div>
-      <div className="space-y-4">
-        {pendingAppointments.length === 0 ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center text-muted-foreground">
-                <CheckCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No appointments awaiting approval</p>
-                <p className="text-sm mt-2">All pending appointments have been processed</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          pendingAppointments.map((app: Appointment) => (
-            <Card key={app.id}>
-              <CardHeader>
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="flex-1">
-                    <CardTitle className="text-xl mb-3">{app.service} with {app.dentist}</CardTitle>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-medium">Patient:</span> {app.patient}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-medium">Date:</span> {app.date} at {app.time}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-medium">Fee:</span> {formatCurrency(app.fee)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={() => handleApprove(app.id)} size="lg">
-                      <Check className="w-4 h-4 mr-2" />
-                      Approve
-                    </Button>
-                    <Button variant="destructive" onClick={() => handleCancel(app.id)} size="lg">
-                      <X className="w-4 h-4 mr-2" />
-                      Reject
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
 
 // --- Component: Patient Records View (Group 3) ---
 
@@ -832,12 +413,16 @@ const PatientRecordsView = ({ appointments }: PatientRecordsViewProps) => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">{app.date} @ {app.time}</td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-3 py-1 inline-flex text-xs font-semibold rounded-full ${
-                                                    app.status === 'CONFIRMED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                    app.status === 'PENDING_APPROVAL' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                                    app.status === 'PENDING_PAYMENT' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                    app.status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                    app.status === 'Scheduled' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                    app.status === 'Pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                                    app.status === 'Completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                    app.status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                    app.status === 'No Show' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                                                    app.status === 'Rescheduled' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
                                                     'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                                 }`}>
-                                                    {app.status.replace(/_/g, ' ')}
+                                                    {app.status}
                                                 </span>
                                             </td>
                                         </tr>
@@ -854,76 +439,10 @@ const PatientRecordsView = ({ appointments }: PatientRecordsViewProps) => {
 
 // --- Main App Component ---
 
-const App = () => {
+const AppointmentWorkflow = () => {
   const [appointments, dispatch] = useReducer(appointmentReducer, INITIAL_APPOINTMENTS);
   const [activeView, setActiveView] = useState('patient'); // 'patient', 'frontdesk', 'records'
-  const [services, setServices] = useState<Service[]>([]);
-  const [dentists, setDentists] = useState<Dentist[]>([]);
   const [appointmentStatuses, setAppointmentStatuses] = useState<{ appointment_status_id: number; appointment_status_name: string }[]>([]);
-  const [currentPatientId, setCurrentPatientId] = useState<number | null>(null);
-
-  // Load services from dentist.services_tbl
-  useEffect(() => {
-    const loadServices = async () => {
-      try {
-        const { data, error } = await dentistClient
-          .from('services_tbl')
-          .select('service_id, service_name, service_fee')
-          .not('service_id', 'is', null)
-          .order('service_name', { ascending: true });
-
-        if (error) {
-          console.error('Failed to load services:', error);
-          return;
-        }
-        setServices(data ?? []);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    loadServices();
-  }, []);
-
-  // Load dentists from personnel_tbl where role_id = 1 (Dentist)
-  useEffect(() => {
-    const loadDentists = async () => {
-      try {
-        console.log('Loading dentists from personnel_tbl...');
-        const { data, error } = await supabase
-          .from('personnel_tbl')
-          .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-          .eq('role_id', '1')
-          .order('l_name', { ascending: true });
-
-        if (error) {
-          console.error('Failed to load dentists - Error:', error);
-          console.error('Error details:', JSON.stringify(error, null, 2));
-          return;
-        }
-        
-        console.log('Loaded dentists - Count:', data?.length || 0);
-        console.log('Loaded dentists - Data:', data);
-        
-        if (!data || data.length === 0) {
-          console.warn('No dentists found with role_id = 1. Checking all personnel...');
-          // Try loading all personnel to see what's in the table
-          const { data: allData, error: allError } = await supabase
-            .from('personnel_tbl')
-            .select('personnel_id, f_name, m_name, l_name, role_id, account_status')
-            .limit(10);
-          
-          if (!allError && allData) {
-            console.log('Sample personnel data:', allData);
-          }
-        }
-        
-        setDentists(data ?? []);
-      } catch (err) {
-        console.error('Exception loading dentists:', err);
-      }
-    };
-    loadDentists();
-  }, []);
 
   // Load appointment statuses
   useEffect(() => {
@@ -938,6 +457,8 @@ const App = () => {
           console.error('Failed to load appointment statuses:', error);
           return;
         }
+        
+        console.log('Loaded appointment statuses from database:', data);
         setAppointmentStatuses(data ?? []);
       } catch (err) {
         console.error(err);
@@ -946,34 +467,51 @@ const App = () => {
     loadStatuses();
   }, []);
 
-  // Load current patient (for now, get first patient or use a default)
-  useEffect(() => {
-    const loadCurrentPatient = async () => {
+  // Get current dentist ID
+  const getPersonnelId = (): string | null => {
+    // Check localStorage first (as used by auth system)
+    const userId = localStorage.getItem('user_id');
+    if (userId) {
+      return userId;
+    }
+    // Fallback: check sessionStorage
+    const sessionUserId = sessionStorage.getItem('user_id');
+    if (sessionUserId) {
+      return sessionUserId;
+    }
+    // Fallback: try to get from user object
+    const userData = sessionStorage.getItem('user') || localStorage.getItem('user');
+    if (userData) {
       try {
-        const { data, error } = await patientRecordClient
-          .from('patient_tbl')
-          .select('patient_id')
-          .limit(1)
-          .single();
-
-        if (!error && data) {
-          setCurrentPatientId(data.patient_id);
-        } else {
-          // Use a default patient ID if available, or set to null
-          setCurrentPatientId(null);
-        }
-      } catch (err) {
-        console.error('Error loading current patient:', err);
+        const user = JSON.parse(userData);
+        return user.personnel_id || user.id || null;
+      } catch {
+        return null;
       }
-    };
-    loadCurrentPatient();
-  }, []);
+    }
+    return null;
+  };
 
   // Load appointments from database
   useEffect(() => {
     const loadAppointments = async () => {
       try {
-        const { data, error } = await frontdeskClient
+        const personnelId = getPersonnelId();
+        
+        if (!personnelId) {
+          console.warn('No personnel_id found. Please ensure you are logged in.');
+          dispatch({ type: 'SET_APPOINTMENTS', payload: [] });
+          return;
+        }
+
+        console.log('Loading appointments for dentist personnel_id:', personnelId);
+
+        // Filter appointments by the logged-in dentist's personnel_id
+        // Try both string and number formats since database might store it as either
+        let data, error;
+        
+        // Try string match first
+        const stringResult = await frontdeskClient
           .from('appointment_tbl')
           .select(`
             appointment_id,
@@ -985,7 +523,38 @@ const App = () => {
             personnel_id,
             created_at
           `)
+          .eq('personnel_id', personnelId)
           .order('created_at', { ascending: false });
+        
+        data = stringResult.data;
+        error = stringResult.error;
+        
+        // If no results and no error, try number format
+        if ((!data || data.length === 0) && !error) {
+          const numPersonnelId = Number(personnelId);
+          if (!isNaN(numPersonnelId)) {
+            console.log('Trying number format for personnel_id:', numPersonnelId);
+            const numResult = await frontdeskClient
+              .from('appointment_tbl')
+              .select(`
+                appointment_id,
+                patient_id,
+                service_id,
+                appointment_date,
+                appointment_time,
+                appointment_status_id,
+                personnel_id,
+                created_at
+              `)
+              .eq('personnel_id', numPersonnelId)
+              .order('created_at', { ascending: false });
+            
+            if (!numResult.error && numResult.data) {
+              data = numResult.data;
+              error = numResult.error;
+            }
+          }
+        }
 
         if (error) {
           console.error('Failed to load appointments:', error);
@@ -1026,17 +595,20 @@ const App = () => {
         const statusMap = new Map(appointmentStatuses.map(s => [s.appointment_status_id, s.appointment_status_name]));
 
         // Map status names to our internal status format
-        const statusNameToStatus: Record<string, 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'CANCELLED'> = {
-          'Pending Payment': 'PENDING_PAYMENT',
-          'Pending Approval': 'PENDING_APPROVAL',
-          'Confirmed': 'CONFIRMED',
-          'Cancelled': 'CANCELLED',
+        const statusNameToStatus: Record<string, 'Pending' | 'Scheduled' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled'> = {
+          'Pending': 'Pending',
+          'Scheduled': 'Scheduled',
+          'Confirmed': 'Confirmed',
+          'Completed': 'Completed',
+          'Cancelled': 'Cancelled',
+          'No Show': 'No Show',
+          'Rescheduled': 'Rescheduled',
         };
 
         // Convert database appointments to our format
         const mappedAppointments: Appointment[] = data.map((app: any) => {
-          const statusName = statusMap.get(app.appointment_status_id) || 'Pending Payment';
-          const status = (statusNameToStatus[statusName as keyof typeof statusNameToStatus] || 'PENDING_PAYMENT') as 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'CANCELLED';
+          const statusName = statusMap.get(app.appointment_status_id) || 'Pending';
+          const status = (statusNameToStatus[statusName as keyof typeof statusNameToStatus] || 'Pending') as 'Pending' | 'Scheduled' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled';
 
           return {
             id: app.appointment_id,
@@ -1049,16 +621,16 @@ const App = () => {
             status: status,
             statusHistory: [
               { step: 1, label: 'Service & Schedule Selected (Patient)', timestamp: new Date(app.created_at || Date.now()), completed: true },
-              ...(status !== 'PENDING_PAYMENT' ? [
+              ...(status !== 'Pending' ? [
                 { step: 2, label: 'Dentist Availability Confirmed (System)', timestamp: new Date(app.created_at || Date.now()), completed: true },
-                { step: 3, label: 'PayMongo Payment Initiated (Patient)', timestamp: new Date(app.created_at || Date.now()), completed: true },
-                { step: 4, label: 'Payment Confirmed / Record Created (Webhook)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+                { step: 3, label: 'Appointment Scheduled', timestamp: new Date(app.created_at || Date.now()), completed: true },
               ] : []),
-              ...(status === 'CONFIRMED' ? [
-                { step: 5, label: 'Front Desk Approved (Group 1)', timestamp: new Date(app.created_at || Date.now()), completed: true },
-                { step: 6, label: 'Patient Dashboard & Records Updated (Core/Group 3)', timestamp: new Date(app.created_at || Date.now()), completed: true },
+              ...(status === 'Confirmed' || status === 'Completed' ? [
+                { step: 4, label: 'Appointment Accepted by Dentist', timestamp: new Date(app.created_at || Date.now()), completed: true },
+                { step: 5, label: 'Appointment Confirmed', timestamp: new Date(app.created_at || Date.now()), completed: true },
               ] : []),
             ],
+            appointment_status_id: app.appointment_status_id,
           };
         });
 
@@ -1075,13 +647,11 @@ const App = () => {
 
   const renderView = () => {
     switch (activeView) {
-      case 'frontdesk':
-        return <FrontDeskView appointments={appointments} dispatch={dispatch} appointmentStatuses={appointmentStatuses} />;
       case 'records':
         return <PatientRecordsView appointments={appointments} />;
       case 'patient':
       default:
-        return <PatientDashboard appointments={appointments} dispatch={dispatch} services={services} dentists={dentists} appointmentStatuses={appointmentStatuses} currentPatientId={currentPatientId} />;
+        return <PatientDashboard appointments={appointments} dispatch={dispatch} appointmentStatuses={appointmentStatuses} />;
     }
   };
 
@@ -1121,7 +691,6 @@ const App = () => {
           <CardContent>
             <div className="flex flex-wrap gap-3">
               <NavItem view="patient" label="Patient Dashboard" icon={User} />
-              <NavItem view="frontdesk" label="Front Desk Approval" icon={ClipboardCheck} />
               <NavItem view="records" label="Patient Records" icon={List} />
             </div>
           </CardContent>
@@ -1137,4 +706,4 @@ const App = () => {
 };
 
 
-export default App;
+export default AppointmentWorkflow;

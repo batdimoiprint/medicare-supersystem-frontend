@@ -120,7 +120,7 @@ const PrescriptionsPage = () => {
         // Try loading all medicines first, then filter in JavaScript if needed
         const { data, error } = await inventoryClient
           .from('medicine_tbl')
-          .select('medicine_id, medicine_name, unit_cost')
+          .select('medicine_id, medicine_name, unit_cost, quantity')
           .order('medicine_name', { ascending: true });
 
         if (error) {
@@ -136,12 +136,16 @@ const PrescriptionsPage = () => {
         console.log('Raw medicines data:', data);
         console.log('Medicines count:', data?.length || 0);
         
-        // Filter out any medicines with null medicine_id or medicine_name
+        // Filter out any medicines with null medicine_id or medicine_name, and quantity <= 0
         const validMedicines = (data ?? []).filter(med => 
-          med.medicine_id != null && med.medicine_name != null && med.medicine_name.trim() !== ''
+          med.medicine_id != null && 
+          med.medicine_name != null && 
+          med.medicine_name.trim() !== '' &&
+          med.quantity != null &&
+          Number(med.quantity) > 0
         );
         
-        console.log('Valid medicines after filtering:', validMedicines);
+        console.log('Valid medicines after filtering (quantity > 0):', validMedicines);
         console.log('Valid medicines count:', validMedicines.length);
         
         if (validMedicines.length === 0) {

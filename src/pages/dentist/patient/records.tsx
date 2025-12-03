@@ -15,6 +15,10 @@ import {
   ClipboardList,
   TrendingUp,
   Briefcase,
+  Pill,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -37,6 +41,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
 const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
+const inventoryClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'inventory' } });
 
 // --- Type Definitions ---
 interface PatientRow {
@@ -59,6 +64,18 @@ interface Service {
   service_description?: string;
 }
 
+interface MedicinePrescribed {
+  name: string;
+  howOften: string;
+  howManyDays: string;
+}
+
+interface HomeCare {
+  whatToDo: string[];
+  whatToAvoid: string[];
+  warningSigns: string[];
+}
+
 interface EMRRecord {
   id: number;
   patient_id: number;
@@ -68,10 +85,13 @@ interface EMRRecord {
   diagnosis: string;
   treatment: string;
   treatment_id?: number; // FK to services_tbl
+  what_was_done?: string; // Procedures/description
+  medicines?: MedicinePrescribed[]; // Array of prescribed medicines
+  home_care?: HomeCare; // Home care instructions
   notes: string;
   dentist: string;
   personnel_id?: string | number; // FK to personnel_tbl (bigint)
-  status: 'Active' | 'Archived';
+  status: 'Active' | 'Archived' | 'Completed';
 }
 
 // --- Main Component ---
@@ -80,6 +100,7 @@ const PatientRecords = () => {
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [dentists, setDentists] = useState<Dentist[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [medicinesList, setMedicinesList] = useState<Array<{ medicine_id: number; medicine_name: string }>>([]);
   const [selectedPatient, setSelectedPatient] = useState<string>(searchParams.get('patient') || '');
   const [records, setRecords] = useState<EMRRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,6 +115,13 @@ const PatientRecords = () => {
     diagnosis: '',
     treatment: '',
     treatment_id: undefined,
+    what_was_done: '',
+    medicines: [],
+    home_care: {
+      whatToDo: [''],
+      whatToAvoid: [''],
+      warningSigns: [''],
+    },
     notes: '',
     dentist: '',
     personnel_id: '',
@@ -191,6 +219,27 @@ const PatientRecords = () => {
     loadServices();
   }, []);
 
+  // --- Load Medicines ---
+  useEffect(() => {
+    const loadMedicines = async () => {
+      try {
+        const { data, error } = await inventoryClient
+          .from('medicine_tbl')
+          .select('medicine_id, medicine_name')
+          .order('medicine_name', { ascending: true });
+
+        if (error) {
+          console.error('Failed to load medicines:', error);
+          return;
+        }
+        setMedicinesList(data ?? []);
+      } catch (err) {
+        console.error('Error loading medicines:', err);
+      }
+    };
+    loadMedicines();
+  }, []);
+
   // --- Load EMR Records ---
   const loadRecords = async () => {
     if (!selectedPatient) return;
@@ -219,12 +268,34 @@ const PatientRecords = () => {
             : Number(d.personnel_id) === record.dentist
         );
         
+        // Try to parse JSON from notes field
+        let parsedData: any = {};
+        let additionalNotes = '';
+        if (record.notes) {
+          try {
+            const parsed = JSON.parse(record.notes);
+            parsedData = {
+              what_was_done: parsed.what_was_done || null,
+              medicines: parsed.medicines || [],
+              home_care: parsed.home_care || null,
+            };
+            additionalNotes = parsed.additional_notes || '';
+          } catch {
+            // If not JSON, treat as plain text notes
+            additionalNotes = record.notes;
+          }
+        }
+        
         return {
           ...record,
           treatment_id: record.treatment, // service_id from database
           treatment: service?.service_name || `Service ID: ${record.treatment}`, // Convert to name for display
           personnel_id: record.dentist, // personnel_id from database (stored in dentist column)
           dentist: dentist ? getDentistName(dentist) : `Dentist ID: ${record.dentist}`, // Convert to name for display
+          what_was_done: parsedData.what_was_done,
+          medicines: parsedData.medicines,
+          home_care: parsedData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] },
+          notes: additionalNotes,
         };
       });
 
@@ -280,6 +351,13 @@ const PatientRecords = () => {
       diagnosis: '',
       treatment: '',
       treatment_id: undefined,
+      what_was_done: '',
+      medicines: [],
+      home_care: {
+        whatToDo: [''],
+        whatToAvoid: [''],
+        warningSigns: [''],
+      },
       notes: '',
       dentist: '',
       personnel_id: defaultDentist,
@@ -355,13 +433,21 @@ const PatientRecords = () => {
         // Note: 
         // - treatment column is bigint (service_id), not text
         // - dentist column is bigint (personnel_id), not text
+        // Combine all additional data into notes as JSON
+        const additionalData = {
+          what_was_done: formData.what_was_done || null,
+          medicines: formData.medicines || [],
+          home_care: formData.home_care || null,
+          additional_notes: formData.notes || null,
+        };
+
         const updateData: Record<string, any> = {
           date: formData.date || new Date().toISOString().split('T')[0],
           time: formData.time || null,
           chief_complaint: formData.chief_complaint || null,
           diagnosis: formData.diagnosis || null,
           treatment: treatmentId, // Send service_id (bigint)
-          notes: formData.notes || null,
+          notes: JSON.stringify(additionalData), // Store as JSON
           dentist: personnelId, // Send personnel_id (bigint), not name (text)
           status: formData.status || 'Active',
         };
@@ -393,7 +479,17 @@ const PatientRecords = () => {
         // - treatment column is bigint (service_id), not text
         // - dentist column is bigint (personnel_id), not text
         // - id column is NOT NULL but not auto-generated, so we need to provide it
+        // - Store what_was_done, medicines, and home_care as JSON in notes field
+        //   (or add new columns to database - see SQL suggestions below)
         const insertData: Record<string, any> = {};
+        
+        // Combine all additional data into notes as JSON
+        const additionalData = {
+          what_was_done: formData.what_was_done || null,
+          medicines: formData.medicines || [],
+          home_care: formData.home_care || null,
+          additional_notes: formData.notes || null,
+        };
         
         // Add only the fields we know exist
         insertData.id = nextId; // Generate id
@@ -403,7 +499,7 @@ const PatientRecords = () => {
         insertData.chief_complaint = formData.chief_complaint || null;
         insertData.diagnosis = formData.diagnosis || null;
         insertData.treatment = treatmentId; // Send service_id (bigint)
-        insertData.notes = formData.notes || null;
+        insertData.notes = JSON.stringify(additionalData); // Store as JSON
         insertData.status = formData.status || 'Active';
         insertData.dentist = personnelId; // Send personnel_id (bigint), not name (text)
 
@@ -423,6 +519,19 @@ const PatientRecords = () => {
           console.error('Insert data that caused error:', insertData);
           throw error;
         }
+
+        // After saving EMR record, optionally link charting data to this record
+        // Note: This requires adding emr_record_id column to patient_teeth table
+        // See add_emr_record_id_to_patient_teeth.sql file for SQL to add the column
+        // 
+        // If you want to link charting to this EMR record, uncomment the following:
+        // const savedRecordId = nextId;
+        // await patientRecordClient
+        //   .from('patient_teeth')
+        //   .update({ emr_record_id: savedRecordId })
+        //   .eq('patient_id', patientId)
+        //   .is('emr_record_id', null); // Only update records not already linked
+
         setIsAdding(false);
       }
 
@@ -437,8 +546,17 @@ const PatientRecords = () => {
         chief_complaint: '',
         diagnosis: '',
         treatment: '',
+        treatment_id: undefined,
+        what_was_done: '',
+        medicines: [],
+        home_care: {
+          whatToDo: [''],
+          whatToAvoid: [''],
+          warningSigns: [''],
+        },
         notes: '',
-        dentist: 'Dr. Evelyn Reyes',
+        dentist: '',
+        personnel_id: '',
         status: 'Active',
       });
 
@@ -698,14 +816,303 @@ const PatientRecords = () => {
                 )}
               </FieldContent>
             </Field>
+            {/* What Was Done Section */}
             <Field orientation="vertical">
-              <FieldLabel>Notes</FieldLabel>
+              <FieldLabel>What Was Done</FieldLabel>
               <FieldContent>
                 <textarea
-                  value={formData.notes}
+                  value={formData.what_was_done || ''}
+                  onChange={(e) => setFormData({ ...formData, what_was_done: e.target.value })}
+                  className="w-full min-h-[100px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Describe the procedures performed, examinations conducted, and any treatments provided..."
+                />
+              </FieldContent>
+            </Field>
+
+            {/* Dental Charting Section */}
+            <Field orientation="vertical">
+              <FieldLabel className="flex items-center gap-2">
+                <Stethoscope className="w-4 h-4" />
+                Dental Charting
+              </FieldLabel>
+              <FieldContent>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    asChild
+                    className="flex-1"
+                  >
+                    <Link to={`/dentist/patient/charting?patient=${selectedPatient}`} target="_blank">
+                      <Stethoscope className="w-4 h-4 mr-2" />
+                      Add/Edit Charting
+                    </Link>
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Open charting page to record tooth conditions and procedures
+                  </p>
+                </div>
+              </FieldContent>
+            </Field>
+
+            {/* Medicines Prescribed Section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <FieldLabel className="flex items-center gap-2">
+                  <Pill className="w-4 h-4" />
+                  Medicines Prescribed
+                </FieldLabel>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      medicines: [...(formData.medicines || []), { name: '', howOften: '', howManyDays: '' }],
+                    });
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Medicine
+                </Button>
+              </div>
+              {(formData.medicines || []).map((medicine, index) => (
+                <Card key={index}>
+                  <CardContent className="pt-4 space-y-3">
+                    <div className="grid md:grid-cols-3 gap-3">
+                      <Field orientation="vertical">
+                        <FieldLabel>Medicine Name</FieldLabel>
+                        <FieldContent>
+                          <Select
+                            value={medicine.name}
+                            onValueChange={(value) => {
+                              const newMedicines = [...(formData.medicines || [])];
+                              newMedicines[index].name = value;
+                              setFormData({ ...formData, medicines: newMedicines });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select medicine" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {medicinesList.map(m => (
+                                <SelectItem key={m.medicine_id} value={m.medicine_name}>
+                                  {m.medicine_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FieldContent>
+                      </Field>
+                      <Field orientation="vertical">
+                        <FieldLabel>How Often</FieldLabel>
+                        <FieldContent>
+                          <Input
+                            value={medicine.howOften}
+                            onChange={(e) => {
+                              const newMedicines = [...(formData.medicines || [])];
+                              newMedicines[index].howOften = e.target.value;
+                              setFormData({ ...formData, medicines: newMedicines });
+                            }}
+                            placeholder="e.g., Every 6 hours"
+                          />
+                        </FieldContent>
+                      </Field>
+                      <Field orientation="vertical">
+                        <FieldLabel>How Many Days</FieldLabel>
+                        <FieldContent>
+                          <Input
+                            value={medicine.howManyDays}
+                            onChange={(e) => {
+                              const newMedicines = [...(formData.medicines || [])];
+                              newMedicines[index].howManyDays = e.target.value;
+                              setFormData({ ...formData, medicines: newMedicines });
+                            }}
+                            placeholder="e.g., 2 days"
+                          />
+                        </FieldContent>
+                      </Field>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        const newMedicines = [...(formData.medicines || [])];
+                        newMedicines.splice(index, 1);
+                        setFormData({ ...formData, medicines: newMedicines });
+                      }}
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Remove
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Home Care Instructions Section */}
+            <div className="space-y-4">
+              <FieldLabel>Home Care Instructions</FieldLabel>
+              <div className="grid md:grid-cols-3 gap-4">
+                {/* What To Do */}
+                <div className="space-y-2">
+                  <FieldLabel className="flex items-center gap-2 text-green-600">
+                    <CheckCircle className="w-4 h-4" />
+                    WHAT TO DO
+                  </FieldLabel>
+                  {(formData.home_care?.whatToDo || ['']).map((item, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={item}
+                        onChange={(e) => {
+                          const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                          newHomeCare.whatToDo[index] = e.target.value;
+                          setFormData({ ...formData, home_care: newHomeCare });
+                        }}
+                        placeholder="e.g., Brush teeth twice daily"
+                        className="flex-1"
+                      />
+                      {(formData.home_care?.whatToDo || []).length > 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                            newHomeCare.whatToDo.splice(index, 1);
+                            setFormData({ ...formData, home_care: newHomeCare });
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                      newHomeCare.whatToDo.push('');
+                      setFormData({ ...formData, home_care: newHomeCare });
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+
+                {/* What To Avoid */}
+                <div className="space-y-2">
+                  <FieldLabel className="flex items-center gap-2 text-orange-600">
+                    <XCircle className="w-4 h-4" />
+                    WHAT TO AVOID
+                  </FieldLabel>
+                  {(formData.home_care?.whatToAvoid || ['']).map((item, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={item}
+                        onChange={(e) => {
+                          const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                          newHomeCare.whatToAvoid[index] = e.target.value;
+                          setFormData({ ...formData, home_care: newHomeCare });
+                        }}
+                        placeholder="e.g., Avoid sticky foods"
+                        className="flex-1"
+                      />
+                      {(formData.home_care?.whatToAvoid || []).length > 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                            newHomeCare.whatToAvoid.splice(index, 1);
+                            setFormData({ ...formData, home_care: newHomeCare });
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                      newHomeCare.whatToAvoid.push('');
+                      setFormData({ ...formData, home_care: newHomeCare });
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+
+                {/* Warning Signs */}
+                <div className="space-y-2">
+                  <FieldLabel className="flex items-center gap-2 text-red-600">
+                    <AlertTriangle className="w-4 h-4" />
+                    WARNING SIGNS
+                  </FieldLabel>
+                  {(formData.home_care?.warningSigns || ['']).map((item, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={item}
+                        onChange={(e) => {
+                          const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                          newHomeCare.warningSigns[index] = e.target.value;
+                          setFormData({ ...formData, home_care: newHomeCare });
+                        }}
+                        placeholder="e.g., Persistent bleeding"
+                        className="flex-1"
+                      />
+                      {(formData.home_care?.warningSigns || []).length > 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                            newHomeCare.warningSigns.splice(index, 1);
+                            setFormData({ ...formData, home_care: newHomeCare });
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const newHomeCare = { ...(formData.home_care || { whatToDo: [''], whatToAvoid: [''], warningSigns: [''] }) };
+                      newHomeCare.warningSigns.push('');
+                      setFormData({ ...formData, home_care: newHomeCare });
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <Field orientation="vertical">
+              <FieldLabel>Additional Notes</FieldLabel>
+              <FieldContent>
+                <textarea
+                  value={formData.notes || ''}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full min-h-[100px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Additional notes..."
+                  placeholder="Additional notes or remarks..."
                 />
               </FieldContent>
             </Field>
