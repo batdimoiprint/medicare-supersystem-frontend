@@ -48,6 +48,16 @@ interface Transaction {
     refund_status?: string;
 }
 
+interface SelectedBill {
+    bill_id: number;
+    reference_no: string;
+    description: string;
+    total_amount: number;
+    payable_amount: number | null;
+    due_date: string;
+   status: "Pending" | "Overdue" | "Paid" | "Partially Paid" | "Refunded";
+}
+
 export default function PatientTransactionsPage() {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -59,7 +69,8 @@ export default function PatientTransactionsPage() {
 
     // Payment Modal State
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [selectedBill, setSelectedBill] = useState<any>(null);
+   const [selectedBill, setSelectedBill] = useState<SelectedBill | null>(null);
+
 
     // Format time to AM/PM
     const formatTimeToAMPM = (timeStr: string) => {
