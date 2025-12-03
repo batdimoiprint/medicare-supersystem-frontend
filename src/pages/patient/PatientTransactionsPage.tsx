@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    ArrowLeft, 
-    CreditCard, 
-    Download, 
+import {
+    ArrowLeft,
+    CreditCard,
+    Download,
     Search,
     FileText,
     Calendar,
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import PaymentModal from '@/components/patient/PaymentModal';
 import supabase from '@/utils/supabase';
+import { useAuth } from '@/context/userContext';
 
 // --- Interface based on actual database schema ---
 interface Transaction {
@@ -49,12 +50,13 @@ interface Transaction {
 
 export default function PatientTransactionsPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPatientId, setCurrentPatientId] = useState<string>('');
-    
+
     // Payment Modal State
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [selectedBill, setSelectedBill] = useState<any>(null);
@@ -73,45 +75,21 @@ export default function PatientTransactionsPage() {
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '';
         const date = new Date(dateStr);
-        return date.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
         });
     };
 
-    // Fetch current patient
+    // Set current patient from auth context
     useEffect(() => {
-        const getCurrentPatient = async () => {
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
-                    navigate('/login');
-                    return;
-                }
-
-                const { data: patientData, error: patientError } = await supabase
-                    .schema('patient_record')
-                    .from('patient_tbl')
-                    .select('patient_id')
-                    .eq('email', user.email)
-                    .single();
-
-                if (patientError) {
-                    console.error('Error fetching patient data:', patientError.message);
-                    return;
-                }
-
-                if (patientData) {
-                    setCurrentPatientId(patientData.patient_id.toString());
-                }
-            } catch (error) {
-                console.error('Unexpected error fetching patient:', error);
-            }
-        };
-
-        getCurrentPatient();
-    }, [navigate]);
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+        setCurrentPatientId(user.id.toString());
+    }, [navigate, user]);
 
     // Fetch transactions when patient ID is available
     useEffect(() => {
@@ -121,7 +99,7 @@ export default function PatientTransactionsPage() {
             try {
                 setLoading(true);
                 const patientIdNum = parseInt(currentPatientId);
-                
+
                 if (isNaN(patientIdNum)) {
                     console.error('Invalid patient ID format');
                     setTransactions([]);
@@ -191,10 +169,10 @@ export default function PatientTransactionsPage() {
                 for (const bill of billingData) {
                     // Generate reference number
                     const referenceNo = `INV-${bill.bill_id}`;
-                    
+
                     // Use current date as transaction date
                     const transactionDate = new Date().toISOString().split('T')[0];
-                    
+
                     // Fetch appointment details if appointment_id exists
                     let appointmentDate = '';
                     let appointmentTime = '';
@@ -211,7 +189,7 @@ export default function PatientTransactionsPage() {
                         if (appointmentData) {
                             appointmentDate = appointmentData.appointment_date || '';
                             appointmentTime = appointmentData.appointment_time || '';
-                            
+
                             // Fetch service name from clinic.service_tbl
                             if (appointmentData.service_id) {
                                 const { data: serviceData } = await supabase
@@ -220,7 +198,7 @@ export default function PatientTransactionsPage() {
                                     .select('service_name')
                                     .eq('service_id', appointmentData.service_id)
                                     .single();
-                                
+
                                 if (serviceData) {
                                     serviceName = serviceData.service_name;
                                 }
@@ -232,11 +210,11 @@ export default function PatientTransactionsPage() {
                     let paymentStatus = 'Pending'; // Default
                     if (bill.payment_status_id) {
                         // First try the actual status table
-                        paymentStatus = statusMap.get(bill.payment_status_id) || 
-                                       // Then try default mapping
-                                       defaultStatusMap.get(bill.payment_status_id) || 
-                                       // Finally use payment_option to infer status
-                                       (bill.cash_paid && bill.cash_paid > 0 ? 'Paid' : 'Pending');
+                        paymentStatus = statusMap.get(bill.payment_status_id) ||
+                            // Then try default mapping
+                            defaultStatusMap.get(bill.payment_status_id) ||
+                            // Finally use payment_option to infer status
+                            (bill.cash_paid && bill.cash_paid > 0 ? 'Paid' : 'Pending');
                     } else {
                         // If no status_id, infer from cash_paid
                         paymentStatus = bill.cash_paid && bill.cash_paid > 0 ? 'Paid' : 'Pending';
@@ -293,15 +271,15 @@ export default function PatientTransactionsPage() {
 
     // Filter Logic
     const filteredTransactions = transactions.filter(t => {
-        const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              t.reference_no.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            t.reference_no.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = statusFilter === 'All' || t.payment_status === statusFilter;
         return matchesSearch && matchesStatus;
     });
 
     // Helper for Status Colors
     const getStatusColor = (status: string) => {
-        switch(status.toLowerCase()) {
+        switch (status.toLowerCase()) {
             case 'paid': return 'bg-green-100 text-green-700 border-green-200';
             case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
             case 'refunded': return 'bg-gray-100 text-gray-700 border-gray-200';
@@ -316,7 +294,7 @@ export default function PatientTransactionsPage() {
         if (transaction.payment_status === 'Pending' || transaction.payment_status === 'Overdue') {
             return <span className="text-xs italic text-muted-foreground">Unpaid</span>;
         }
-        
+
         if (transaction.payment_option?.toLowerCase().includes('cash')) {
             return (
                 <div className="flex items-center gap-2">
@@ -325,7 +303,7 @@ export default function PatientTransactionsPage() {
                 </div>
             );
         }
-        
+
         if (transaction.payment_option?.toLowerCase().includes('online') || transaction.paymongo_id) {
             return (
                 <div className="flex items-center gap-2">
@@ -334,7 +312,7 @@ export default function PatientTransactionsPage() {
                 </div>
             );
         }
-        
+
         return <span className="text-xs">{transaction.payment_option || 'Not Specified'}</span>;
     };
 
@@ -351,12 +329,12 @@ export default function PatientTransactionsPage() {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 p-6 max-w-6xl mx-auto">
-            
+
             {/* Header with Back Button */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                    <Button 
-                        variant="ghost" 
+                    <Button
+                        variant="ghost"
                         className="pl-0 hover:bg-transparent hover:text-primary mb-1"
                         onClick={() => navigate('/patient')}
                     >
@@ -364,7 +342,7 @@ export default function PatientTransactionsPage() {
                     </Button>
                     <h1 className="text-3xl font-bold tracking-tight">Transaction History</h1>
                     <p className="text-muted-foreground">
-                        {transactions.length > 0 
+                        {transactions.length > 0
                             ? `You have ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}`
                             : 'No transactions found'}
                     </p>
@@ -381,9 +359,9 @@ export default function PatientTransactionsPage() {
                 <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
                     <div className="relative flex-1">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search by invoice # or description..." 
-                            className="pl-8" 
+                        <Input
+                            placeholder="Search by invoice # or description..."
+                            className="pl-8"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -422,8 +400,8 @@ export default function PatientTransactionsPage() {
                     <div className="max-h-[500px] overflow-y-auto">
                         {filteredTransactions.length > 0 ? (
                             filteredTransactions.map((t) => (
-                                <div 
-                                    key={t.bill_id} 
+                                <div
+                                    key={t.bill_id}
                                     className="grid grid-cols-12 items-center p-4 border-b hover:bg-muted/20 transition-colors text-sm min-h-[80px]"
                                 >
                                     <div className="col-span-2">
@@ -487,8 +465,8 @@ export default function PatientTransactionsPage() {
                                     </div>
                                     <div className="col-span-1 flex justify-end">
                                         {t.payment_status === 'Pending' || t.payment_status === 'Overdue' ? (
-                                            <Button 
-                                                size="sm" 
+                                            <Button
+                                                size="sm"
                                                 className="h-7 text-xs bg-green-600 hover:bg-green-700"
                                                 onClick={() => handlePayClick(t)}
                                             >
@@ -516,7 +494,7 @@ export default function PatientTransactionsPage() {
             </Card>
 
             {/* Payment Modal Integration */}
-            <PaymentModal 
+            <PaymentModal
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
                 bill={selectedBill}

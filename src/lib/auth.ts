@@ -2,7 +2,7 @@ import supabase from '@/utils/supabase'
 import type { User, UserRoleType, SessionData } from '@/types/auth'
 import { UserRole, roleRoutes } from '@/types/auth'
 
-// Session storage keys
+// Local storage keys
 const SESSION_KEYS = {
     USER_ID: 'user_id',
     USER_NAME: 'user_name',
@@ -11,23 +11,23 @@ const SESSION_KEYS = {
 } as const
 
 /**
- * Save user session to sessionStorage
+ * Save user session to localStorage
  */
 export function saveSession(user: User): void {
-    sessionStorage.setItem(SESSION_KEYS.USER_ID, user.id.toString())
-    sessionStorage.setItem(SESSION_KEYS.USER_NAME, user.name)
-    sessionStorage.setItem(SESSION_KEYS.USER_ROLE, user.role.toString())
-    sessionStorage.setItem(SESSION_KEYS.USER_EMAIL, user.email)
+    localStorage.setItem(SESSION_KEYS.USER_ID, user.id.toString())
+    localStorage.setItem(SESSION_KEYS.USER_NAME, user.name)
+    localStorage.setItem(SESSION_KEYS.USER_ROLE, user.role.toString())
+    localStorage.setItem(SESSION_KEYS.USER_EMAIL, user.email)
 }
 
 /**
- * Read session data from sessionStorage
+ * Read session data from localStorage
  */
 export function getSession(): SessionData | null {
-    const userId = sessionStorage.getItem(SESSION_KEYS.USER_ID)
-    const userName = sessionStorage.getItem(SESSION_KEYS.USER_NAME)
-    const userRole = sessionStorage.getItem(SESSION_KEYS.USER_ROLE)
-    const userEmail = sessionStorage.getItem(SESSION_KEYS.USER_EMAIL)
+    const userId = localStorage.getItem(SESSION_KEYS.USER_ID)
+    const userName = localStorage.getItem(SESSION_KEYS.USER_NAME)
+    const userRole = localStorage.getItem(SESSION_KEYS.USER_ROLE)
+    const userEmail = localStorage.getItem(SESSION_KEYS.USER_EMAIL)
 
     if (!userId || !userName || !userRole) {
         return null
@@ -42,13 +42,13 @@ export function getSession(): SessionData | null {
 }
 
 /**
- * Clear session from sessionStorage
+ * Clear session from localStorage
  */
 export function clearSession(): void {
-    sessionStorage.removeItem(SESSION_KEYS.USER_ID)
-    sessionStorage.removeItem(SESSION_KEYS.USER_NAME)
-    sessionStorage.removeItem(SESSION_KEYS.USER_ROLE)
-    sessionStorage.removeItem(SESSION_KEYS.USER_EMAIL)
+    localStorage.removeItem(SESSION_KEYS.USER_ID)
+    localStorage.removeItem(SESSION_KEYS.USER_NAME)
+    localStorage.removeItem(SESSION_KEYS.USER_ROLE)
+    localStorage.removeItem(SESSION_KEYS.USER_EMAIL)
 }
 
 /**

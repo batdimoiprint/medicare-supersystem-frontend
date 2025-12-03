@@ -11,7 +11,7 @@ import Support from '@/pages/public/Support';
 import Terms from '@/pages/public/Terms';
 import { Route, Routes } from 'react-router-dom';
 import VerifyPage from "@/pages/public/VerifyPage";
-import { ProtectedRoute, PublicOnlyRoute } from '@/components/auth/ProtectedRoute';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { UserRole } from '@/types/auth';
 import PatientLayout from '@/layout/PatientLayout';
 import ReceptionistLayout from '@/layout/ReceptionistLayout';
@@ -40,17 +40,9 @@ export default function AppRoutes() {
                 <Route path='support' element={<Support />} />
                 <Route path='contact' element={<ContactPage />} />
 
-                {/* Auth pages - redirect to dashboard if already logged in */}
-                <Route path='login' element={
-                    <PublicOnlyRoute>
-                        <LoginPage />
-                    </PublicOnlyRoute>
-                } />
-                <Route path='register' element={
-                    <PublicOnlyRoute>
-                        <RegisterPage />
-                    </PublicOnlyRoute>
-                } />
+                {/* Auth pages - accessible even when logged in */}
+                <Route path='login' element={<LoginPage />} />
+                <Route path='register' element={<RegisterPage />} />
                 <Route path='verify' element={<VerifyPage />} />
             </Route>
 
