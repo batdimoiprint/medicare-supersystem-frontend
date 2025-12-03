@@ -31,6 +31,7 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
 const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
 const inventoryClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'inventory' } });
+const frontdeskClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'frontdesk' } });
 
 // --- Type Definitions ---
 interface MaterialLog {
@@ -212,6 +213,187 @@ const MaterialsLogging = () => {
     });
   };
 
+  // Helper function to increment inventory (for edits/restorations)
+  const incrementInventory = async (category: string, itemName: string, quantity: number) => {
+    if (!category || !itemName || quantity <= 0) {
+      console.warn('Invalid parameters for inventory increment:', { category, itemName, quantity });
+      return;
+    }
+
+    try {
+      if (category === 'Consumables') {
+        const { data: item } = await inventoryClient
+          .from('consumables_tbl')
+          .select('quantity')
+          .eq('consumable_name', itemName)
+          .single();
+        
+        if (item) {
+          const currentQty = Number(item.quantity) || 0;
+          const newQty = currentQty + quantity;
+          await inventoryClient
+            .from('consumables_tbl')
+            .update({ quantity: newQty })
+            .eq('consumable_name', itemName);
+          console.log(`✓ Restored consumable quantity for ${itemName} from ${currentQty} to ${newQty}`);
+        }
+      } else if (category === 'Medicines') {
+        const { data: item } = await inventoryClient
+          .from('medicine_tbl')
+          .select('quantity')
+          .eq('medicine_name', itemName)
+          .single();
+        
+        if (item) {
+          const currentQty = Number(item.quantity) || 0;
+          const newQty = currentQty + quantity;
+          await inventoryClient
+            .from('medicine_tbl')
+            .update({ quantity: newQty })
+            .eq('medicine_name', itemName);
+          console.log(`✓ Restored medicine quantity for ${itemName} from ${currentQty} to ${newQty}`);
+        }
+      } else if (category === 'Equipment') {
+        const { data: item } = await inventoryClient
+          .from('equipment_tbl')
+          .select('quantity')
+          .eq('equipment_name', itemName)
+          .single();
+        
+        if (item) {
+          const currentQty = Number(item.quantity) || 0;
+          const newQty = currentQty + quantity;
+          await inventoryClient
+            .from('equipment_tbl')
+            .update({ quantity: newQty })
+            .eq('equipment_name', itemName);
+          console.log(`✓ Restored equipment quantity for ${itemName} from ${currentQty} to ${newQty}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error in incrementInventory:', err);
+    }
+  };
+
+  // Helper function to decrement inventory
+  const decrementInventory = async (category: string, itemName: string, quantity: number) => {
+    if (!category || !itemName || quantity <= 0) {
+      console.warn('Invalid parameters for inventory decrement:', { category, itemName, quantity });
+      return;
+    }
+
+    try {
+      if (category === 'Consumables') {
+        const { data: item, error: fetchError } = await inventoryClient
+          .from('consumables_tbl')
+          .select('quantity, consumable_id')
+          .eq('consumable_name', itemName)
+          .single();
+        
+        if (fetchError) {
+          console.error('Error fetching consumable:', fetchError);
+          console.error('Consumable name:', itemName);
+          return;
+        }
+        
+        if (item) {
+          const currentQty = Number(item.quantity) || 0;
+          const materialQty = Number(quantity) || 0;
+          const newQty = Math.max(0, currentQty - materialQty);
+          
+          console.log(`Decrementing consumable: ${itemName}`);
+          console.log(`  Current quantity: ${currentQty}, Quantity: ${materialQty}, New: ${newQty}`);
+          
+          const { error: updateError } = await inventoryClient
+            .from('consumables_tbl')
+            .update({ quantity: newQty })
+            .eq('consumable_name', itemName)
+            .select();
+          
+          if (updateError) {
+            console.error('Error updating consumable quantity:', updateError);
+          } else {
+            console.log(`✓ Successfully updated consumable quantity for ${itemName} from ${currentQty} to ${newQty}`);
+          }
+        } else {
+          console.warn(`Consumable not found in database: ${itemName}`);
+        }
+      } else if (category === 'Medicines') {
+        const { data: item, error: fetchError } = await inventoryClient
+          .from('medicine_tbl')
+          .select('quantity, medicine_id')
+          .eq('medicine_name', itemName)
+          .single();
+        
+        if (fetchError) {
+          console.error('Error fetching medicine:', fetchError);
+          console.error('Medicine name:', itemName);
+          return;
+        }
+        
+        if (item) {
+          const currentQty = Number(item.quantity) || 0;
+          const materialQty = Number(quantity) || 0;
+          const newQty = Math.max(0, currentQty - materialQty);
+          
+          console.log(`Decrementing medicine: ${itemName}`);
+          console.log(`  Current quantity: ${currentQty}, Quantity: ${materialQty}, New: ${newQty}`);
+          
+          const { error: updateError } = await inventoryClient
+            .from('medicine_tbl')
+            .update({ quantity: newQty })
+            .eq('medicine_name', itemName)
+            .select();
+          
+          if (updateError) {
+            console.error('Error updating medicine quantity:', updateError);
+          } else {
+            console.log(`✓ Successfully updated medicine quantity for ${itemName} from ${currentQty} to ${newQty}`);
+          }
+        } else {
+          console.warn(`Medicine not found in database: ${itemName}`);
+        }
+      } else if (category === 'Equipment') {
+        const { data: item, error: fetchError } = await inventoryClient
+          .from('equipment_tbl')
+          .select('quantity, equipment_id')
+          .eq('equipment_name', itemName)
+          .single();
+        
+        if (fetchError) {
+          console.error('Error fetching equipment:', fetchError);
+          console.error('Equipment name:', itemName);
+          return;
+        }
+        
+        if (item) {
+          const currentQty = Number(item.quantity) || 0;
+          const materialQty = Number(quantity) || 0;
+          const newQty = Math.max(0, currentQty - materialQty);
+          
+          console.log(`Decrementing equipment: ${itemName}`);
+          console.log(`  Current quantity: ${currentQty}, Quantity: ${materialQty}, New: ${newQty}`);
+          
+          const { error: updateError } = await inventoryClient
+            .from('equipment_tbl')
+            .update({ quantity: newQty })
+            .eq('equipment_name', itemName)
+            .select();
+          
+          if (updateError) {
+            console.error('Error updating equipment quantity:', updateError);
+          } else {
+            console.log(`✓ Successfully updated equipment quantity for ${itemName} from ${currentQty} to ${newQty}`);
+          }
+        } else {
+          console.warn(`Equipment not found in database: ${itemName}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error in decrementInventory:', err);
+    }
+  };
+
   const handleEdit = (log: MaterialLog) => {
     setIsEditing(log.id);
     setIsAdding(false);
@@ -230,6 +412,9 @@ const MaterialsLogging = () => {
           combinedNotes = `Patient: ${formData.patient_name}${combinedNotes ? `\n${combinedNotes}` : ''}`;
         }
         
+        // Get the old log to calculate quantity difference
+        const oldLog = logs.find(l => l.id === isEditing);
+        
         const { error } = await inventoryClient
           .from('stock_out')
           .update({
@@ -244,6 +429,37 @@ const MaterialsLogging = () => {
           .eq('id', isEditing);
 
         if (error) throw error;
+
+        // Handle inventory adjustment for edits
+        // If category or item changed, we need to restore old quantity and decrement new quantity
+        if (oldLog) {
+          // Restore old quantity if category/item changed
+          if (oldLog.category !== formData.category || oldLog.item_name !== formData.item_name) {
+            // Restore old item quantity
+            if (oldLog.category && oldLog.item_name) {
+              await incrementInventory(oldLog.category, oldLog.item_name, oldLog.quantity);
+            }
+            // Decrement new item quantity
+            if (formData.category && formData.item_name) {
+              await decrementInventory(formData.category, formData.item_name, formData.quantity || 0);
+            }
+          } else if (oldLog.quantity !== formData.quantity) {
+            // Same item, different quantity - adjust the difference
+            const quantityDiff = (formData.quantity || 0) - oldLog.quantity;
+            if (quantityDiff < 0) {
+              // Quantity decreased, restore the difference
+              if (formData.category && formData.item_name) {
+                await incrementInventory(formData.category, formData.item_name, Math.abs(quantityDiff));
+              }
+            } else if (quantityDiff > 0) {
+              // Quantity increased, decrement the difference
+              if (formData.category && formData.item_name) {
+                await decrementInventory(formData.category, formData.item_name, quantityDiff);
+              }
+            }
+          }
+        }
+
         setIsEditing(null);
       } else if (isAdding) {
         // Generate reference number (SO-XXXXXXXX format)
@@ -273,6 +489,48 @@ const MaterialsLogging = () => {
           });
 
         if (error) throw error;
+
+        // Decrement inventory after saving to stock_out
+        if (formData.category && formData.item_name) {
+          await decrementInventory(formData.category, formData.item_name, formData.quantity || 0);
+        }
+
+        // Create billing entry if patient is provided
+        if (formData.patient_name) {
+          const patient = patients.find(p => 
+            `${p.f_name ?? ''} ${p.m_name ?? ''} ${p.l_name ?? ''}`.trim() === formData.patient_name
+          );
+          
+          if (patient) {
+            const { data: maxBillData } = await frontdeskClient
+              .from('billing_tbl')
+              .select('bill_id')
+              .order('bill_id', { ascending: false })
+              .limit(1)
+              .single();
+
+            let nextBillId = 1;
+            if (maxBillData?.bill_id) {
+              nextBillId = (maxBillData.bill_id as number) + 1;
+            }
+
+            const billCategoryId = formData.category === 'Consumables' ? 'bill_consumable_id' :
+                                   formData.category === 'Medicines' ? 'bill_medicine_id' :
+                                   'bill_equipment_id';
+
+            const totalAmount = (formData.unit_cost || 0) * (formData.quantity || 0);
+
+            await frontdeskClient.from('billing_tbl').insert({
+              bill_id: nextBillId,
+              patient_id: patient.patient_id,
+              [billCategoryId]: reference, // Using reference as the ID reference
+              total_amount: totalAmount,
+              payable_amount: totalAmount,
+              payment_status_id: 1, // Pending
+            });
+          }
+        }
+
         setIsAdding(false);
       }
 

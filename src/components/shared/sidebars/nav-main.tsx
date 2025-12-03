@@ -136,7 +136,23 @@ export function NavMain() {
     }
 
     const finalItems: MainItem[] = selectedRouteData
-        .filter(route => !route.path?.includes(':') && !route.title?.includes('Details'))
+        .filter(route => {
+            // Filter out routes with dynamic params or Details pages
+            if (route.path?.includes(':') || route.title?.includes('Details')) return false
+            
+            // Filter out patient pages from dentist sidebar (keep only workflow)
+            if (basePath === '/dentist') {
+                const path = route.path || ''
+                if (path.includes('patient/charting') || 
+                    path.includes('patient/records') || 
+                    path.includes('patient/prescriptions') || 
+                    path.includes('patient/treatment/plan')) {
+                    return false
+                }
+            }
+            
+            return true
+        })
         .map((route) => ({
             title: route.title || 'Untitled',
             url: route.index ? basePath : `${basePath}/${route.path}`,
