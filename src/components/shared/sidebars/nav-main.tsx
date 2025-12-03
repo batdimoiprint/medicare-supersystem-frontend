@@ -22,7 +22,8 @@ import {
     BarChart3,
     FileStack,
     List,
-    Settings
+    Settings,
+    Trash2
 } from "lucide-react"
 import { receptionistRouteData } from "@/routes/receptionistRoutes"
 import { adminRouteData } from "@/routes/adminRoutes"
@@ -116,6 +117,8 @@ export function NavMain() {
         if (titleLower.includes('stock')) return Activity
         if (titleLower.includes('supplier')) return Truck
         if (titleLower.includes('report') || titleLower.includes('reports')) return BarChart3
+        if (titleLower.includes('alert')) return Bell
+        if (titleLower.includes('waste') || titleLower.includes('disposal')) return Trash2
 
         // Schedule & Logging
         if (titleLower.includes('schedule')) return Calendar
