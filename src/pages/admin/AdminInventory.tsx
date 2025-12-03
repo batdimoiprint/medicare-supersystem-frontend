@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Package,
@@ -14,7 +14,8 @@ import {
   Box,
   Minus,
   Plus,
-  ClipboardCheck
+  ClipboardCheck,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,55 +30,73 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import supabase from '@/utils/supabase';
 
-// Inventory Items
-const inventoryItems = [
-  { id: 'INV-001', name: 'Dental Gloves (Box)', category: 'Consumables', stock: 45, minStock: 20, unit: 'boxes', price: 350, expiryDate: '2026-03-15', status: 'normal', lastUpdated: '2025-12-01' },
-  { id: 'INV-002', name: 'Face Masks (Box)', category: 'Consumables', stock: 12, minStock: 15, unit: 'boxes', price: 280, expiryDate: '2026-06-20', status: 'low', lastUpdated: '2025-12-02' },
-  { id: 'INV-003', name: 'Composite Resin A2', category: 'Restorative', stock: 8, minStock: 5, unit: 'syringes', price: 1200, expiryDate: '2025-12-30', status: 'expiring', lastUpdated: '2025-11-28' },
-  { id: 'INV-004', name: 'Dental Needles 27G', category: 'Consumables', stock: 150, minStock: 50, unit: 'pcs', price: 15, expiryDate: '2027-01-10', status: 'normal', lastUpdated: '2025-12-01' },
-  { id: 'INV-005', name: 'Lidocaine 2%', category: 'Anesthetics', stock: 3, minStock: 10, unit: 'vials', price: 450, expiryDate: '2026-02-28', status: 'low', lastUpdated: '2025-12-03' },
-  { id: 'INV-006', name: 'Alginate Impression', category: 'Impressions', stock: 25, minStock: 10, unit: 'bags', price: 850, expiryDate: '2025-12-15', status: 'expiring', lastUpdated: '2025-11-30' },
-  { id: 'INV-007', name: 'Dental Burs (Set)', category: 'Instruments', stock: 18, minStock: 5, unit: 'sets', price: 2500, expiryDate: null, status: 'normal', lastUpdated: '2025-12-01' },
-  { id: 'INV-008', name: 'Sterilization Pouches', category: 'Consumables', stock: 200, minStock: 100, unit: 'pcs', price: 8, expiryDate: '2027-06-01', status: 'normal', lastUpdated: '2025-12-02' },
-  { id: 'INV-009', name: 'Fluoride Varnish', category: 'Preventive', stock: 6, minStock: 8, unit: 'tubes', price: 650, expiryDate: '2026-01-20', status: 'low', lastUpdated: '2025-12-01' },
-  { id: 'INV-010', name: 'Bonding Agent', category: 'Restorative', stock: 4, minStock: 3, unit: 'bottles', price: 1800, expiryDate: '2025-12-10', status: 'expiring', lastUpdated: '2025-11-29' },
-];
+// Types for inventory data
+interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  stock: number;
+  minStock: number;
+  unit: string;
+  price: number;
+  expiryDate: string | null;
+  status: 'normal' | 'low' | 'expiring' | 'critical';
+  lastUpdated: string;
+  supplier?: string;
+}
 
-// Stock Deductions (from Dentist Subsystem)
-const stockDeductions = [
-  { id: 'DED-001', itemId: 'INV-001', itemName: 'Dental Gloves (Box)', quantity: 2, dentist: 'Dr. Smith', patient: 'Maria Santos', treatment: 'Dental Cleaning', date: '2025-12-03', time: '09:30 AM', status: 'logged' },
-  { id: 'DED-002', itemId: 'INV-004', itemName: 'Dental Needles 27G', quantity: 3, dentist: 'Dr. Johnson', patient: 'Juan Dela Cruz', treatment: 'Tooth Extraction', date: '2025-12-03', time: '10:15 AM', status: 'logged' },
-  { id: 'DED-003', itemId: 'INV-005', itemName: 'Lidocaine 2%', quantity: 1, dentist: 'Dr. Johnson', patient: 'Juan Dela Cruz', treatment: 'Tooth Extraction', date: '2025-12-03', time: '10:15 AM', status: 'logged' },
-  { id: 'DED-004', itemId: 'INV-003', itemName: 'Composite Resin A2', quantity: 1, dentist: 'Dr. Lee', patient: 'Ana Reyes', treatment: 'Dental Filling', date: '2025-12-02', time: '02:30 PM', status: 'logged' },
-  { id: 'DED-005', itemId: 'INV-002', itemName: 'Face Masks (Box)', quantity: 1, dentist: 'Dr. Smith', patient: 'Pedro Garcia', treatment: 'Root Canal', date: '2025-12-02', time: '03:00 PM', status: 'logged' },
-  { id: 'DED-006', itemId: 'INV-009', itemName: 'Fluoride Varnish', quantity: 1, dentist: 'Dr. Smith', patient: 'Sofia Martinez', treatment: 'Preventive Care', date: '2025-12-01', time: '11:00 AM', status: 'logged' },
-];
+interface StockDeduction {
+  id: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  dentist: string;
+  patient: string;
+  treatment: string;
+  date: string;
+  time: string;
+  status: string;
+  category: string;
+}
 
-// Restock Entries (from Inventory Manager)
-const restockEntries = [
-  { id: 'RST-001', itemId: 'INV-002', itemName: 'Face Masks (Box)', quantity: 20, supplier: 'MedSupply Co.', cost: 5600, enteredBy: 'John Doe', date: '2025-12-03', status: 'pending', notes: 'Regular monthly restock' },
-  { id: 'RST-002', itemId: 'INV-005', itemName: 'Lidocaine 2%', quantity: 15, supplier: 'PharmaDent Inc.', cost: 6750, enteredBy: 'John Doe', date: '2025-12-03', status: 'pending', notes: 'Urgent restock - low stock alert' },
-  { id: 'RST-003', itemId: 'INV-009', itemName: 'Fluoride Varnish', quantity: 10, supplier: 'DentalCare Ltd.', cost: 6500, enteredBy: 'Jane Smith', date: '2025-12-02', status: 'approved', notes: 'Approved by Admin', approvedBy: 'Admin', approvedDate: '2025-12-02' },
-  { id: 'RST-004', itemId: 'INV-003', itemName: 'Composite Resin A2', quantity: 12, supplier: 'DentalCare Ltd.', cost: 14400, enteredBy: 'Jane Smith', date: '2025-12-01', status: 'approved', notes: 'New batch with later expiry', approvedBy: 'Admin', approvedDate: '2025-12-01' },
-  { id: 'RST-005', itemId: 'INV-006', itemName: 'Alginate Impression', quantity: 8, supplier: 'MedSupply Co.', cost: 6800, enteredBy: 'John Doe', date: '2025-11-30', status: 'rejected', notes: 'Rejected - incorrect supplier quote', rejectedBy: 'Admin', rejectedDate: '2025-12-01' },
-];
-
-// Low Stock Items
-const lowStockItems = inventoryItems.filter(item => item.status === 'low');
-
-// Expiring Items (within 30 days)
-const expiringItems = inventoryItems.filter(item => item.status === 'expiring');
-
-// Stats
-const inventoryStats = [
-  { title: 'Total Items', value: inventoryItems.length.toString(), icon: Package, color: 'text-primary', bg: 'bg-primary/10' },
-  { title: 'Low Stock', value: lowStockItems.length.toString(), icon: TrendingDown, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  { title: 'Expiring Soon', value: expiringItems.length.toString(), icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10' },
-  { title: 'Pending Restocks', value: restockEntries.filter(r => r.status === 'pending').length.toString(), icon: ClipboardCheck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
-];
+interface RestockEntry {
+  id: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  supplier: string;
+  cost: number;
+  enteredBy: string;
+  date: string;
+  status: 'pending' | 'approved' | 'rejected' | 'received';
+  notes: string;
+  category: string;
+}
 
 type TabType = 'items' | 'deductions' | 'restocks' | 'alerts';
+
+// Helper function to determine item status based on quantity and expiry
+function calculateStatus(quantity: number, minStock: number, expiryDate: string | null): 'normal' | 'low' | 'expiring' | 'critical' {
+  const isLowStock = quantity <= minStock;
+  const isCritical = quantity === 0;
+  
+  // Check if expiring within 30 days
+  let isExpiring = false;
+  if (expiryDate) {
+    const expDate = new Date(expiryDate);
+    const today = new Date();
+    const diffTime = expDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    isExpiring = diffDays <= 30 && diffDays > 0;
+  }
+
+  if (isCritical) return 'critical';
+  if (isExpiring) return 'expiring';
+  if (isLowStock) return 'low';
+  return 'normal';
+}
 
 export default function AdminInventory() {
   const [activeTab, setActiveTab] = useState<TabType>('items');
@@ -87,9 +106,283 @@ export default function AdminInventory() {
   const [restockFilter, setRestockFilter] = useState('all');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<typeof inventoryItems[0] | null>(null);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  
+  // Data state
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [stockDeductions, setStockDeductions] = useState<StockDeduction[]>([]);
+  const [restockEntries, setRestockEntries] = useState<RestockEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const openDetailModal = (item: typeof inventoryItems[0]) => {
+  // Fetch all data on mount
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const fetchAllData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchInventoryItems(),
+        fetchStockDeductions(),
+        fetchRestockEntries()
+      ]);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchInventoryItems = async () => {
+    try {
+      // Fetch from all three inventory tables
+      const [consumables, medicines, equipment] = await Promise.all([
+        supabase.schema('inventory').from('consumables_tbl').select('*'),
+        supabase.schema('inventory').from('medicine_tbl').select('*'),
+        supabase.schema('inventory').from('equipment_tbl').select('*')
+      ]);
+
+      const items: InventoryItem[] = [];
+      const minStockThreshold = 10; // Default minimum stock threshold
+
+      // Map Consumables
+      (consumables.data || []).forEach((item: any) => {
+        const status = calculateStatus(item.quantity || 0, minStockThreshold, item.expiry_date);
+        items.push({
+          id: `CON-${item.consumables_id}`,
+          name: item.consumable_name,
+          category: 'Consumables',
+          stock: item.quantity || 0,
+          minStock: minStockThreshold,
+          unit: 'units',
+          price: item.unit_cost || 0,
+          expiryDate: item.expiry_date || null,
+          status,
+          lastUpdated: item.created_at || new Date().toISOString(),
+          supplier: item.supplier_name || item.supplier || '--'
+        });
+      });
+
+      // Map Medicines
+      (medicines.data || []).forEach((item: any) => {
+        const status = calculateStatus(item.quantity || 0, minStockThreshold, item.expiry_date);
+        items.push({
+          id: `MED-${item.medicine_id}`,
+          name: item.medicine_name,
+          category: 'Medicines',
+          stock: item.quantity || 0,
+          minStock: minStockThreshold,
+          unit: 'units',
+          price: item.unit_cost || 0,
+          expiryDate: item.expiry_date || null,
+          status,
+          lastUpdated: new Date().toISOString(),
+          supplier: item.supplier_name || '--'
+        });
+      });
+
+      // Map Equipment
+      (equipment.data || []).forEach((item: any) => {
+        const status = calculateStatus(item.quantity || 0, 5, item.expiry_date); // Equipment has lower minStock
+        items.push({
+          id: `EQP-${item.equipment_id}`,
+          name: item.equipment_name,
+          category: 'Equipment',
+          stock: item.quantity || 0,
+          minStock: 5,
+          unit: 'units',
+          price: item.unit_cost || 0,
+          expiryDate: item.expiry_date || null,
+          status,
+          lastUpdated: new Date().toISOString(),
+          supplier: item.supplier_name || '--'
+        });
+      });
+
+      setInventoryItems(items);
+    } catch (error) {
+      console.error('Error fetching inventory items:', error);
+    }
+  };
+
+  const fetchStockDeductions = async () => {
+    try {
+      const { data, error } = await supabase
+        .schema('inventory')
+        .from('stock_out')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const deductions: StockDeduction[] = (data || []).map((item: any) => {
+        const dateObj = item.created_at ? new Date(item.created_at) : new Date();
+        return {
+          id: `DED-${item.id}`,
+          itemId: item.reference || `SO-${item.id}`,
+          itemName: item.item_name || 'Unknown Item',
+          quantity: item.quantity || 0,
+          dentist: item.user_name || 'Staff',
+          patient: 'N/A', // Not stored in stock_out table
+          treatment: item.notes || 'Stock Out',
+          date: dateObj.toISOString().split('T')[0],
+          time: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'logged',
+          category: item.category || 'Consumables'
+        };
+      });
+
+      setStockDeductions(deductions);
+    } catch (error) {
+      console.error('Error fetching stock deductions:', error);
+    }
+  };
+
+  const fetchRestockEntries = async () => {
+    try {
+      const { data, error } = await supabase
+        .schema('inventory')
+        .from('stock_in')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const entries: RestockEntry[] = (data || []).map((item: any) => {
+        const dateObj = item.created_at ? new Date(item.created_at) : new Date();
+        // Map status: Pending -> pending, Received -> approved, Cancelled -> rejected
+        let mappedStatus: 'pending' | 'approved' | 'rejected' | 'received' = 'pending';
+        if (item.status === 'Received') mappedStatus = 'approved';
+        else if (item.status === 'Cancelled') mappedStatus = 'rejected';
+        else if (item.status === 'Pending') mappedStatus = 'pending';
+
+        return {
+          id: `RST-${item.id.slice(0, 8)}`,
+          itemId: item.id,
+          itemName: item.item_name || 'Unknown Item',
+          quantity: item.quantity || 0,
+          supplier: item.supplier || 'Unknown Supplier',
+          cost: (item.quantity || 0) * (item.unit_cost || 0),
+          enteredBy: item.created_by || 'Inventory Manager',
+          date: dateObj.toISOString().split('T')[0],
+          status: mappedStatus,
+          notes: item.lock_until ? 'Order placed' : 'Direct restock',
+          category: item.category || 'Consumables'
+        };
+      });
+
+      setRestockEntries(entries);
+    } catch (error) {
+      console.error('Error fetching restock entries:', error);
+    }
+  };
+
+  // Approve/Reject restock entry
+  const handleRestockAction = async (entryId: string, action: 'approve' | 'reject') => {
+    try {
+      // Find the entry to get the full ID (since we truncated it)
+      const entry = restockEntries.find(e => e.id === entryId);
+      if (!entry) return;
+
+      const newStatus = action === 'approve' ? 'Received' : 'Cancelled';
+      
+      const { error } = await supabase
+        .schema('inventory')
+        .from('stock_in')
+        .update({ status: newStatus })
+        .eq('id', entry.itemId);
+
+      if (error) throw error;
+
+      // If approved and not already moved to inventory, move it
+      if (action === 'approve') {
+        const stockInEntry = restockEntries.find(e => e.id === entryId);
+        if (stockInEntry) {
+          // Determine target table
+          let targetTable = 'consumables_tbl';
+          let nameColumn = 'consumable_name';
+          
+          if (stockInEntry.category === 'Medicines' || stockInEntry.category === 'medicine') {
+            targetTable = 'medicine_tbl';
+            nameColumn = 'medicine_name';
+          } else if (stockInEntry.category === 'Equipment' || stockInEntry.category === 'equipment') {
+            targetTable = 'equipment_tbl';
+            nameColumn = 'equipment_name';
+          }
+
+          // Check if item already exists in inventory (by name)
+          const { data: existingItems } = await supabase
+            .schema('inventory')
+            .from(targetTable)
+            .select('*')
+            .eq(nameColumn, stockInEntry.itemName);
+
+          if (existingItems && existingItems.length > 0) {
+            // Update existing item quantity
+            const idColumn = targetTable === 'consumables_tbl' ? 'consumables_id' : 
+                            targetTable === 'medicine_tbl' ? 'medicine_id' : 'equipment_id';
+            const existingItem = existingItems[0];
+            const currentQty = existingItem.quantity || 0;
+            
+            await supabase
+              .schema('inventory')
+              .from(targetTable)
+              .update({ quantity: currentQty + stockInEntry.quantity })
+              .eq(idColumn, existingItem[idColumn]);
+          } else {
+            // Insert new item
+            const payload: any = {
+              [nameColumn]: stockInEntry.itemName,
+              quantity: stockInEntry.quantity,
+              supplier_name: stockInEntry.supplier
+            };
+
+            await supabase
+              .schema('inventory')
+              .from(targetTable)
+              .insert(payload);
+          }
+        }
+      }
+
+      // Refresh data
+      await fetchAllData();
+    } catch (error) {
+      console.error('Error updating restock entry:', error);
+      alert('Failed to update restock entry');
+    }
+  };
+
+  // Computed values
+  const lowStockItems = useMemo(() => 
+    inventoryItems.filter(item => item.status === 'low' || item.status === 'critical'),
+    [inventoryItems]
+  );
+
+  const expiringItems = useMemo(() => 
+    inventoryItems.filter(item => item.status === 'expiring'),
+    [inventoryItems]
+  );
+
+  const pendingRestocks = useMemo(() => 
+    restockEntries.filter(r => r.status === 'pending'),
+    [restockEntries]
+  );
+
+  const inventoryStats = useMemo(() => [
+    { title: 'Total Items', value: inventoryItems.length.toString(), icon: Package, color: 'text-primary', bg: 'bg-primary/10' },
+    { title: 'Low Stock', value: lowStockItems.length.toString(), icon: TrendingDown, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    { title: 'Expiring Soon', value: expiringItems.length.toString(), icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10' },
+    { title: 'Pending Restocks', value: pendingRestocks.length.toString(), icon: ClipboardCheck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+  ], [inventoryItems, lowStockItems, expiringItems, pendingRestocks]);
+
+  const categories = useMemo(() => 
+    [...new Set(inventoryItems.map(item => item.category))],
+    [inventoryItems]
+  );
+
+  const openDetailModal = (item: InventoryItem) => {
     setSelectedItem(item);
     setShowDetailModal(true);
     setTimeout(() => setIsDetailOpen(true), 10);
@@ -102,8 +395,6 @@ export default function AdminInventory() {
       setSelectedItem(null);
     }, 200);
   };
-
-  const categories = [...new Set(inventoryItems.map(item => item.category))];
 
   const filteredItems = inventoryItems.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -134,9 +425,12 @@ export default function AdminInventory() {
         return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
       case 'expiring':
         return 'bg-destructive/10 text-destructive border-destructive/20';
+      case 'critical':
+        return 'bg-red-600/10 text-red-600 border-red-600/20';
       case 'pending':
         return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
       case 'approved':
+      case 'received':
         return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
       case 'rejected':
         return 'bg-destructive/10 text-destructive border-destructive/20';
@@ -151,6 +445,7 @@ export default function AdminInventory() {
     switch (status) {
       case 'normal':
       case 'approved':
+      case 'received':
         return <CheckCircle2 className="w-3 h-3 mr-1" />;
       case 'low':
         return <TrendingDown className="w-3 h-3 mr-1" />;
@@ -162,6 +457,8 @@ export default function AdminInventory() {
         return <X className="w-3 h-3 mr-1" />;
       case 'logged':
         return <Minus className="w-3 h-3 mr-1" />;
+      case 'critical':
+        return <AlertTriangle className="w-3 h-3 mr-1" />;
       default:
         return null;
     }
@@ -174,8 +471,23 @@ export default function AdminInventory() {
     { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
   ];
 
-  const getItemDeductions = (itemId: string) => stockDeductions.filter(d => d.itemId === itemId);
-  const getItemRestocks = (itemId: string) => restockEntries.filter(r => r.itemId === itemId);
+  // Get deductions and restocks by item name (since IDs don't directly match)
+  const getItemDeductions = (itemName: string) => 
+    stockDeductions.filter(d => d.itemName.toLowerCase() === itemName.toLowerCase());
+  const getItemRestocks = (itemName: string) => 
+    restockEntries.filter(r => r.itemName.toLowerCase() === itemName.toLowerCase());
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground p-6 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading inventory data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 space-y-6">
@@ -192,6 +504,10 @@ export default function AdminInventory() {
                 Complete oversight of clinic supplies, stock activities, and restocking
               </p>
             </div>
+            <Button onClick={fetchAllData} variant="outline" className="gap-2">
+              <Loader2 className={cn("w-4 h-4", loading && "animate-spin")} />
+              Refresh
+            </Button>
           </div>
         </CardHeader>
       </Card>
@@ -278,8 +594,9 @@ export default function AdminInventory() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="normal">In Stock</SelectItem>
                       <SelectItem value="low">Low Stock</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
                       <SelectItem value="expiring">Expiring</SelectItem>
                     </SelectContent>
                   </Select>
@@ -325,11 +642,13 @@ export default function AdminInventory() {
                       <div className="flex items-center gap-4">
                         <div className={cn("p-3 rounded-lg",
                           item.status === 'normal' ? 'bg-primary/10' :
-                          item.status === 'low' ? 'bg-amber-500/10' : 'bg-destructive/10'
+                          item.status === 'low' ? 'bg-amber-500/10' : 
+                          item.status === 'critical' ? 'bg-red-600/10' : 'bg-destructive/10'
                         )}>
                           <Box className={cn("w-5 h-5",
                             item.status === 'normal' ? 'text-primary' :
-                            item.status === 'low' ? 'text-amber-500' : 'text-destructive'
+                            item.status === 'low' ? 'text-amber-500' : 
+                            item.status === 'critical' ? 'text-red-600' : 'text-destructive'
                           )} />
                         </div>
                         <div>
@@ -337,12 +656,17 @@ export default function AdminInventory() {
                             <p className="font-semibold group-hover:text-primary transition-colors">{item.name}</p>
                             <Badge variant="outline" className={cn("text-xs", getStatusColor(item.status))}>
                               {getStatusIcon(item.status)}
-                              {item.status === 'normal' ? 'In Stock' : item.status === 'low' ? 'Low Stock' : 'Expiring Soon'}
+                              {item.status === 'normal' ? 'In Stock' : 
+                               item.status === 'low' ? 'Low Stock' : 
+                               item.status === 'critical' ? 'Critical' : 'Expiring Soon'}
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">{item.id} • {item.category}</p>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
                             <span>Min: {item.minStock} {item.unit}</span>
+                            {item.supplier && item.supplier !== '--' && (
+                              <span>Supplier: {item.supplier}</span>
+                            )}
                             {item.expiryDate && (
                               <span className={cn("flex items-center gap-1",
                                 item.status === 'expiring' ? 'text-destructive' : ''
@@ -358,7 +682,8 @@ export default function AdminInventory() {
                         <div className="text-right">
                           <p className={cn("text-2xl font-bold",
                             item.status === 'normal' ? 'text-primary' :
-                            item.status === 'low' ? 'text-amber-500' : 'text-destructive'
+                            item.status === 'low' ? 'text-amber-500' : 
+                            item.status === 'critical' ? 'text-red-600' : 'text-destructive'
                           )}>
                             {item.stock}
                           </p>
@@ -453,11 +778,11 @@ export default function AdminInventory() {
                       <div className="flex items-center gap-4">
                         <div className={cn("p-3 rounded-lg",
                           entry.status === 'pending' ? 'bg-amber-500/10' :
-                          entry.status === 'approved' ? 'bg-emerald-500/10' : 'bg-destructive/10'
+                          entry.status === 'approved' || entry.status === 'received' ? 'bg-emerald-500/10' : 'bg-destructive/10'
                         )}>
                           <Plus className={cn("w-5 h-5",
                             entry.status === 'pending' ? 'text-amber-500' :
-                            entry.status === 'approved' ? 'text-emerald-500' : 'text-destructive'
+                            entry.status === 'approved' || entry.status === 'received' ? 'text-emerald-500' : 'text-destructive'
                           )} />
                         </div>
                         <div>
@@ -465,11 +790,14 @@ export default function AdminInventory() {
                             <p className="font-semibold">{entry.itemName}</p>
                             <Badge variant="outline" className={cn("text-xs", getStatusColor(entry.status))}>
                               {getStatusIcon(entry.status)}
-                              {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                              {entry.status === 'approved' ? 'Received' : entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs bg-muted">
+                              {entry.category}
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            Supplier: {entry.supplier} • Cost: ₱{entry.cost.toLocaleString()}
+                            Supplier: {entry.supplier} {entry.cost > 0 && `• Cost: ₱${entry.cost.toLocaleString()}`}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             By {entry.enteredBy} • {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -483,17 +811,25 @@ export default function AdminInventory() {
                         <div className="text-right">
                           <p className={cn("text-xl font-bold",
                             entry.status === 'pending' ? 'text-amber-500' :
-                            entry.status === 'approved' ? 'text-emerald-500' : 'text-destructive'
+                            entry.status === 'approved' || entry.status === 'received' ? 'text-emerald-500' : 'text-destructive'
                           )}>+{entry.quantity}</p>
                           <p className="text-xs text-muted-foreground">units</p>
                         </div>
                         {entry.status === 'pending' && (
                           <div className="flex gap-2">
-                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+                            <Button 
+                              size="sm" 
+                              className="bg-emerald-600 hover:bg-emerald-700"
+                              onClick={() => handleRestockAction(entry.id, 'approve')}
+                            >
                               <CheckCircle2 className="w-4 h-4 mr-1" />
                               Approve
                             </Button>
-                            <Button size="sm" variant="destructive">
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={() => handleRestockAction(entry.id, 'reject')}
+                            >
                               <X className="w-4 h-4 mr-1" />
                               Reject
                             </Button>
@@ -636,12 +972,14 @@ export default function AdminInventory() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className={cn("p-4 rounded-lg border text-center",
                       selectedItem.status === 'normal' ? 'bg-primary/10 border-primary/20' :
-                      selectedItem.status === 'low' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-destructive/10 border-destructive/20'
+                      selectedItem.status === 'low' ? 'bg-amber-500/10 border-amber-500/20' : 
+                      selectedItem.status === 'critical' ? 'bg-red-600/10 border-red-600/20' : 'bg-destructive/10 border-destructive/20'
                     )}>
                       <p className="text-xs text-muted-foreground">Current Stock</p>
                       <p className={cn("text-3xl font-bold",
                         selectedItem.status === 'normal' ? 'text-primary' :
-                        selectedItem.status === 'low' ? 'text-amber-500' : 'text-destructive'
+                        selectedItem.status === 'low' ? 'text-amber-500' : 
+                        selectedItem.status === 'critical' ? 'text-red-600' : 'text-destructive'
                       )}>{selectedItem.stock}</p>
                       <p className="text-xs text-muted-foreground">{selectedItem.unit}</p>
                     </div>
@@ -652,8 +990,8 @@ export default function AdminInventory() {
                     </div>
                     <div className="p-4 rounded-lg border bg-muted/50 text-center">
                       <p className="text-xs text-muted-foreground">Unit Price</p>
-                      <p className="text-2xl font-bold">₱{selectedItem.price}</p>
-                      <p className="text-xs text-muted-foreground">per {selectedItem.unit.slice(0, -1)}</p>
+                      <p className="text-2xl font-bold">₱{selectedItem.price.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">per unit</p>
                     </div>
                   </div>
 
@@ -663,13 +1001,21 @@ export default function AdminInventory() {
                       <p className="text-xs text-muted-foreground">Status</p>
                       <Badge variant="outline" className={cn("mt-1", getStatusColor(selectedItem.status))}>
                         {getStatusIcon(selectedItem.status)}
-                        {selectedItem.status === 'normal' ? 'In Stock' : selectedItem.status === 'low' ? 'Low Stock' : 'Expiring Soon'}
+                        {selectedItem.status === 'normal' ? 'In Stock' : 
+                         selectedItem.status === 'low' ? 'Low Stock' : 
+                         selectedItem.status === 'critical' ? 'Critical' : 'Expiring Soon'}
                       </Badge>
                     </div>
                     <div className="p-3 rounded-lg bg-muted/50">
                       <p className="text-xs text-muted-foreground">Category</p>
                       <p className="text-sm font-medium mt-1">{selectedItem.category}</p>
                     </div>
+                    {selectedItem.supplier && selectedItem.supplier !== '--' && (
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="text-xs text-muted-foreground">Supplier</p>
+                        <p className="text-sm font-medium mt-1">{selectedItem.supplier}</p>
+                      </div>
+                    )}
                     {selectedItem.expiryDate && (
                       <div className={cn("p-3 rounded-lg", selectedItem.status === 'expiring' ? 'bg-destructive/10' : 'bg-muted/50')}>
                         <p className="text-xs text-muted-foreground">Expiry Date</p>
@@ -678,12 +1024,6 @@ export default function AdminInventory() {
                         </p>
                       </div>
                     )}
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">Last Updated</p>
-                      <p className="text-sm font-medium mt-1">
-                        {new Date(selectedItem.lastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                    </div>
                   </div>
 
                   {/* Recent Deductions */}
@@ -692,11 +1032,11 @@ export default function AdminInventory() {
                       <Minus className="w-4 h-4" />
                       Recent Deductions
                     </h4>
-                    {getItemDeductions(selectedItem.id).length === 0 ? (
+                    {getItemDeductions(selectedItem.name).length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4 bg-muted/30 rounded-lg">No recent deductions</p>
                     ) : (
                       <div className="space-y-2">
-                        {getItemDeductions(selectedItem.id).slice(0, 3).map((ded, idx) => (
+                        {getItemDeductions(selectedItem.name).slice(0, 3).map((ded, idx) => (
                           <div key={idx} className="p-3 rounded-lg border bg-card flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium">{ded.treatment}</p>
@@ -718,24 +1058,24 @@ export default function AdminInventory() {
                       <Plus className="w-4 h-4" />
                       Recent Restocks
                     </h4>
-                    {getItemRestocks(selectedItem.id).length === 0 ? (
+                    {getItemRestocks(selectedItem.name).length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4 bg-muted/30 rounded-lg">No recent restocks</p>
                     ) : (
                       <div className="space-y-2">
-                        {getItemRestocks(selectedItem.id).slice(0, 3).map((entry, idx) => (
+                        {getItemRestocks(selectedItem.name).slice(0, 3).map((entry, idx) => (
                           <div key={idx} className="p-3 rounded-lg border bg-card flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
                                 <p className="text-sm font-medium">{entry.supplier}</p>
                                 <Badge variant="outline" className={cn("text-xs", getStatusColor(entry.status))}>
-                                  {entry.status}
+                                  {entry.status === 'approved' ? 'Received' : entry.status}
                                 </Badge>
                               </div>
                               <p className="text-xs text-muted-foreground">{entry.enteredBy}</p>
                             </div>
                             <div className="text-right">
                               <p className={cn("text-sm font-bold",
-                                entry.status === 'approved' ? 'text-emerald-500' :
+                                entry.status === 'approved' || entry.status === 'received' ? 'text-emerald-500' :
                                 entry.status === 'pending' ? 'text-amber-500' : 'text-destructive'
                               )}>+{entry.quantity}</p>
                               <p className="text-xs text-muted-foreground">{entry.date}</p>
