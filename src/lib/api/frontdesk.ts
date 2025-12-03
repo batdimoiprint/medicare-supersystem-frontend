@@ -29,6 +29,15 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`
 }
 
+// Get today's date in UTC (YYYY-MM-DD format)
+const getTodayDateUTC = () => {
+  const today = new Date()
+  const year = today.getUTCFullYear()
+  const month = String(today.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(today.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // Get date N days ago (local timezone)
 const getDateDaysAgo = (days: number) => {
   const date = new Date()
@@ -37,6 +46,18 @@ const getDateDaysAgo = (days: number) => {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+// Get current timestamp in local timezone format for database (YYYY-MM-DD HH:MM:SS)
+const getLocalTimestamp = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const seconds = String(now.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 /**
@@ -1427,7 +1448,11 @@ async function getServiceName(serviceId: number | null): Promise<string> {
  * Fetch admin appointment statistics
  */
 export async function fetchAdminAppointmentStats(): Promise<AdminAppointmentStats> {
-  const today = getTodayDate()
+  // The database stores timestamps in UTC (via now() function)
+  // We need to query using UTC dates to match
+  const todayUTC = getTodayDateUTC()
+  const todayStartUTC = `${todayUTC} 00:00:00`
+  const todayEndUTC = `${todayUTC} 23:59:59`
 
   // Fetch all appointment statuses to get IDs
   const { data: statuses } = await frontdesk()
@@ -1449,12 +1474,14 @@ export async function fetchAdminAppointmentStats(): Promise<AdminAppointmentStat
     .select('*', { count: 'exact', head: true })
     .eq('appointment_status_id', pendingId)
 
-  // Count approved today (confirmed appointments created/updated today)
+  // Count approved today (confirmed appointments where updated_at is today in UTC)
+  // This requires the updated_at column to be added to the table
   const { count: approvedToday } = await frontdesk()
     .from('appointment_tbl')
     .select('*', { count: 'exact', head: true })
     .eq('appointment_status_id', confirmedId)
-    .eq('appointment_date', today)
+    .gte('updated_at', todayStartUTC)
+    .lte('updated_at', todayEndUTC)
 
   // Count rescheduled (we'll check for appointments with rescheduled status or notes containing reschedule)
   // Since there might not be a dedicated "rescheduled" status, we can track this differently
@@ -1780,7 +1807,10 @@ export async function fetchAdminCancelledAppointments(): Promise<AdminCancelledA
 export async function approveAppointment(appointmentId: number): Promise<void> {
   const { error } = await frontdesk()
     .from('appointment_tbl')
-    .update({ appointment_status_id: 2 })
+    .update({ 
+      appointment_status_id: 2,
+      updated_at: getLocalTimestamp() // Track when approval happened (local timezone)
+    })
     .eq('appointment_id', appointmentId)
 
   if (error) {
@@ -1801,8 +1831,9 @@ export async function declineAppointment(appointmentId: number, reason?: string)
 
   const cancelledId = statusData?.appointment_status_id ?? CANCELLED_STATUS_ID
 
-  const updateData: { appointment_status_id: number; notes?: string } = {
+  const updateData: { appointment_status_id: number; notes?: string; updated_at: string } = {
     appointment_status_id: cancelledId,
+    updated_at: getLocalTimestamp(),
   }
 
   if (reason) {
@@ -1857,10 +1888,12 @@ export async function rescheduleAppointmentAdmin(
     appointment_time?: string | null
     notes: string
     appointment_status_id: number
+    updated_at: string
   } = {
     appointment_date: newDate,
     notes: newNotes,
     appointment_status_id: 7, // Rescheduled status
+    updated_at: getLocalTimestamp(),
   }
 
   if (newTime !== undefined) {
