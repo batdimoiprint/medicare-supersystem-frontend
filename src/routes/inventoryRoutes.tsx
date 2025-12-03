@@ -4,6 +4,8 @@ import InventoryTable from '@/pages/inventory/inventorytable/InventoryTable';
 import StockLogs from '@/pages/inventory/StockLogs';
 import Supplier from '@/pages/inventory/Supplier';
 import Report from '@/pages/inventory/Report';
+import Alerts from '@/pages/inventory/Alerts';
+import WasteDisposal from '@/pages/inventory/WasteDisposal';
 import { Route } from 'react-router-dom';
 
 export const inventoryRouteData = [
@@ -11,7 +13,9 @@ export const inventoryRouteData = [
     { index: false, path: 'table', element: <InventoryTable />, title: 'Inventory Table' }
     ,{ index: false, path: 'stock-logs', element: <StockLogs />, title: 'Stock Logs' }
     ,{ index: false, path: 'supplier', element: <Supplier />, title: 'Suppliers' },
-    { index: false, path: 'report', element: <Report />, title: 'Reports' }
+    { index: false, path: 'report', element: <Report />, title: 'Reports' },
+    { index: false, path: 'alerts', element: <Alerts />, title: 'Alerts' },
+    { index: false, path: 'waste-disposal', element: <WasteDisposal />, title: 'Waste & Disposal' }
 ];
 
 export const inventoryRoutes = (

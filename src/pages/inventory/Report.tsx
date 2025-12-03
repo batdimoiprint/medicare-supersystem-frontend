@@ -1,23 +1,331 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart, Coins } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { BarChart, Coins, DownloadCloud } from 'lucide-react'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
 import { cn, formatCurrency } from '@/lib/utils'
 import supabase from '@/utils/supabase'
 import ChartRadialSimple from '@/components/ui/chart-radial-simple'
 import { DatePicker } from '@/components/ui/date-picker'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const ReportPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'usage' | 'cost'>('usage')
   const [dateRange, setDateRange] = useState('Last 6 Months')
   const [startDate, setStartDate] = useState<Date | undefined>()
   const [endDate, setEndDate] = useState<Date | undefined>()
+  const [isExporting, setIsExporting] = useState(false)
 
   const [usageData, setUsageData] = useState<{ label: string; value: number }[]>([])
   const CATEGORY_COLORS: Record<string, string> = { Consumables: '#58B3FF', Medicines: '#77DD77', Equipment: '#FFD166' }
   // default colors; will override based on categoryFilter or usageData length
   const usageColors = ['#58B3FF', '#77DD77', '#FFD166']
   const [categoryFilter, setCategoryFilter] = useState<string>('All Categories')
+
+  // Export report to PDF using jsPDF directly (without html2canvas)
+  function exportReportToPDF() {
+    if (isExporting) return
+    setIsExporting(true)
+    
+    try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+      
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      
+      // Header
+      doc.setFillColor(7, 42, 45)
+      doc.rect(0, 0, pageWidth, 32, 'F')
+      
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(20)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Inventory Report', 14, 15)
+      
+      // Subtitle with active tab
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      const tabLabel = activeTab === 'usage' ? 'Usage Trends' : 'Cost Analysis'
+      doc.text(`${tabLabel} | ${categoryFilter}`, 14, 23)
+      
+      // Company name and date on right
+      doc.setFontSize(9)
+      doc.setTextColor(180, 220, 220)
+      doc.setFont('helvetica', 'bold')
+      doc.text('MEDICARE DENTAL CLINIC', pageWidth - 14, 12, { align: 'right' })
+      
+      doc.setFont('helvetica', 'normal')
+      const today = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+      doc.text(`Generated: ${today}`, pageWidth - 14, 19, { align: 'right' })
+      
+      const timeNow = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      doc.text(timeNow, pageWidth - 14, 25, { align: 'right' })
+      
+      let yPos = 45
+      
+      // Summary Cards
+      doc.setFillColor(240, 253, 250)
+      doc.roundedRect(14, yPos, 120, 30, 3, 3, 'F')
+      doc.roundedRect(144, yPos, 120, 30, 3, 3, 'F')
+      
+      doc.setTextColor(100, 100, 100)
+      doc.setFontSize(9)
+      doc.text('Total Inventory Value', 20, yPos + 10)
+      doc.text('Monthly Usage', 150, yPos + 10)
+      
+      doc.setTextColor(30, 30, 30)
+      doc.setFontSize(16)
+      doc.setFont('helvetica', 'bold')
+      // Format currency for PDF (using PHP instead of ₱)
+      const formatPdfCurrency = (value: number) => `PHP ${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      doc.text(formatPdfCurrency(inventoryValue), 20, yPos + 22)
+      doc.text(formatPdfCurrency(monthlyUsageCost), 150, yPos + 22)
+      
+      yPos += 40
+      
+      if (activeTab === 'usage') {
+        // Usage Trends Table
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(14)
+        doc.setTextColor(0, 168, 168)
+        doc.text('Usage Trends - Monthly Material Usage', 14, yPos)
+        yPos += 8
+        
+        const totalUsage = usageData.reduce((s, d) => s + d.value, 0)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        doc.setTextColor(80, 80, 80)
+        doc.text(`Total Usage: ${totalUsage.toLocaleString()} units`, 14, yPos)
+        yPos += 8
+        
+        // Usage data table
+        const usageTableData = usageData.map((item) => [
+          item.label,
+          item.value.toLocaleString(),
+          `${totalUsage > 0 ? Math.round((item.value / totalUsage) * 100) : 0}%`
+        ])
+        
+        autoTable(doc, {
+          head: [['Category/Item', 'Quantity Used', 'Percentage']],
+          body: usageTableData,
+          startY: yPos,
+          theme: 'grid',
+          styles: {
+            fontSize: 10,
+            cellPadding: 4,
+            textColor: [50, 50, 50],
+          },
+          headStyles: {
+            fillColor: [0, 168, 168],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+          },
+          alternateRowStyles: {
+            fillColor: [248, 252, 252],
+          },
+          columnStyles: {
+            0: { cellWidth: 100 },
+            1: { cellWidth: 60, halign: 'right' },
+            2: { cellWidth: 50, halign: 'center' },
+          },
+          margin: { left: 14, right: 14 },
+        })
+        
+      } else {
+        // Cost Analysis with Pie Chart
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(14)
+        doc.setTextColor(0, 168, 168)
+        doc.text('Cost Analysis - Monthly Spending Overview', 14, yPos)
+        yPos += 5
+        
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        doc.setTextColor(80, 80, 80)
+        doc.text(`Total Cost: ${formatPdfCurrency(totalCost)}`, 14, yPos)
+        yPos += 12
+        
+        // Draw Pie Chart
+        const centerX = 70
+        const centerY = yPos + 45
+        const radius = 35
+        
+        // Draw pie chart sections
+        let startAngle = -Math.PI / 2 // Start from top
+        const pieColors = [
+          [88, 179, 255],   // Consumables - #58B3FF
+          [119, 221, 119],  // Medicines - #77DD77  
+          [255, 209, 102],  // Equipment - #FFD166
+        ]
+        
+        costBreakdownData.forEach((item, idx) => {
+          const percentage = totalCost > 0 ? item.value / totalCost : 0
+          const sweepAngle = percentage * 2 * Math.PI
+          
+          if (percentage > 0) {
+            // Draw pie slice
+            const color = pieColors[idx % pieColors.length]
+            doc.setFillColor(color[0], color[1], color[2])
+            
+            // Draw arc segments
+            const segments = Math.max(Math.ceil(sweepAngle * 20), 1)
+            const points: [number, number][] = [[centerX, centerY]]
+            
+            for (let i = 0; i <= segments; i++) {
+              const angle = startAngle + (sweepAngle * i / segments)
+              points.push([
+                centerX + radius * Math.cos(angle),
+                centerY + radius * Math.sin(angle)
+              ])
+            }
+            
+            // Draw filled polygon
+            doc.setDrawColor(255, 255, 255)
+            doc.setLineWidth(0.5)
+            
+            // Use triangle fan approach for pie slice
+            for (let i = 1; i < points.length - 1; i++) {
+              doc.triangle(
+                centerX, centerY,
+                points[i][0], points[i][1],
+                points[i + 1][0], points[i + 1][1],
+                'F'
+              )
+            }
+            
+            startAngle += sweepAngle
+          }
+        })
+        
+        // Draw center circle for donut effect
+        doc.setFillColor(255, 255, 255)
+        doc.circle(centerX, centerY, radius * 0.5, 'F')
+        
+        // Draw total in center
+        doc.setFontSize(8)
+        doc.setTextColor(100, 100, 100)
+        doc.text('Total', centerX, centerY - 3, { align: 'center' })
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(30, 30, 30)
+        doc.text(formatPdfCurrency(totalCost), centerX, centerY + 4, { align: 'center' })
+        
+        // Cost Breakdown section (right side)
+        const breakdownX = 130
+        let breakdownY = yPos
+        
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(12)
+        doc.setTextColor(0, 168, 168)
+        doc.text('Cost Breakdown', breakdownX, breakdownY)
+        breakdownY += 10
+        
+        costBreakdownData.forEach((item, idx) => {
+          const color = pieColors[idx % pieColors.length]
+          const percentage = totalCost > 0 ? Math.round((item.value / totalCost) * 100) : 0
+          
+          // Color dot
+          doc.setFillColor(color[0], color[1], color[2])
+          doc.circle(breakdownX + 3, breakdownY - 2, 3, 'F')
+          
+          // Category name
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10)
+          doc.setTextColor(50, 50, 50)
+          doc.text(item.label, breakdownX + 10, breakdownY)
+          
+          // Percentage
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9)
+          doc.setTextColor(120, 120, 120)
+          doc.text(`${percentage}%`, breakdownX + 10, breakdownY + 5)
+          
+          // Amount (right aligned)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10)
+          doc.setTextColor(50, 50, 50)
+          doc.text(formatPdfCurrency(item.value), pageWidth - 30, breakdownY, { align: 'right' })
+          
+          breakdownY += 18
+        })
+        
+        yPos = Math.max(centerY + radius + 15, breakdownY + 5)
+        
+        // Summary table below
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(12)
+        doc.setTextColor(0, 168, 168)
+        doc.text('Detailed Cost Summary', 14, yPos)
+        yPos += 8
+        
+        // Cost breakdown table
+        const costTableData = costBreakdownData.map((item) => [
+          item.label,
+          formatPdfCurrency(item.value),
+          `${totalCost > 0 ? Math.round((item.value / totalCost) * 100) : 0}%`
+        ])
+        
+        autoTable(doc, {
+          head: [['Category/Item', 'Cost', 'Percentage']],
+          body: costTableData,
+          startY: yPos,
+          theme: 'grid',
+          styles: {
+            fontSize: 10,
+            cellPadding: 4,
+            textColor: [50, 50, 50],
+          },
+          headStyles: {
+            fillColor: [0, 168, 168],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+          },
+          alternateRowStyles: {
+            fillColor: [248, 252, 252],
+          },
+          columnStyles: {
+            0: { cellWidth: 100 },
+            1: { cellWidth: 70, halign: 'right' },
+            2: { cellWidth: 50, halign: 'center' },
+          },
+          margin: { left: 14, right: 14 },
+        })
+      }
+      
+      // Footer
+      const footerY = pageHeight - 10
+      doc.setDrawColor(200, 210, 210)
+      doc.setLineWidth(0.3)
+      doc.line(14, footerY - 5, pageWidth - 14, footerY - 5)
+      
+      doc.setFontSize(8)
+      doc.setTextColor(120, 130, 140)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Medicare Dental Clinic - Inventory Management System', 14, footerY)
+      doc.text('Page 1 of 1', pageWidth - 14, footerY, { align: 'right' })
+      
+      // Save
+      const filename = `inventory-report-${activeTab}-${new Date().toISOString().split('T')[0]}.pdf`
+      doc.save(filename)
+    } catch (error) {
+      console.error('Error exporting PDF:', error)
+      alert('Error exporting PDF. Check console for details.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   // Horizontal bar chart component for usage trends
   function HorizontalBarChart({ data, colors = ['#00a8a8'] }: { data: { label: string; value: number }[]; colors?: string[] }) {
@@ -221,6 +529,15 @@ const ReportPage: React.FC = () => {
                 <CardTitle className="text-3xl mb-0 flex items-center gap-3">Reports</CardTitle>
                 <p className="text-muted-foreground">Generate inventory reports and exports</p>
               </div>
+              <Button 
+                size="sm" 
+                className="bg-[#00a8a8] hover:bg-[#009090] text-white print:hidden" 
+                onClick={exportReportToPDF}
+                disabled={isExporting}
+              >
+                <DownloadCloud className="w-4 h-4 mr-2" />
+                {isExporting ? 'Exporting...' : 'Export PDF'}
+              </Button>
             </div>
           </CardHeader>
         </Card>
