@@ -17,9 +17,9 @@ export default function Followup() {
                         Manage and view all patient follow-up appointments.
                     </p>
                 </div>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
+                <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => refetch()}
                     disabled={isFetching}
                 >
@@ -50,9 +50,9 @@ export default function Followup() {
                     </CardContent>
                 </Card>
             ) : (
-                <div className="mt-4">
-                    <ReceptionistTable 
-                        items={followups} 
+                <Card className="p-4">
+                    <ReceptionistTable
+                        items={followups}
                         basePath="/receptionist/followup"
                         type="followup"
                     />
@@ -61,7 +61,7 @@ export default function Followup() {
                             No follow-ups found.
                         </p>
                     )}
-                </div>
+                </Card>
             )}
         </div>
     )
