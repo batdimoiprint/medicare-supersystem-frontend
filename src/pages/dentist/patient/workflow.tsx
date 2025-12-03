@@ -35,7 +35,6 @@ import { formatCurrency } from '@/lib/utils';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
 const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
 const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
 const inventoryClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'inventory' } });
@@ -100,7 +99,6 @@ const STEPS = [
 const PatientWorkflow = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Data
@@ -1759,7 +1757,6 @@ const PatientWorkflow = () => {
             <div className="grid grid-cols-8 gap-2">
               {Array.from({ length: 32 }, (_, i) => i + 1).map(toothNum => {
                 const tooth = teeth[toothNum] || { number: toothNum, condition: 'Healthy' };
-                const condition = toothConditions.find(c => c.condition_name === tooth.condition);
                 return (
                   <Card
                     key={toothNum}
