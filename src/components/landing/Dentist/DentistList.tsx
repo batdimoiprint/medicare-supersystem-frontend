@@ -1,10 +1,10 @@
-// C:\Users\gulfe\Medi\medicare-supersystem-frontend-main\src\components\landing\Dentist\DentistList.tsx
+// C:\Users\gulfe\Medi\medicare-supersystem-frontend\src\components\landing\Dentist\DentistList.tsx
 
 import { cn } from "@/lib/utils";
 import { motion, type Variants } from "framer-motion"; 
-import { GraduationCap } from "lucide-react"; 
+import { GraduationCap} from "lucide-react"; 
 import { useState } from 'react';
-import DoctorProfileModal from './DoctorProfileModal';
+// REMOVED: import DoctorProfileModal from './DoctorProfileModal'; 
 
 // --- IMAGE IMPORTS (assuming correct alias path) ---
 import imgMaria from '@/components/assets/dentists/img_dentist1.jpg';
@@ -20,7 +20,7 @@ export type Dentist = {
   name: string;
   specialization: string;
   education: string;
-  image?: { src: string } | string; 
+  image?: { src: string } | string;
   bio?: string;
   years: number;
   philosophy: string;
@@ -54,28 +54,30 @@ export const DENTISTS: Dentist[] = [
     services: ["Clear Aligners (Invisalign)", "Traditional Braces", "Porcelain Veneers", "Teeth Whitening", "Gum Contouring", "Smile Makeovers"],
   },
   {
+    // --- CHANGED: Oral Surgery -> Prosthodontics (Doctor Angela Reyes) ---
     id: "angela-reyes",
     name: "Dr. Angela Reyes",
-    specialization: "Oral Surgery & Endodontics",
+    specialization: "Prosthodontics & Endodontics", // Updated Specialization
     education: "University of the Philippines Manila",
     image: imgAngela,
-    bio: "A precision-focused surgeon, Dr. Reyes excels in complex procedures, from wisdom tooth extraction to root canal therapy, ensuring quick recovery.",
+    bio: "A precision-focused specialist, Dr. Reyes excels in complex restorations, from dental implants to root canal therapy, ensuring durable and aesthetic results.", // Updated Bio
     years: 10,
-    philosophy: "Precision and comfort are not mutually exclusive. Prioritizes rapid post-operative recovery for complex procedures.",
-    affiliations: "Philippine Society of Endodontists, Association of Philippine Oral and Maxillofacial Surgeons",
-    services: ["Root Canal Therapy", "Wisdom Tooth Extraction", "Dental Implant Placement", "Apicoectomy", "Biopsies"],
+    philosophy: "Precision and comfort are not mutually exclusive. Prioritizes rapid post-operative recovery for complex restorative work.", // Updated Philosophy
+    affiliations: "Philippine Society of Endodontists, Philippine Prosthodontic Society", // Updated Affiliations
+    services: ["Dental Implants (Restorative Phase)", "Crowns", "Bridges", "Full and Partial Dentures", "Root Canal Therapy"], // Updated Services
   },
   {
-    id: "mark-villanueva",
+    // --- CHANGED: Prosthodontics -> Radiograph (Doctor Mark Villanueva) ---
+    id: "radiograph", // Updated ID to match new focus
     name: "Dr. Mark Villanueva",
-    specialization: "Prosthodontics & Digital Imaging",
+    specialization: "Radiograph & Digital Imaging", // Updated Specialization
     education: "CEU Manila, College of Dentistry",
     image: imgMark,
-    bio: "Dr. Villanueva specializes in restoring function and aesthetics with crowns, bridges, and implants, leveraging advanced 3D scanning technology.",
+    bio: "Dr. Villanueva specializes in advanced diagnostic imaging, leveraging 3D scanning and digital X-ray technology for precise treatment planning and diagnosis.", // Updated Bio
     years: 6,
-    philosophy: "Function restored is life restored. Utilizes digital tools (CAD/CAM) to create perfectly fitting, durable, and aesthetic restorations.",
-    affiliations: "Philippine Prosthodontic Society, International Team for Implantology (ITI)",
-    services: ["Dental Implants (Restorative Phase)", "Crowns", "Bridges", "Full and Partial Dentures", "Occlusal Adjustments", "Full-Mouth Reconstruction"],
+    philosophy: "Accurate diagnosis through technology. Utilizes digital tools (CAD/CAM and CBCT) to provide perfectly clear and necessary insights for treatment.", // Updated Philosophy
+    affiliations: "Philippine Society of Dental Radiologists, International Team for Implantology (ITI)", // Updated Affiliations
+    services: ["Digital X-rays", "Panoramic X-rays", "Cone-Beam CT (CBCT) Scans", "Intraoral Imaging", "Diagnostic Reports"], // Updated Services
   },
 ];
 
@@ -106,36 +108,28 @@ const item: Variants = {
 type DentistListProps = {
     initialSpecialtyFilter?: string; 
     onCloseProfiles?: () => void;
-    // Required prop for the modal chain
-    onViewServices?: (specialtyName: string) => void; 
+    // REMOVED: onViewServices (The parent page passes this directly to the modal now)
+    
+    // 🔑 FIX 3: Add the onDoctorSelect prop to the type definition
+    onDoctorSelect: (doctor: Dentist) => void; 
 };
 
 
 // --- MAIN COMPONENT ---
 
-export default function DentistList({ initialSpecialtyFilter, onCloseProfiles, onViewServices }: DentistListProps) {
+// Update prop destructuring: remove onViewServices, add onDoctorSelect
+export default function DentistList({ initialSpecialtyFilter, onCloseProfiles, onDoctorSelect }: DentistListProps) {
     
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedDoctor, setSelectedDoctor] = useState<Dentist | null>(null);
+    // REMOVED: isModalOpen, selectedDoctor, openModal, closeModal logic
+
     const [currentFilter, setCurrentFilter] = useState(initialSpecialtyFilter || ''); // State for filter
-
-    const openModal = (doctor: Dentist) => {
-        setSelectedDoctor(doctor);
-        setIsModalOpen(true);
-    };
-
-    const closeModal = () => {
-        setIsModalOpen(false);
-        setSelectedDoctor(null);
-    };
 
     // Filtering Logic based on prop
     const filteredDentists = DENTISTS.filter(doc => {
         if (!currentFilter) return true;
-
         const specialtyParts = doc.specialization.split(',').map(s => s.trim().toLowerCase());
         const targetFilter = currentFilter.toLowerCase().replace(/-/g, ' ');
-
+        // The filter must match the new specialty names: 'prosthodontics' or 'radiograph'
         return specialtyParts.some(part => part.includes(targetFilter));
     });
 
@@ -155,15 +149,15 @@ export default function DentistList({ initialSpecialtyFilter, onCloseProfiles, o
                     </button>
                 </div>
             )}
-            
-            {filteredDentists.length === 0 && currentFilter && (
-                <div className="max-w-6xl mx-auto p-8 text-center my-16 bg-card rounded-xl shadow-lg">
-                    <h3 className="text-2xl font-bold text-red-500">No Specialists Found</h3>
-                    <p className="text-muted-foreground mt-2">
-                        We couldn't find any doctors matching the specialty: <strong className="capitalize">{currentFilter.replace(/-/g, ' ')}</strong>. Showing all available doctors below.
-                    </p>
-                </div>
-            )}
+            
+            {filteredDentists.length === 0 && currentFilter && (
+                <div className="max-w-6xl mx-auto p-8 text-center my-16 bg-card rounded-xl shadow-lg">
+                    <h3 className="text-2xl font-bold text-red-500">No Specialists Found</h3>
+                    <p className="text-muted-foreground mt-2">
+                        We couldn't find any doctors matching the specialty: <strong className="capitalize">{currentFilter.replace(/-/g, ' ')}</strong>. Showing all available doctors below.
+                    </p>
+                </div>
+            )}
 
             <motion.div
                 className="mt-16 space-y-12 max-w-6xl mx-auto"
@@ -200,7 +194,6 @@ export default function DentistList({ initialSpecialtyFilter, onCloseProfiles, o
                                 )}
                             >
                                 <img
-                                    // FIX: Safely access the image source property
                                     src={typeof doc.image === 'string' ? doc.image : doc.image?.src}
                                     alt={doc.name}
                                     onError={(e) => {
@@ -236,7 +229,8 @@ export default function DentistList({ initialSpecialtyFilter, onCloseProfiles, o
                                 </ul>
 
                                 <button 
-                                    onClick={() => openModal(doc)}
+                                    // 🔑 FIX 4: Call the new prop to pass the doctor up to the parent page
+                                    onClick={() => onDoctorSelect(doc)}
                                     className="mt-5 inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors h-10 px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
                                 >
                                     View Full Profile
@@ -250,23 +244,11 @@ export default function DentistList({ initialSpecialtyFilter, onCloseProfiles, o
             {/* Render the 'Close Profiles' button only if the prop is provided (i.e., on the dedicated Doctor Page) */}
             {onCloseProfiles && (
                 <div className="mt-16 text-center">
-                    <button
-                        onClick={onCloseProfiles} 
-                        className="inline-flex items-center justify-center rounded-lg text-lg font-bold transition-colors h-12 px-8 py-3 bg-secondary text-secondary-foreground hover:bg-secondary/90 shadow-lg"
-                    >
-                        Go Back to Services
-                    </button>
                 </div>
             )}
 
 
-            {/* 5. Render the Modal component */}
-            <DoctorProfileModal 
-                doctor={selectedDoctor} 
-                isOpen={isModalOpen} 
-                onClose={closeModal} 
-                onViewServices={onViewServices || (() => console.log('View Services link clicked'))}
-            />
+            {/* 5. The DoctorProfileModal rendering logic is now managed by the parent page. */}
         </>
     );
 }
