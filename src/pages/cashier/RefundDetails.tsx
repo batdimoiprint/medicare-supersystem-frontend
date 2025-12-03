@@ -181,12 +181,13 @@ export default function RefundDetails() {
               <Select value={refundStatus} onValueChange={setRefundStatus}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
-                </SelectTrigger>
+                </SelectTrigger> processed pending failed
                 <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="processed">Processed</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="Requested">Requested</SelectItem>
+                  <SelectItem value="Approved">Approved</SelectItem>
+                  <SelectItem value="Processed">Processed</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Failed">Failed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
