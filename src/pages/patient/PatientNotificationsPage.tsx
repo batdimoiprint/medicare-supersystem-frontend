@@ -19,6 +19,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import supabase from '@/utils/supabase';
+import { useAuth } from '@/context/userContext';
 
 // --- Database Types ---
 interface Appointment {
@@ -207,6 +208,7 @@ const generateNotificationId = (
 
 export default function PatientNotificationsPage() {
     const navigate = useNavigate();
+    const { user: authUser } = useAuth();
     const [notifications, setNotifications] = useState<GeneratedNotification[]>([]);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
@@ -238,7 +240,7 @@ export default function PatientNotificationsPage() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [authUser]);
 
     // Fetch read status from Supabase
     const fetchReadStatus = async (currentPatientId: number) => {
@@ -329,19 +331,17 @@ export default function PatientNotificationsPage() {
             setLoading(true);
             setError(null);
             
-            // 1. Get current authenticated user
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-            
-            if (authError || !user) {
+            // 1. Get current authenticated user from auth context
+            if (!authUser) {
                 throw new Error('User not authenticated. Please log in.');
             }
             
-            // 2. Fetch patient data from patient_record schema
+            // 2. Fetch patient data from patient_record schema using user.id
             const { data: patientData, error: patientError } = await supabase
                 .schema('patient_record')
                 .from('patient_tbl')
                 .select('patient_id, f_name, l_name, m_name, suffix, birthdate, gender, email, pri_contact_no, account_status')
-                .eq('email', user.email)
+                .eq('patient_id', authUser.id)
                 .single();
             
             if (patientError) {

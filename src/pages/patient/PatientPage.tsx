@@ -32,6 +32,7 @@ import {
 import { Input } from "@/components/ui/input";
 
 import { useNavigate } from 'react-router-dom'; 
+import { useAuth } from '@/context/userContext';
 
 // Import Modals
 import BookAppointmentModal from '@/components/patient/BookAppointmentModal';
@@ -186,6 +187,7 @@ const ScrollButtons = ({ scrollRef, itemsLength }: { scrollRef: React.RefObject<
 
 export default function PatientPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [currentPatient, setCurrentPatient] = useState<PatientData | null>(null);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [appointmentHistory, setAppointmentHistory] = useState<AppointmentHistory[]>([]);
@@ -229,23 +231,21 @@ export default function PatientPage() {
     useEffect(() => {
         const fetchPatientData = async () => {
             try {
-                // Get current user
-                const { data: { user }, error: userError } = await supabase.auth.getUser();
-                
-                console.log('User object:', user);
-                
-                if (userError || !user) {
-                    console.error('No user logged in', userError);
+                // Get current user from auth context
+                if (!user) {
+                    console.error('No user logged in');
                     navigate('/login');
                     return;
                 }
 
-                // Fetch patient data
+                console.log('User object from context:', user);
+
+                // Fetch patient data using user.id from auth context
                 const { data: patientData, error: patientError } = await supabase
                     .schema('patient_record')
                     .from('patient_tbl')
                     .select('patient_id, email, f_name, l_name, pri_contact_no, house_no, street, barangay, city, account_status')
-                    .eq('email', user.email)
+                    .eq('patient_id', user.id)
                     .single();
 
                 if (patientError) {
@@ -401,7 +401,7 @@ export default function PatientPage() {
         };
 
         fetchPatientData();
-    }, [navigate]);
+    }, [navigate, user]);
 
     // Helper functions
     const formatTimeToAMPM = (timeStr: string) => {

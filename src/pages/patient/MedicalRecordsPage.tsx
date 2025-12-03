@@ -27,6 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useState, useEffect } from 'react';
 import supabase from '@/utils/supabase';
+import { useAuth } from '@/context/userContext';
 
 // --- Types ---
 interface EMRRecord {
@@ -98,6 +99,7 @@ const TOOTH_CONDITIONS: Record<number, { name: string; description: string; colo
 
 export default function MedicalRecordsPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [emrRecords, setEmrRecords] = useState<EMRRecord[]>([]);
     const [treatmentPlans, setTreatmentPlans] = useState<TreatmentPlan[]>([]);
@@ -108,27 +110,25 @@ export default function MedicalRecordsPage() {
 
     useEffect(() => {
         fetchMedicalData();
-    }, []);
+    }, [user]);
 
     const fetchMedicalData = async () => {
         try {
             setLoading(true);
             
-            // Get current user
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-            
-            if (userError || !user) {
-                console.error('No user logged in', userError);
+            // Get current user from auth context
+            if (!user) {
+                console.error('No user logged in');
                 navigate('/login');
                 return;
             }
 
-            // Fetch patient data to get patient_id and basic info
+            // Fetch patient data using user.id from auth context
             const { data: patientData, error: patientError } = await supabase
                 .schema('patient_record')
                 .from('patient_tbl')
                 .select('patient_id, email, f_name, l_name, pri_contact_no, house_no, street, barangay, city, account_status')
-                .eq('email', user.email)
+                .eq('patient_id', user.id)
                 .single();
 
             if (patientError) {
