@@ -1,3 +1,4 @@
+// Prescriptions page - Manage patient prescriptions
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {

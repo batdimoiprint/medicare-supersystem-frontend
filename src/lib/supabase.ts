@@ -4,12 +4,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? undefined) as string | undefined
 // support multiple possible names used in your env files
-const SUPABASE_KEY = (
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
-  import.meta.env.VITE_SUPABASE_ANON_KEY ??
-  import.meta.env.VITE_SUPABASE_KEY ??
-  undefined
-) as string | undefined
+// Only using publishable key - no fallbacks
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string | undefined
 
 if (!SUPABASE_URL) {
   throw new Error(
@@ -18,7 +14,7 @@ if (!SUPABASE_URL) {
 }
 if (!SUPABASE_KEY) {
   throw new Error(
-    'VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY (or VITE_SUPABASE_ANON_KEY / VITE_SUPABASE_KEY) is required. Add it to .env.local and restart the dev server.'
+    'VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY is required. Add it to your .env file and restart the dev server.'
   )
 }
 

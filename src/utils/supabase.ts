@@ -1,8 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Environment variables
+// Environment variables - only using URL and publishable key
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+// Validate environment variables
+if (!supabaseUrl) {
+  throw new Error('VITE_SUPABASE_URL is required. Add it to your .env file.');
+}
+
+if (!supabaseKey) {
+  throw new Error('VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY is required. Add it to your .env file.');
+}
 
 // Default client (can be used for general queries - public schema)
 const supabase = createClient(supabaseUrl, supabaseKey);

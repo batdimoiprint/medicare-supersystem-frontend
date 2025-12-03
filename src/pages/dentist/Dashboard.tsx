@@ -107,7 +107,7 @@ const Dashboard = () => {
           const { count } = await dentistClient
             .from('treatment_plan_tbl')
             .select('*', { count: 'exact', head: true })
-            .in('treatment_status', ['Planned', 'In Progress']);
+            .in('treatment_status', ['Pending', 'Ongoing']);
           activeTreatmentPlans = count || 0;
         } catch (err) {
           console.error('Failed to load active treatment plans:', err);

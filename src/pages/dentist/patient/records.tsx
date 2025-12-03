@@ -368,13 +368,29 @@ const PatientRecords = () => {
         if (error) throw error;
         setIsEditing(null);
       } else if (isAdding) {
+        // Get the next available id for emr_records
+        // Get the max id to calculate next id
+        const { data: maxData } = await patientRecordClient
+          .from('emr_records')
+          .select('id')
+          .order('id', { ascending: false })
+          .limit(1)
+          .single();
+
+        let nextId = 1;
+        if (maxData?.id) {
+          nextId = (maxData.id as number) + 1;
+        }
+
         // Insert new record
         // Note: 
         // - treatment column is bigint (service_id), not text
         // - dentist column is bigint (personnel_id), not text
+        // - id column is NOT NULL but not auto-generated, so we need to provide it
         const insertData: Record<string, any> = {};
         
         // Add only the fields we know exist
+        insertData.id = nextId; // Generate id
         insertData.patient_id = patientId;
         insertData.date = formData.date || new Date().toISOString().split('T')[0];
         insertData.time = formData.time || null;

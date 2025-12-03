@@ -49,7 +49,7 @@ interface TreatmentPlan {
   personnel_id?: number;
   treatment_name: string;
   description?: string;
-  treatment_status: 'Planned' | 'In Progress' | 'Completed' | 'Cancelled';
+  treatment_status: 'Pending' | 'Ongoing' | 'Completed' | 'Cancelled';
   created_at?: string;
   // For UI - loaded separately
   services?: TreatmentPlanService[];
@@ -62,7 +62,7 @@ interface TreatmentPlanService {
   service_id: number;
   tooth_number?: string;
   priority: 'High' | 'Medium' | 'Low';
-  status: 'Planned' | 'In Progress' | 'Completed' | 'Cancelled';
+  status: 'Pending' | 'Ongoing' | 'Completed' | 'Cancelled';
   estimated_cost: number;
   // Joined from services_tbl
   service_name?: string;
@@ -214,7 +214,7 @@ const TreatmentPlanPage = () => {
         patient_id: Number(patient),
         treatment_name: '',
         description: 'Treatment plan created from dental charting data.',
-        treatment_status: 'Planned',
+        treatment_status: 'Pending',
         services: [],
         total_cost: 0,
       });
@@ -225,17 +225,17 @@ const TreatmentPlanPage = () => {
     patient_id: undefined,
     treatment_name: '',
     description: '',
-    treatment_status: 'Planned',
+        treatment_status: 'Pending',
     services: [],
     total_cost: 0,
   });
-  const [itemForm, setItemForm] = useState<Partial<TreatmentPlanService>>({
-    service_id: undefined,
-    tooth_number: '',
-    estimated_cost: 0,
-    priority: 'Medium',
-    status: 'Planned',
-  });
+    const [itemForm, setItemForm] = useState<Partial<TreatmentPlanService>>({
+      service_id: undefined,
+      tooth_number: '',
+      estimated_cost: 0,
+      priority: 'Medium',
+      status: 'Pending',
+    });
 
   const handleAddPlan = () => {
     setIsAdding(true);
@@ -244,7 +244,7 @@ const TreatmentPlanPage = () => {
       patient_id: selectedPatient ? Number(selectedPatient) : undefined,
       treatment_name: '',
       description: '',
-      treatment_status: 'Planned',
+      treatment_status: 'Ongoing',
       services: [],
       total_cost: 0,
     });
@@ -265,7 +265,7 @@ const TreatmentPlanPage = () => {
             patient_id: Number(selectedPatient),
             treatment_name: formData.treatment_name,
             description: formData.description,
-            treatment_status: formData.treatment_status || 'Planned',
+            treatment_status: formData.treatment_status || 'Pending',
           })
           .select()
           .single();
@@ -274,10 +274,24 @@ const TreatmentPlanPage = () => {
 
         // Insert services for this plan
         if (formData.services && formData.services.length > 0) {
-          const servicesToInsert = formData.services.map(service => ({
+          // Get the next available id(s) for batch insert
+          const { data: maxData } = await dentistClient
+            .from('treatment_services_tbl')
+            .select('id')
+            .order('id', { ascending: false })
+            .limit(1)
+            .single();
+
+          let nextId = 1;
+          if (maxData?.id) {
+            nextId = (maxData.id as number) + 1;
+          }
+
+          const servicesToInsert = formData.services.map((service, index) => ({
+            id: nextId + index, // Generate sequential ids
             treatment_id: planData.treatment_id,
             service_id: service.service_id,
-            tooth_number: service.tooth_number,
+            tooth_number: service.tooth_number || null,
             estimated_cost: service.estimated_cost,
             priority: service.priority,
             status: service.status,
@@ -302,7 +316,7 @@ const TreatmentPlanPage = () => {
         patient_id: undefined,
         treatment_name: '',
         description: '',
-        treatment_status: 'Planned',
+        treatment_status: 'Pending',
         services: [],
         total_cost: 0,
       });
@@ -328,7 +342,7 @@ const TreatmentPlanPage = () => {
       tooth_number: itemForm.tooth_number,
       estimated_cost: itemForm.estimated_cost || service?.service_fee || 0,
       priority: itemForm.priority || 'Medium',
-      status: itemForm.status || 'Planned',
+      status: itemForm.status || 'Ongoing',
     };
 
     if (isAdding) {
@@ -341,12 +355,26 @@ const TreatmentPlanPage = () => {
     } else if (selectedPlan) {
       // Adding service to existing plan - save to database
       try {
+        // Get the next available id
+        const { data: maxData } = await dentistClient
+          .from('treatment_services_tbl')
+          .select('id')
+          .order('id', { ascending: false })
+          .limit(1)
+          .single();
+
+        let nextId = 1;
+        if (maxData?.id) {
+          nextId = (maxData.id as number) + 1;
+        }
+
         const { error } = await dentistClient
           .from('treatment_services_tbl')
           .insert({
+            id: nextId, // Generate id
             treatment_id: selectedPlan,
             service_id: newService.service_id,
-            tooth_number: newService.tooth_number,
+            tooth_number: newService.tooth_number || null,
             estimated_cost: newService.estimated_cost,
             priority: newService.priority,
             status: newService.status,
@@ -365,7 +393,7 @@ const TreatmentPlanPage = () => {
       tooth_number: '',
       estimated_cost: 0,
       priority: 'Medium',
-      status: 'Planned',
+      status: 'Pending',
     });
   };
 
@@ -541,7 +569,8 @@ const TreatmentPlanPage = () => {
                           </p>
                           <span className={`inline-block mt-2 px-2 py-1 rounded text-xs font-semibold ${
                             plan.treatment_status === 'Completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                            plan.treatment_status === 'In Progress' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            plan.treatment_status === 'Pending' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                            plan.treatment_status === 'Ongoing' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
                             plan.treatment_status === 'Cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
                             'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                           }`}>
@@ -611,8 +640,8 @@ const TreatmentPlanPage = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Planned">Planned</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Ongoing">Ongoing</SelectItem>
                     <SelectItem value="Completed">Completed</SelectItem>
                     <SelectItem value="Cancelled">Cancelled</SelectItem>
                   </SelectContent>
@@ -802,8 +831,7 @@ const TreatmentPlanPage = () => {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="Planned">Planned</SelectItem>
-                                  <SelectItem value="In Progress">In Progress</SelectItem>
+                                  <SelectItem value="Ongoing">Ongoing</SelectItem>
                                   <SelectItem value="Completed">Completed</SelectItem>
                                   <SelectItem value="Cancelled">Cancelled</SelectItem>
                                 </SelectContent>

@@ -261,8 +261,23 @@ const DentalCharting = () => {
         .eq('patient_id', patientId)
         .in('tooth_number', selectedTeeth);
 
-      // Step 2: Prepare all rows for batch insert
-      const rows = selectedTeeth.map(toothNum => ({
+      // Step 2: Get the next available id(s) for batch insert
+      // Get the max id to calculate next ids
+      const { data: maxData } = await patientRecordClient
+        .from('patient_teeth')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1)
+        .single();
+
+      let nextId = 1;
+      if (maxData?.id) {
+        nextId = (maxData.id as number) + 1;
+      }
+
+      // Step 3: Prepare all rows for batch insert with generated ids
+      const rows = selectedTeeth.map((toothNum, index) => ({
+        id: nextId + index, // Generate sequential ids
         patient_id: patientId,
         tooth_number: toothNum,
         condition_id: conditionId,
@@ -272,7 +287,7 @@ const DentalCharting = () => {
         notes: notes.trim() || null,
       }));
 
-      // Step 3: Insert all records in a single batch operation
+      // Step 4: Insert all records in a single batch operation
       const { error: insertError } = await patientRecordClient
         .from('patient_teeth')
         .insert(rows);
@@ -377,13 +392,27 @@ const DentalCharting = () => {
       .eq('patient_id', patientId)
       .in('tooth_number', toothNumbers);
 
-    // Prepare rows for Supabase
-    const rows = unhealthyTeeth.map(tooth => {
+    // Get the next available id for batch insert
+    const { data: maxData } = await patientRecordClient
+      .from('patient_teeth')
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1)
+      .single();
+
+    let nextId = 1;
+    if (maxData?.id) {
+      nextId = (maxData.id as number) + 1;
+    }
+
+    // Prepare rows for Supabase with generated ids
+    const rows = unhealthyTeeth.map((tooth, index) => {
       const conditionId = getConditionId(tooth.condition, conditions);
       if (!conditionId) {
         throw new Error(`Condition ID not found for: ${tooth.condition}`);
       }
       return {
+        id: nextId + index, // Generate sequential ids
         patient_id: patientId,
         tooth_number: tooth.number,
         condition_id: conditionId,

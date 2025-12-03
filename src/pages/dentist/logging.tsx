@@ -58,6 +58,7 @@ interface InventoryItem {
   name: string;
   category: string;
   unit_cost: number;
+  uniqueId?: string;
 }
 
 // --- Main Component ---
@@ -105,11 +106,21 @@ const MaterialsLogging = () => {
         ]);
 
         const items: InventoryItem[] = [
-          ...(consumables.data ?? []).map(c => ({ name: c.consumable_name, category: 'Consumables', unit_cost: c.unit_cost || 0 })),
-          ...(medicines.data ?? []).map(m => ({ name: m.medicine_name, category: 'Medicines', unit_cost: m.unit_cost || 0 })),
-          ...(equipment.data ?? []).map(e => ({ name: e.equipment_name, category: 'Equipment', unit_cost: e.unit_cost || 0 })),
+          ...(consumables.data ?? []).map((c, idx) => ({ name: c.consumable_name, category: 'Consumables', unit_cost: c.unit_cost || 0, uniqueId: `consumables-${idx}-${c.consumable_name}` })),
+          ...(medicines.data ?? []).map((m, idx) => ({ name: m.medicine_name, category: 'Medicines', unit_cost: m.unit_cost || 0, uniqueId: `medicines-${idx}-${m.medicine_name}` })),
+          ...(equipment.data ?? []).map((e, idx) => ({ name: e.equipment_name, category: 'Equipment', unit_cost: e.unit_cost || 0, uniqueId: `equipment-${idx}-${e.equipment_name}` })),
         ];
-        setInventoryItems(items);
+        
+        // Deduplicate items by name and category (keep first occurrence)
+        const uniqueItems = items.reduce((acc, item) => {
+          const key = `${item.category}-${item.name}`;
+          if (!acc.has(key)) {
+            acc.set(key, item);
+          }
+          return acc;
+        }, new Map<string, InventoryItem>());
+        
+        setInventoryItems(Array.from(uniqueItems.values()));
       } catch (err) {
         console.error('Failed to load inventory items:', err);
       }
@@ -434,6 +445,32 @@ const MaterialsLogging = () => {
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <Field orientation="vertical">
+                <FieldLabel>Category</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) => {
+                      // Clear item_name when category changes to force user to reselect
+                      setFormData({ 
+                        ...formData, 
+                        category: value,
+                        item_name: '',
+                        unit_cost: null,
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Consumables">Consumables</SelectItem>
+                      <SelectItem value="Medicines">Medicines</SelectItem>
+                      <SelectItem value="Equipment">Equipment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
+              <Field orientation="vertical">
                 <FieldLabel>Material Name</FieldLabel>
                 <FieldContent>
                   <Select
@@ -447,34 +484,23 @@ const MaterialsLogging = () => {
                         unit_cost: item?.unit_cost || formData.unit_cost,
                       });
                     }}
+                    disabled={!formData.category}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select material" />
+                      <SelectValue placeholder={formData.category ? "Select material" : "Select category first"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {inventoryItems.map((item) => (
-                        <SelectItem key={item.name} value={item.name}>
-                          {item.name} ({item.category})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FieldContent>
-              </Field>
-              <Field orientation="vertical">
-                <FieldLabel>Category</FieldLabel>
-                <FieldContent>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Consumables">Consumables</SelectItem>
-                      <SelectItem value="Medicines">Medicines</SelectItem>
-                      <SelectItem value="Equipment">Equipment</SelectItem>
+                      {formData.category && inventoryItems.filter(item => item.category === formData.category).length > 0 ? (
+                        inventoryItems
+                          .filter(item => item.category === formData.category)
+                          .map((item, index) => (
+                            <SelectItem key={item.uniqueId || `${item.category}-${item.name}-${index}`} value={item.name}>
+                              {item.name}
+                            </SelectItem>
+                          ))
+                      ) : formData.category ? (
+                        <SelectItem value="__no_items__" disabled>No items available in this category</SelectItem>
+                      ) : null}
                     </SelectContent>
                   </Select>
                 </FieldContent>
