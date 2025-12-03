@@ -1,21 +1,90 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useFollowup, useFollowupStatuses, useUpdateFollowupStatus } from '@/hooks/use-followups'
+import { useState, useEffect } from 'react'
+import { Loader2 } from 'lucide-react'
 
 export default function FollowupDetails() {
     const { appointment_id } = useParams()
+    const navigate = useNavigate()
+    const followupId = appointment_id ? parseInt(appointment_id, 10) : undefined
+
+    const { data: followup, isLoading, isError } = useFollowup(followupId)
+    const { data: statuses } = useFollowupStatuses()
+    const updateStatusMutation = useUpdateFollowupStatus()
+
+    const [selectedStatus, setSelectedStatus] = useState<string>('')
+    const [hasChanges, setHasChanges] = useState(false)
+
+    // Set initial status when followup loads
+    useEffect(() => {
+        if (followup?.appointment_status_id) {
+            setSelectedStatus(followup.appointment_status_id.toString())
+        }
+    }, [followup?.appointment_status_id])
+
+    const handleStatusChange = (value: string) => {
+        setSelectedStatus(value)
+        setHasChanges(value !== followup?.appointment_status_id?.toString())
+    }
+
+    const handleSave = async () => {
+        if (!followupId || !selectedStatus) return
+
+        await updateStatusMutation.mutateAsync({
+            followupId,
+            statusId: parseInt(selectedStatus, 10)
+        })
+        setHasChanges(false)
+        // Navigate back to followups list after successful update
+        navigate('/receptionist/followup')
+    }
+
+    if (isLoading) {
+        return (
+            <div className="p-6 space-y-6">
+                <Skeleton className="h-10 w-64" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Skeleton className="h-96" />
+                    <Skeleton className="h-96" />
+                    <Skeleton className="h-96" />
+                </div>
+            </div>
+        )
+    }
+
+    if (isError || !followup) {
+        return (
+            <div className="p-6">
+                <p className="text-destructive">Error loading follow-up details.</p>
+                <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>
+                    Go Back
+                </Button>
+            </div>
+        )
+    }
 
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight">Follow-up Details</h1>
                 <div className="flex gap-2">
-                    <Button variant="outline">Back</Button>
-                    <Button>Save Changes</Button>
+                    <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
+                    <Button
+                        onClick={handleSave}
+                        disabled={!hasChanges || updateStatusMutation.isPending}
+                    >
+                        {updateStatusMutation.isPending && (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        )}
+                        Save Changes
+                    </Button>
                 </div>
             </div>
 
@@ -28,25 +97,45 @@ export default function FollowupDetails() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label>Full Name</Label>
-                            <Input value="Maria Santos" readOnly className="bg-muted" />
+                            <Input value={
+                                [
+                                    followup.patient_first_name,
+                                    followup.patient_middle_name,
+                                    followup.patient_last_name,
+                                    followup.patient_suffix
+                                ].filter(Boolean).join(' ') || 'N/A'
+                            } readOnly className="bg-muted" />
                         </div>
                         <div className="space-y-2">
-                            <Label>Email</Label>
-                            <Input value="maria@example.com" readOnly className="bg-muted" />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Contact Number</Label>
-                            <Input value="+63 917 123 4567" readOnly className="bg-muted" />
+                            <Label>Patient ID</Label>
+                            <Input value={followup.patient_id?.toString() || 'N/A'} readOnly className="bg-muted" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Gender</Label>
-                                <Input value="Female" readOnly className="bg-muted" />
+                                <Input value={followup.patient_gender || 'N/A'} readOnly className="bg-muted" />
                             </div>
                             <div className="space-y-2">
                                 <Label>Birthdate</Label>
-                                <Input value="1995-05-20" readOnly className="bg-muted" />
+                                <Input value={followup.patient_birthdate || 'N/A'} readOnly className="bg-muted" />
                             </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Primary Contact</Label>
+                            <Input value={followup.patient_contact || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Secondary Contact</Label>
+                            <Input value={followup.patient_secondary_contact || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Email</Label>
+                            <Input value={followup.patient_email || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <Separator />
+                        <div className="space-y-2">
+                            <Label>Address</Label>
+                            <Input value={followup.patient_address || 'N/A'} readOnly className="bg-muted" />
                         </div>
                     </CardContent>
                 </Card>
@@ -59,19 +148,15 @@ export default function FollowupDetails() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label>Original Appointment ID</Label>
-                            <Input value="APT-1001" readOnly className="bg-muted" />
+                            <Input value={followup.appointment_id?.toString() || 'N/A'} readOnly className="bg-muted" />
                         </div>
                         <div className="space-y-2">
                             <Label>Service Performed</Label>
-                            <Input value="Root Canal Treatment" readOnly className="bg-muted" />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Dentist</Label>
-                            <Input value="Dr. Mark Santos" readOnly className="bg-muted" />
+                            <Input value={followup.original_appointment_service || 'N/A'} readOnly className="bg-muted" />
                         </div>
                         <div className="space-y-2">
                             <Label>Date Completed</Label>
-                            <Input value="2024-01-15" readOnly className="bg-muted" />
+                            <Input value={followup.original_appointment_date || 'N/A'} readOnly className="bg-muted" />
                         </div>
                     </CardContent>
                 </Card>
@@ -84,34 +169,66 @@ export default function FollowupDetails() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label>Follow-up ID</Label>
-                            <Input value={appointment_id || "FLP-56789"} readOnly className="bg-muted" />
+                            <Input value={followup.followup_id?.toString() || appointment_id || "N/A"} readOnly className="bg-muted" />
                         </div>
                         <div className="space-y-2">
-                            <Label>Reason</Label>
-                            <Input value="Post-treatment Checkup" readOnly className="bg-muted" />
+                            <Label>Service</Label>
+                            <Input value={followup.service_name || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        {followup.service_category_name && (
+                            <div className="space-y-2">
+                                <Label>Category</Label>
+                                <Input value={followup.service_category_name} readOnly className="bg-muted" />
+                            </div>
+                        )}
+                        {followup.service_description && (
+                            <div className="space-y-2">
+                                <Label>Service Description</Label>
+                                <Input value={followup.service_description} readOnly className="bg-muted" />
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label>Assigned Dentist</Label>
+                            <Input value={followup.personnel_first_name && followup.personnel_last_name
+                                ? `Dr. ${followup.personnel_first_name} ${followup.personnel_last_name}`
+                                : 'Not Assigned'} readOnly className="bg-muted" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Scheduled Date</Label>
-                                <Input value="2024-02-20" readOnly className="bg-muted" />
+                                <Input value={followup.followup_date || 'N/A'} readOnly className="bg-muted" />
                             </div>
                             <div className="space-y-2">
                                 <Label>Time</Label>
-                                <Input value="2:00 PM" readOnly className="bg-muted" />
+                                <Input value={followup.followup_time || 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Service Fee</Label>
+                                <Input value={followup.service_fee ? `₱ ${followup.service_fee.toFixed(2)}` : 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Duration</Label>
+                                <Input value={followup.service_duration || 'N/A'} readOnly className="bg-muted" />
                             </div>
                         </div>
                         <Separator />
                         <div className="space-y-2">
                             <Label>Status</Label>
-                            <Select defaultValue="PENDING_APPROVAL">
+                            <Select value={selectedStatus} onValueChange={handleStatusChange}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="PENDING_PAYMENT">Pending Payment</SelectItem>
-                                    <SelectItem value="PENDING_APPROVAL">Pending Approval</SelectItem>
-                                    <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                                    {statuses?.map(status => (
+                                        <SelectItem
+                                            key={status.appointment_status_id}
+                                            value={status.appointment_status_id.toString()}
+                                        >
+                                            {status.appointment_status_name}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>

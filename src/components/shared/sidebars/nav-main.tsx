@@ -20,7 +20,9 @@ import {
     ClipboardCheck,
     Truck,
     BarChart3,
-    FileStack
+    FileStack,
+    List,
+    Settings
 } from "lucide-react"
 import { receptionistRouteData } from "@/routes/receptionistRoutes"
 import { adminRouteData } from "@/routes/adminRoutes"
@@ -37,7 +39,6 @@ import {
 } from "@/components/ui/collapsible"
 import {
     SidebarGroup,
-    SidebarGroupLabel,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
@@ -84,17 +85,25 @@ export function NavMain() {
         // Dashboard icons
         if (titleLower.includes('dashboard')) return Home
 
+        // User Management
+        if (titleLower.includes('user management')) return Users
+
+        // Service Management
+        if (titleLower.includes('service management')) return List
+
         // Appointment related
         if (titleLower.includes('appointment')) return Calendar
         if (titleLower.includes('followup') || titleLower.includes('follow')) return Users
         if (titleLower.includes('cancel')) return RotateCcw
 
         // Payment/Financial
+        if (titleLower.includes('billing')) return DollarSign
         if (titleLower.includes('payment')) return DollarSign
         if (titleLower.includes('refund')) return RotateCcw
         if (titleLower.includes('transaction')) return Receipt
 
         // Patient/Medical
+        if (titleLower.includes('dentist')) return Stethoscope
         if (titleLower.includes('charting')) return Stethoscope
         if (titleLower.includes('patient record') || titleLower.includes('medical record')) return FolderOpen
         if (titleLower.includes('treatment plan')) return ClipboardList
@@ -102,6 +111,7 @@ export function NavMain() {
         if (titleLower.includes('profile')) return UserCircle
 
         // Inventory
+        if (titleLower === 'inventory') return FileStack
         if (titleLower.includes('inventory table')) return FileStack
         if (titleLower.includes('stock')) return Activity
         if (titleLower.includes('supplier')) return Truck
@@ -110,9 +120,13 @@ export function NavMain() {
         // Schedule & Logging
         if (titleLower.includes('schedule')) return Calendar
         if (titleLower.includes('logging')) return ClipboardCheck
+        if (titleLower.includes('system logs') || titleLower.includes('logs')) return Activity
 
         // Notifications
         if (titleLower.includes('notification')) return Bell
+
+        // Settings
+        if (titleLower.includes('settings')) return Settings
 
         // Default
         return FileText
@@ -128,7 +142,7 @@ export function NavMain() {
 
     return (
         <SidebarGroup>
-            <SidebarGroupLabel>Platform</SidebarGroupLabel>
+
             <SidebarMenu>
                 {finalItems.map((item) => (
                     item.items && item.items.length ? (

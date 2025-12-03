@@ -20,7 +20,9 @@ export default function PublicFooter() {
 
                         <div className="flex gap-3 items-center pt-2">
                             <Mail className="size-5" />
-                            <a className="text-sm text-muted-foreground hover:text-primary" href="mailto:hello@medicareclinic.example">hello@medicareclinic.example</a>
+                            <a className="text-sm text-muted-foreground hover:text-primary" href="mailto:medicare.dental.ph@gmail.com
+">medicare.dental.ph@gmail.com
+                            </a>
                         </div>
 
                         <p className="text-xs text-muted-foreground">Open Mon — Fri 8:00 — 18:00 · Sat 9:00 — 14:00</p>

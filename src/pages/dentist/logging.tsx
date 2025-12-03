@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import {
   Package,
   Plus,
@@ -25,105 +24,175 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
+const inventoryClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'inventory' } });
 
 // --- Type Definitions ---
 interface MaterialLog {
   id: number;
-  materialName: string;
+  created_at: string;
+  item_name: string;
   category: string;
   quantity: number;
-  unit: string;
-  date: string;
-  procedure: string;
-  patientName: string;
-  cost: number;
-  notes?: string;
+  unit?: string | null;
+  unit_cost?: number | null;
+  supplier?: string | null;
+  reference?: string | null;
+  type?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  timestamp_local?: string | null;
+  user_name?: string | null;
+  // UI-only fields (not in database)
+  procedure?: string;
+  patient_name?: string;
 }
 
-// --- Mock Data ---
-const INITIAL_LOGS: MaterialLog[] = [
-  {
-    id: 1,
-    materialName: 'Composite Resin',
-    category: 'Filling Materials',
-    quantity: 2,
-    unit: 'pack',
-    date: '2024-01-15',
-    procedure: 'Composite Filling',
-    patientName: 'John Doe',
-    cost: 500,
-    notes: 'Used for tooth #3 and #14',
-  },
-  {
-    id: 2,
-    materialName: 'Local Anesthetic',
-    category: 'Anesthetics',
-    quantity: 1,
-    unit: 'vial',
-    date: '2024-01-15',
-    procedure: 'Tooth Extraction',
-    patientName: 'Jane Smith',
-    cost: 150,
-  },
-];
+interface PatientRow {
+  patient_id: number;
+  f_name?: string;
+  m_name?: string;
+  l_name?: string;
+}
 
-const MATERIAL_CATEGORIES = [
-  'Filling Materials',
-  'Anesthetics',
-  'Impression Materials',
-  'Crown & Bridge Materials',
-  'Orthodontic Materials',
-  'Surgical Supplies',
-  'Disinfectants',
-  'Other',
-];
-
-const COMMON_MATERIALS = [
-  'Composite Resin',
-  'Amalgam',
-  'Local Anesthetic',
-  'Gauze',
-  'Cotton Rolls',
-  'Dental Floss',
-  'Bonding Agent',
-  'Etching Gel',
-];
+interface InventoryItem {
+  name: string;
+  category: string;
+  unit_cost: number;
+  uniqueId?: string;
+}
 
 // --- Main Component ---
 const MaterialsLogging = () => {
-  const [logs, setLogs] = useState<MaterialLog[]>(INITIAL_LOGS);
+  const [logs, setLogs] = useState<MaterialLog[]>([]);
+  const [patients, setPatients] = useState<PatientRow[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<Partial<MaterialLog>>({
-    materialName: '',
+    item_name: '',
     category: '',
     quantity: 0,
-    unit: 'unit',
-    date: new Date().toISOString().split('T')[0],
+    unit: null,
+    unit_cost: null,
+    supplier: 'N/A',
+    notes: null,
+    // UI-only fields
     procedure: '',
-    patientName: '',
-    cost: 0,
-    notes: '',
+    patient_name: '',
   });
 
+  // Load patients
+  useEffect(() => {
+    const loadPatients = async () => {
+      const { data } = await patientRecordClient
+        .from('patient_tbl')
+        .select('patient_id, f_name, m_name, l_name')
+        .order('l_name', { ascending: true });
+      setPatients(data ?? []);
+    };
+    loadPatients();
+  }, []);
+
+  // Load inventory items (consumables, medicines, equipment)
+  useEffect(() => {
+    const loadInventoryItems = async () => {
+      try {
+        const [consumables, medicines, equipment] = await Promise.all([
+          inventoryClient.from('consumables_tbl').select('consumable_name, unit_cost'),
+          inventoryClient.from('medicine_tbl').select('medicine_name, unit_cost'),
+          inventoryClient.from('equipment_tbl').select('equipment_name, unit_cost'),
+        ]);
+
+        const items: InventoryItem[] = [
+          ...(consumables.data ?? []).map((c, idx) => ({ name: c.consumable_name, category: 'Consumables', unit_cost: c.unit_cost || 0, uniqueId: `consumables-${idx}-${c.consumable_name}` })),
+          ...(medicines.data ?? []).map((m, idx) => ({ name: m.medicine_name, category: 'Medicines', unit_cost: m.unit_cost || 0, uniqueId: `medicines-${idx}-${m.medicine_name}` })),
+          ...(equipment.data ?? []).map((e, idx) => ({ name: e.equipment_name, category: 'Equipment', unit_cost: e.unit_cost || 0, uniqueId: `equipment-${idx}-${e.equipment_name}` })),
+        ];
+        
+        // Deduplicate items by name and category (keep first occurrence)
+        const uniqueItems = items.reduce((acc, item) => {
+          const key = `${item.category}-${item.name}`;
+          if (!acc.has(key)) {
+            acc.set(key, item);
+          }
+          return acc;
+        }, new Map<string, InventoryItem>());
+        
+        setInventoryItems(Array.from(uniqueItems.values()));
+      } catch (err) {
+        console.error('Failed to load inventory items:', err);
+      }
+    };
+    loadInventoryItems();
+  }, []);
+
+  // Load stock out logs
+  const loadLogs = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await inventoryClient
+        .from('stock_out')
+        .select('id, created_at, item_name, category, quantity, unit, unit_cost, supplier, reference, type, notes, created_by, timestamp_local, user_name')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      // Parse procedure and patient_name from notes if they exist
+      const parsedLogs = (data ?? []).map(log => {
+        const parsed: MaterialLog = { ...log };
+        if (log.notes) {
+          const notes = log.notes;
+          const procedureMatch = notes.match(/Procedure:\s*(.+?)(?:\n|$)/i);
+          const patientMatch = notes.match(/Patient:\s*(.+?)(?:\n|$)/i);
+          if (procedureMatch) {
+            parsed.procedure = procedureMatch[1].trim();
+          }
+          if (patientMatch) {
+            parsed.patient_name = patientMatch[1].trim();
+          }
+        }
+        return parsed;
+      });
+      
+      setLogs(parsedLogs);
+    } catch (err) {
+      console.error('Failed to load logs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLogs();
+  }, []);
+
+
   const filteredLogs = logs.filter((log) =>
-    log.materialName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.category.toLowerCase().includes(searchTerm.toLowerCase())
+    log.item_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.patient_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalCost = logs.reduce((sum, log) => sum + (log.cost * log.quantity), 0);
+  const totalCost = logs.reduce((sum, log) => sum + ((log.unit_cost || 0) * log.quantity), 0);
   const thisMonthCost = logs
     .filter(l => {
-      const logDate = new Date(l.date);
+      const logDate = new Date(l.created_at);
       const now = new Date();
       return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
     })
-    .reduce((sum, log) => sum + (log.cost * log.quantity), 0);
+    .reduce((sum, log) => sum + ((log.unit_cost || 0) * log.quantity), 0);
 
   const categoryBreakdown = logs.reduce((acc, log) => {
-    acc[log.category] = (acc[log.category] || 0) + (log.cost * log.quantity);
+    const cat = log.category || 'Other';
+    acc[cat] = (acc[cat] || 0) + ((log.unit_cost || 0) * log.quantity);
     return acc;
   }, {} as Record<string, number>);
 
@@ -131,15 +200,15 @@ const MaterialsLogging = () => {
     setIsAdding(true);
     setIsEditing(null);
     setFormData({
-      materialName: '',
+      item_name: '',
       category: '',
       quantity: 0,
-      unit: 'unit',
-      date: new Date().toISOString().split('T')[0],
+      unit: null,
+      unit_cost: null,
+      supplier: 'N/A',
+      notes: null,
       procedure: '',
-      patientName: '',
-      cost: 0,
-      notes: '',
+      patient_name: '',
     });
   };
 
@@ -149,44 +218,96 @@ const MaterialsLogging = () => {
     setFormData(log);
   };
 
-  const handleSave = () => {
-    if (isEditing) {
-      setLogs(logs.map(l => l.id === isEditing ? { ...formData, id: isEditing } as MaterialLog : l));
-      setIsEditing(null);
-    } else if (isAdding) {
-      const newLog: MaterialLog = {
-        ...formData,
-        id: Date.now(),
-      } as MaterialLog;
-      setLogs([...logs, newLog]);
-      setIsAdding(false);
+  const handleSave = async () => {
+    try {
+      if (isEditing) {
+        // Combine procedure and patient_name into notes if provided
+        let combinedNotes = formData.notes || '';
+        if (formData.procedure) {
+          combinedNotes = `Procedure: ${formData.procedure}${combinedNotes ? `\n${combinedNotes}` : ''}`;
+        }
+        if (formData.patient_name) {
+          combinedNotes = `Patient: ${formData.patient_name}${combinedNotes ? `\n${combinedNotes}` : ''}`;
+        }
+        
+        const { error } = await inventoryClient
+          .from('stock_out')
+          .update({
+            item_name: formData.item_name,
+            category: formData.category,
+            quantity: formData.quantity,
+            unit: formData.unit || null,
+            unit_cost: formData.unit_cost || null,
+            supplier: formData.supplier || null,
+            notes: combinedNotes || null,
+          })
+          .eq('id', isEditing);
+
+        if (error) throw error;
+        setIsEditing(null);
+      } else if (isAdding) {
+        // Generate reference number (SO-XXXXXXXX format)
+        const reference = `SO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+        
+        // Combine procedure and patient_name into notes if provided
+        let combinedNotes = formData.notes || '';
+        if (formData.procedure) {
+          combinedNotes = `Procedure: ${formData.procedure}${combinedNotes ? `\n${combinedNotes}` : ''}`;
+        }
+        if (formData.patient_name) {
+          combinedNotes = `Patient: ${formData.patient_name}${combinedNotes ? `\n${combinedNotes}` : ''}`;
+        }
+        
+        const { error } = await inventoryClient
+          .from('stock_out')
+          .insert({
+            item_name: formData.item_name,
+            category: formData.category,
+            quantity: formData.quantity,
+            unit: formData.unit || null,
+            unit_cost: formData.unit_cost || null,
+            supplier: formData.supplier || 'N/A',
+            reference: reference,
+            notes: combinedNotes || null,
+            user_name: 'Dentist', // You can get this from sessionStorage if needed
+          });
+
+        if (error) throw error;
+        setIsAdding(false);
+      }
+
+      await loadLogs();
+      alert('Material log saved successfully!');
+
+      setFormData({
+        item_name: '',
+        category: '',
+        quantity: 0,
+        unit: 'unit',
+        procedure: '',
+        patient_name: '',
+        unit_cost: 0,
+        notes: '',
+      });
+    } catch (err) {
+      console.error('Failed to save log:', err);
+      alert('Failed to save material log');
     }
-    setFormData({
-      materialName: '',
-      category: '',
-      quantity: 0,
-      unit: 'unit',
-      date: new Date().toISOString().split('T')[0],
-      procedure: '',
-      patientName: '',
-      cost: 0,
-      notes: '',
-    });
   };
 
   const handleCancel = () => {
     setIsAdding(false);
     setIsEditing(null);
     setFormData({
-      materialName: '',
+      item_name: '',
       category: '',
       quantity: 0,
-      unit: 'unit',
-      date: new Date().toISOString().split('T')[0],
+      unit: null,
+      unit_cost: null,
+      supplier: 'N/A',
+      notes: null,
       procedure: '',
-      patientName: '',
-      cost: 0,
-      notes: '',
+      patient_name: '',
     });
   };
 
@@ -254,7 +375,7 @@ const MaterialsLogging = () => {
                 <p className="text-sm text-muted-foreground">This Month</p>
                 <p className="text-2xl font-bold">
                   {logs.filter(l => {
-                    const logDate = new Date(l.date);
+                    const logDate = new Date(l.created_at);
                     const now = new Date();
                     return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
                   }).length}
@@ -330,41 +451,62 @@ const MaterialsLogging = () => {
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <Field orientation="vertical">
-                <FieldLabel>Material Name</FieldLabel>
-                <FieldContent>
-                  <Select
-                    value={formData.materialName}
-                    onValueChange={(value) => setFormData({ ...formData, materialName: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select material" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMMON_MATERIALS.map((material) => (
-                        <SelectItem key={material} value={material}>
-                          {material}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FieldContent>
-              </Field>
-              <Field orientation="vertical">
                 <FieldLabel>Category</FieldLabel>
                 <FieldContent>
                   <Select
                     value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
+                    onValueChange={(value) => {
+                      // Clear item_name when category changes to force user to reselect
+                      setFormData({ 
+                        ...formData, 
+                        category: value,
+                        item_name: '',
+                        unit_cost: null,
+                      });
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {MATERIAL_CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Consumables">Consumables</SelectItem>
+                      <SelectItem value="Medicines">Medicines</SelectItem>
+                      <SelectItem value="Equipment">Equipment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
+              <Field orientation="vertical">
+                <FieldLabel>Material Name</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={formData.item_name}
+                    onValueChange={(value) => {
+                      const item = inventoryItems.find(i => i.name === value);
+                      setFormData({ 
+                        ...formData, 
+                        item_name: value,
+                        category: item?.category || formData.category,
+                        unit_cost: item?.unit_cost || formData.unit_cost,
+                      });
+                    }}
+                    disabled={!formData.category}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={formData.category ? "Select material" : "Select category first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {formData.category && inventoryItems.filter(item => item.category === formData.category).length > 0 ? (
+                        inventoryItems
+                          .filter(item => item.category === formData.category)
+                          .map((item, index) => (
+                            <SelectItem key={item.uniqueId || `${item.category}-${item.name}-${index}`} value={item.name}>
+                              {item.name}
+                            </SelectItem>
+                          ))
+                      ) : formData.category ? (
+                        <SelectItem value="__no_items__" disabled>No items available in this category</SelectItem>
+                      ) : null}
                     </SelectContent>
                   </Select>
                 </FieldContent>
@@ -374,63 +516,65 @@ const MaterialsLogging = () => {
                 <FieldContent>
                   <Input
                     type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                    value={formData.quantity || ''}
+                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) || 0 })}
                     placeholder="0"
+                    min="0"
                   />
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
                 <FieldLabel>Unit</FieldLabel>
                 <FieldContent>
-                  <Select
-                    value={formData.unit}
-                    onValueChange={(value) => setFormData({ ...formData, unit: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unit">Unit</SelectItem>
-                      <SelectItem value="pack">Pack</SelectItem>
-                      <SelectItem value="vial">Vial</SelectItem>
-                      <SelectItem value="box">Box</SelectItem>
-                      <SelectItem value="bottle">Bottle</SelectItem>
-                      <SelectItem value="tube">Tube</SelectItem>
-                      <SelectItem value="sheet">Sheet</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FieldContent>
-              </Field>
-              <Field orientation="vertical">
-                <FieldLabel>Date</FieldLabel>
-                <FieldContent>
                   <Input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    value={formData.unit || ''}
+                    onChange={(e) => setFormData({ ...formData, unit: e.target.value || null })}
+                    placeholder="e.g., pieces, boxes, vials"
                   />
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
-                <FieldLabel>Cost (₱)</FieldLabel>
+                <FieldLabel>Unit Cost (₱)</FieldLabel>
                 <FieldContent>
                   <Input
                     type="number"
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
+                    value={formData.unit_cost || ''}
+                    onChange={(e) => setFormData({ ...formData, unit_cost: e.target.value ? Number(e.target.value) : null })}
                     placeholder="0"
                   />
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
-                <FieldLabel>Patient Name</FieldLabel>
+                <FieldLabel>Supplier</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={formData.patientName}
-                    onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
-                    placeholder="Enter patient name"
+                    value={formData.supplier || 'N/A'}
+                    onChange={(e) => setFormData({ ...formData, supplier: e.target.value || 'N/A' })}
+                    placeholder="N/A"
                   />
+                </FieldContent>
+              </Field>
+              <Field orientation="vertical">
+                <FieldLabel>Patient</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={formData.patient_name}
+                    onValueChange={(value) => setFormData({ ...formData, patient_name: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select patient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {patients.map((patient) => (
+                        <SelectItem 
+                          key={patient.patient_id} 
+                          value={`${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim()}
+                        >
+                          {`${patient.f_name ?? ''} ${patient.m_name ?? ''} ${patient.l_name ?? ''}`.trim()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FieldContent>
               </Field>
               <Field orientation="vertical">
@@ -448,10 +592,10 @@ const MaterialsLogging = () => {
               <FieldLabel>Notes (Optional)</FieldLabel>
               <FieldContent>
                 <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  value={formData.notes || ''}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })}
                   className="w-full min-h-[80px] p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Additional notes..."
+                  placeholder="Additional notes... (You can include procedure and patient info here if needed)"
                 />
               </FieldContent>
             </Field>
@@ -471,7 +615,15 @@ const MaterialsLogging = () => {
 
       {/* Logs List */}
       <div className="space-y-4">
-        {filteredLogs.length === 0 ? (
+        {loading ? (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center text-muted-foreground">
+                <p className="text-lg font-medium">Loading logs...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : filteredLogs.length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
@@ -487,16 +639,16 @@ const MaterialsLogging = () => {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-xl mb-2">{log.materialName}</CardTitle>
+                    <CardTitle className="text-xl mb-2">{log.item_name}</CardTitle>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-semibold">
-                        {log.category}
+                        {log.category || 'Uncategorized'}
                       </span>
                       <div className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
-                        {log.date}
+                        {log.created_at ? new Date(log.created_at).toLocaleDateString() : 'N/A'}
                       </div>
-                      <span className="font-medium">{log.patientName}</span>
+                      {log.patient_name && <span className="font-medium">{log.patient_name}</span>}
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => handleEdit(log)}>
@@ -509,27 +661,32 @@ const MaterialsLogging = () => {
                 <div className="grid md:grid-cols-4 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Quantity</p>
-                    <p className="font-semibold">{log.quantity} {log.unit}</p>
+                    <p className="font-semibold">{log.quantity} {log.unit || 'units'}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Procedure</p>
-                    <p className="font-semibold">{log.procedure}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Cost</p>
-                    <p className="font-semibold text-primary">{formatCurrency(log.cost)}</p>
+                    <p className="text-sm text-muted-foreground">Unit Cost</p>
+                    <p className="font-semibold text-primary">{formatCurrency(log.unit_cost || 0)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total Cost</p>
-                    <p className="font-semibold text-primary">{formatCurrency(log.quantity * log.cost)}</p>
+                    <p className="font-semibold text-primary">{formatCurrency(log.quantity * (log.unit_cost || 0))}</p>
                   </div>
-                  <div className="md:col-span-4 pt-2">
-                    <Link to={`/dentist/patient/records?patient=${log.patientName}`}>
-                      <Button variant="outline" size="sm">
-                        View Patient Records
-                      </Button>
-                    </Link>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Supplier</p>
+                    <p className="font-semibold">{log.supplier || 'N/A'}</p>
                   </div>
+                  {log.reference && (
+                    <div className="md:col-span-4">
+                      <p className="text-sm text-muted-foreground">Reference</p>
+                      <p className="font-semibold text-xs">{log.reference}</p>
+                    </div>
+                  )}
+                  {log.user_name && (
+                    <div className="md:col-span-4">
+                      <p className="text-sm text-muted-foreground">Created By</p>
+                      <p className="font-semibold text-xs">{log.user_name}</p>
+                    </div>
+                  )}
                 </div>
                 {log.notes && (
                   <div className="mt-4 pt-4 border-t">

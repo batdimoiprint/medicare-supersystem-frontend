@@ -11,24 +11,24 @@ import {
 } from "@/components/ui/sidebar"
 import { NavMain } from "./nav-main"
 import { NavUser } from "./nav-user"
-import BrandTitle from "../brand/BrandTitle"
+import SidebarBrandTitle from "../brand/SidebarBrandTitle"
 import { Separator } from "@/components/ui/separator"
-
-// This is sample data.
-const data = {
-    user: {
-        name: "shadcn",
-        email: "m@example.com",
-        avatar: "/avatars/shadcn.jpg",
-        role: "cashier"
-    }
-}
+import { useAuth } from "@/context/userContext"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const { user } = useAuth()
+
+    // Build user data for NavUser component
+    const userData = {
+        name: user?.name ?? "Guest",
+        email: user?.email ?? "",
+        avatar: user?.avatar ?? "/avatars/default.jpg",
+    }
+
     return (
         <Sidebar collapsible="icon" {...props}>
             <SidebarHeader>
-                <BrandTitle />
+                <SidebarBrandTitle />
 
             </SidebarHeader>
             <Separator />
@@ -37,7 +37,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarContent>
             <Separator />
             <SidebarFooter>
-                <NavUser user={data.user} />
+                <NavUser user={userData} />
             </SidebarFooter>
             <SidebarRail />
         </Sidebar>

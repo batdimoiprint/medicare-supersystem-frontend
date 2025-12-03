@@ -19,10 +19,33 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import Chart from 'react-apexcharts';
 import { useTheme } from '@/components/theme-provider';
 import type { ApexOptions } from 'apexcharts';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
+const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
+const inventoryClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'inventory' } });
+const frontdeskClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'frontdesk' } });
 
 const Dashboard = () => {
   const { theme } = useTheme();
   const [isDark, setIsDark] = useState(false);
+  const [stats, setStats] = useState({
+    todayAppointments: 0,
+    pendingApprovals: 0,
+    totalPatients: 0,
+    activeTreatmentPlans: 0,
+    pendingPrescriptions: 0,
+    materialsUsedThisMonth: 0,
+  });
+  const [chartData, setChartData] = useState({
+    appointments: [0, 0, 0, 0, 0, 0],
+    treatmentPlans: [0, 0, 0, 0, 0, 0],
+    prescriptions: [0, 0, 0, 0, 0, 0],
+  });
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
     const updateTheme = () => {
@@ -45,29 +68,327 @@ const Dashboard = () => {
     }
   }, [theme]);
 
-  // Mock statistics - in real app, these would come from API
-  const stats = {
-    todayAppointments: 8,
-    pendingApprovals: 3,
-    totalPatients: 45,
-    activeTreatmentPlans: 12,
-    pendingPrescriptions: 5,
-    materialsUsedThisMonth: 24,
-  };
+  // Load dashboard statistics from database
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
 
-  // Chart data - Monthly appointments over the last 6 months
+        // Get today's appointments from frontdesk.appointment_tbl
+        let todayAppointments = 0;
+        try {
+          const { count } = await frontdeskClient
+            .from('appointment_tbl')
+            .select('*', { count: 'exact', head: true })
+            .eq('appointment_date', today);
+          todayAppointments = count || 0;
+        } catch (err) {
+          console.error('Failed to load today appointments:', err);
+        }
+
+        // Get pending appointments (status = 'Pending')
+        let pendingApprovals = 0;
+        try {
+          const { count } = await frontdeskClient
+            .from('appointment_tbl')
+            .select('*', { count: 'exact', head: true })
+            .eq('appointment_status', 'Pending');
+          pendingApprovals = count || 0;
+        } catch (err) {
+          console.error('Failed to load pending approvals:', err);
+        }
+
+        // Get total patients from patient_record.patient_tbl
+        let totalPatients = 0;
+        try {
+          const { count } = await patientRecordClient
+            .from('patient_tbl')
+            .select('*', { count: 'exact', head: true });
+          totalPatients = count || 0;
+        } catch (err) {
+          console.error('Failed to load total patients:', err);
+        }
+
+        // Get active treatment plans from dentist.treatment_plan_tbl
+        let activeTreatmentPlans = 0;
+        try {
+          const { count } = await dentistClient
+            .from('treatment_plan_tbl')
+            .select('*', { count: 'exact', head: true })
+            .in('treatment_status', ['Pending', 'Ongoing']);
+          activeTreatmentPlans = count || 0;
+        } catch (err) {
+          console.error('Failed to load active treatment plans:', err);
+        }
+
+        // Get pending prescriptions from dentist.prescription_tbl
+        // Note: prescription_tbl doesn't have a status column, so we'll get total prescriptions
+        let pendingPrescriptions = 0;
+        try {
+          const { count } = await dentistClient
+            .from('prescription_tbl')
+            .select('*', { count: 'exact', head: true });
+          pendingPrescriptions = count || 0;
+        } catch (err) {
+          console.error('Failed to load prescriptions:', err);
+        }
+
+        // Get materials used this month from inventory.stock_out
+        let materialsUsedThisMonth = 0;
+        try {
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          startOfMonth.setHours(0, 0, 0, 0);
+          const startOfMonthISO = startOfMonth.toISOString();
+          
+          console.log('Querying materials from:', startOfMonthISO);
+          
+          const { count, error } = await inventoryClient
+            .from('stock_out')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', startOfMonthISO);
+          
+          if (error) {
+            console.error('Error loading materials used:', error);
+            console.error('Error details:', JSON.stringify(error, null, 2));
+          } else {
+            materialsUsedThisMonth = count || 0;
+            console.log('Materials used this month:', materialsUsedThisMonth);
+          }
+        } catch (err) {
+          console.error('Failed to load materials used:', err);
+          console.error('Error details:', err);
+        }
+
+        console.log('Dashboard stats loaded:', {
+          todayAppointments,
+          pendingApprovals,
+          totalPatients,
+          activeTreatmentPlans,
+          pendingPrescriptions,
+          materialsUsedThisMonth,
+        });
+
+        setStats({
+          todayAppointments: todayAppointments || 0,
+          pendingApprovals: pendingApprovals || 0,
+          totalPatients: totalPatients || 0,
+          activeTreatmentPlans: activeTreatmentPlans || 0,
+          pendingPrescriptions: pendingPrescriptions || 0,
+          materialsUsedThisMonth: materialsUsedThisMonth || 0,
+        });
+
+        // Load chart data for last 6 months
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        
+        // Get appointments for last 6 months grouped by month
+        let appointmentsData: any[] = [];
+        try {
+          const { data } = await frontdeskClient
+            .from('appointment_tbl')
+            .select('appointment_date')
+            .gte('appointment_date', sixMonthsAgo.toISOString().split('T')[0]);
+          appointmentsData = data || [];
+        } catch (err) {
+          console.error('Failed to load appointments for chart:', err);
+        }
+        
+        // Get treatment plans for last 6 months
+        let treatmentPlansData: any[] = [];
+        try {
+          const { data } = await dentistClient
+            .from('treatment_plan_tbl')
+            .select('created_at')
+            .gte('created_at', sixMonthsAgo.toISOString());
+          treatmentPlansData = data || [];
+        } catch (err) {
+          console.error('Failed to load treatment plans for chart:', err);
+        }
+        
+        // Get prescriptions for last 6 months
+        let prescriptionsData: any[] = [];
+        try {
+          const { data } = await dentistClient
+            .from('prescription_tbl')
+            .select('created_at')
+            .gte('created_at', sixMonthsAgo.toISOString());
+          prescriptionsData = data || [];
+        } catch (err) {
+          console.error('Failed to load prescriptions for chart:', err);
+        }
+
+        // Group by month (last 6 months)
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          months.push(date);
+        }
+
+        const appointmentsByMonth = months.map(month => {
+          const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+          const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+          return (appointmentsData || []).filter(apt => {
+            const aptDate = new Date(apt.appointment_date);
+            return aptDate >= monthStart && aptDate <= monthEnd;
+          }).length;
+        });
+
+        const treatmentPlansByMonth = months.map(month => {
+          const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+          const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+          return (treatmentPlansData || []).filter(tp => {
+            const tpDate = new Date(tp.created_at);
+            return tpDate >= monthStart && tpDate <= monthEnd;
+          }).length;
+        });
+
+        const prescriptionsByMonth = months.map(month => {
+          const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+          const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+          return (prescriptionsData || []).filter(pr => {
+            const prDate = new Date(pr.created_at);
+            return prDate >= monthStart && prDate <= monthEnd;
+          }).length;
+        });
+
+        setChartData({
+          appointments: appointmentsByMonth,
+          treatmentPlans: treatmentPlansByMonth,
+          prescriptions: prescriptionsByMonth,
+        });
+
+        // Load recent activity
+        const loadRecentActivity = async () => {
+          try {
+            const activities: any[] = [];
+
+            // Get recent appointments
+            let recentAppointments: any[] = [];
+            try {
+              const { data } = await frontdeskClient
+                .from('appointment_tbl')
+                .select('appointment_id, appointment_date, appointment_status, patient_id')
+                .order('appointment_date', { ascending: false })
+                .limit(5);
+              recentAppointments = data || [];
+            } catch (err) {
+              console.error('Failed to load recent appointments:', err);
+            }
+
+            // Get recent EMR records
+            let recentRecords: any[] = [];
+            try {
+              const { data } = await patientRecordClient
+                .from('emr_records')
+                .select('id, date, patient_id, treatment')
+                .order('date', { ascending: false })
+                .limit(5);
+              recentRecords = data || [];
+            } catch (err) {
+              console.error('Failed to load recent records:', err);
+            }
+
+            // Get recent treatment plans
+            let recentPlans: any[] = [];
+            try {
+              const { data } = await dentistClient
+                .from('treatment_plan_tbl')
+                .select('treatment_id, created_at, treatment_name, patient_id')
+                .order('created_at', { ascending: false })
+                .limit(5);
+              recentPlans = data || [];
+            } catch (err) {
+              console.error('Failed to load recent treatment plans:', err);
+            }
+
+            // Get recent prescriptions
+            let recentPrescriptions: any[] = [];
+            try {
+              const { data } = await dentistClient
+                .from('prescription_tbl')
+                .select('prescription_id, created_at, medicine_id')
+                .order('created_at', { ascending: false })
+                .limit(5);
+              recentPrescriptions = data || [];
+            } catch (err) {
+              console.error('Failed to load recent prescriptions:', err);
+            }
+
+            // Combine and sort by date
+            recentAppointments.forEach(apt => {
+              activities.push({
+                type: 'appointment',
+                icon: CheckCircle,
+                title: `Appointment ${apt.appointment_status === 'Confirmed' ? 'confirmed' : 'updated'}`,
+                date: apt.appointment_date,
+                id: apt.appointment_id,
+              });
+            });
+
+            recentRecords.forEach(record => {
+              activities.push({
+                type: 'record',
+                icon: FileText,
+                title: 'New EMR record created',
+                date: record.date,
+                id: record.id,
+              });
+            });
+
+            recentPlans.forEach(plan => {
+              activities.push({
+                type: 'treatment',
+                icon: ClipboardList,
+                title: 'Treatment plan updated',
+                date: plan.created_at,
+                id: plan.treatment_id,
+              });
+            });
+
+            recentPrescriptions.forEach(prescription => {
+              activities.push({
+                type: 'prescription',
+                icon: Pill,
+                title: 'Prescription issued',
+                date: prescription.created_at,
+                id: prescription.prescription_id,
+              });
+            });
+
+            // Sort by date (most recent first) and take top 4
+            activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setRecentActivity(activities.slice(0, 4));
+
+          } catch (err) {
+            console.error('Failed to load recent activity:', err);
+          }
+        };
+
+        loadRecentActivity();
+
+      } catch (err) {
+        console.error('Failed to load dashboard stats:', err);
+      }
+    };
+
+    loadStats();
+  }, []);
+
+  // Chart data - Monthly appointments over the last 6 months (from database)
   const chartSeries = [
     {
       name: 'Appointments',
-      data: [45, 52, 48, 61, 55, 68],
+      data: chartData.appointments,
     },
     {
       name: 'Treatment Plans',
-      data: [28, 32, 30, 38, 35, 42],
+      data: chartData.treatmentPlans,
     },
     {
       name: 'Prescriptions',
-      data: [15, 18, 16, 22, 20, 25],
+      data: chartData.prescriptions,
     },
   ];
 
@@ -112,7 +433,15 @@ const Dashboard = () => {
       },
     },
     xaxis: {
-      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+      categories: (() => {
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          months.push(date.toLocaleDateString('en-US', { month: 'short' }));
+        }
+        return months;
+      })(),
       labels: {
         style: {
           colors: isDark ? '#fff' : '#000',
@@ -298,34 +627,37 @@ const Dashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-              <CheckCircle className="w-5 h-5 text-primary mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Appointment #1001 confirmed</p>
-                <p className="text-xs text-muted-foreground">John Doe - 2 hours ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-              <FileText className="w-5 h-5 text-primary mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">New EMR record created</p>
-                <p className="text-xs text-muted-foreground">Jane Smith - 4 hours ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-              <ClipboardList className="w-5 h-5 text-primary mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Treatment plan updated</p>
-                <p className="text-xs text-muted-foreground">Michael Johnson - 1 day ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-              <Pill className="w-5 h-5 text-destructive mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Prescription issued</p>
-                <p className="text-xs text-muted-foreground">Sarah Williams - 1 day ago</p>
-              </div>
-            </div>
+            {recentActivity.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+            ) : (
+              recentActivity.map((activity, index) => {
+                const Icon = activity.icon;
+                const date = new Date(activity.date);
+                const now = new Date();
+                const diffMs = now.getTime() - date.getTime();
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffHours / 24);
+                
+                let timeAgo = '';
+                if (diffHours < 1) {
+                  timeAgo = 'Just now';
+                } else if (diffHours < 24) {
+                  timeAgo = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                } else {
+                  timeAgo = `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+                }
+
+                return (
+                  <div key={`${activity.type}-${activity.id}-${index}`} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                    <Icon className={`w-5 h-5 ${activity.type === 'prescription' ? 'text-destructive' : 'text-primary'} mt-0.5`} />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{activity.title}</p>
+                      <p className="text-xs text-muted-foreground">{timeAgo}</p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </CardContent>
       </Card >
