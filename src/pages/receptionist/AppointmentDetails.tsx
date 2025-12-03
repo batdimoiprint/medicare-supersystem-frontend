@@ -14,7 +14,6 @@ import {
     useRescheduleAppointment,
     usePersonnel,
 } from '@/hooks/use-appointments'
-import { useCreateFollowup } from '@/hooks/use-followups'
 import { useState, useEffect } from 'react'
 import { Loader2, CalendarIcon } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
@@ -30,7 +29,6 @@ export default function AppointmentDetails() {
     const updateStatusMutation = useUpdateAppointmentStatus()
     const assignDoctorMutation = useAssignDoctor()
     const rescheduleMutation = useRescheduleAppointment()
-    const createFollowupMutation = useCreateFollowup()
 
     const [selectedStatus, setSelectedStatus] = useState<string>('')
     const [selectedDoctor, setSelectedDoctor] = useState<string>('')
@@ -40,11 +38,6 @@ export default function AppointmentDetails() {
     const [rescheduleOpen, setRescheduleOpen] = useState(false)
     const [newDate, setNewDate] = useState('')
     const [newTime, setNewTime] = useState('')
-
-    // Followup form state
-    const [followupRequired, setFollowupRequired] = useState('no')
-    const [followupReason, setFollowupReason] = useState('')
-    const [followupDate, setFollowupDate] = useState('')
 
     // Set initial values when appointment loads
     useEffect(() => {
@@ -106,24 +99,6 @@ export default function AppointmentDetails() {
         setRescheduleOpen(false)
         setNewDate('')
         setNewTime('')
-    }
-
-    const handleCreateFollowup = async () => {
-        if (!appointment?.patient_id || !followupDate) return
-
-        await createFollowupMutation.mutateAsync({
-            patient_id: appointment.patient_id,
-            appointment_id: appointmentId,
-            followup_date: followupDate,
-            service_id: appointment.service_id ?? undefined,
-            personnel_id: appointment.personnel_id ?? undefined,
-            notes: followupReason || undefined,
-        })
-
-        // Reset form
-        setFollowupRequired('no')
-        setFollowupReason('')
-        setFollowupDate('')
     }
 
     const isSaving = updateStatusMutation.isPending || assignDoctorMutation.isPending
@@ -354,62 +329,6 @@ export default function AppointmentDetails() {
                                 </SelectContent>
                             </Select>
                         </div>
-                    </CardContent>
-                </Card>
-
-                {/* Column 3: Follow-up Info */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Schedule Follow-up</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Schedule Follow-up?</Label>
-                            <Select value={followupRequired} onValueChange={setFollowupRequired}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="yes">Yes</SelectItem>
-                                    <SelectItem value="no">No</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {followupRequired === 'yes' && (
-                            <>
-                                <div className="space-y-2">
-                                    <Label>Reason for Follow-up</Label>
-                                    <Input
-                                        value={followupReason}
-                                        onChange={(e) => setFollowupReason(e.target.value)}
-                                        placeholder="Enter reason (optional)"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Follow-up Date</Label>
-                                    <Input
-                                        type="date"
-                                        value={followupDate}
-                                        onChange={(e) => setFollowupDate(e.target.value)}
-                                    />
-                                </div>
-                                <Separator />
-                                <Button
-                                    className="w-full"
-                                    onClick={handleCreateFollowup}
-                                    disabled={!followupDate || createFollowupMutation.isPending}
-                                >
-                                    {createFollowupMutation.isPending && (
-                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    )}
-                                    Create Follow-up Appointment
-                                </Button>
-                                {createFollowupMutation.isSuccess && (
-                                    <p className="text-sm text-green-600">Follow-up created successfully!</p>
-                                )}
-                            </>
-                        )}
                     </CardContent>
                 </Card>
             </div>
