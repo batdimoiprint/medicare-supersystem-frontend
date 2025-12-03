@@ -71,18 +71,20 @@ export default function LoginPage() {
       const sanitizedEmail = formData.email.trim().toLowerCase();
 
       // 1️⃣ PATIENT LOGIN CHECK
-      const { data: patientData, error: patientError } = await supabase
+      const { data: patientRows, error: patientError } = await supabase
         .schema('patient_record')
         .from('patient_tbl')
         .select('patient_id, email, password, account_status, f_name, l_name')
         .eq('email', sanitizedEmail)
-        .maybeSingle();
+        .limit(1);
 
       if (patientError) {
         console.error('Patient query error:', patientError);
         setError('Login service temporarily unavailable');
         return;
       }
+
+      const patientData = patientRows?.[0];
 
       if (patientData) {
         if (['Suspended', 'Inactive', 'Pending'].includes(patientData.account_status)) {
@@ -110,17 +112,23 @@ export default function LoginPage() {
       }
 
       // 2️⃣ PERSONNEL LOGIN CHECK
-      const { data: personnelData, error: personnelError } = await supabase
+      console.log('Checking personnel table for:', sanitizedEmail);
+      
+      const { data: personnelRows, error: personnelError } = await supabase
         .from('personnel_tbl')
         .select('personnel_id, email, password, role_id, f_name, l_name, account_status')
         .eq('email', sanitizedEmail)
-        .maybeSingle();
+        .limit(1);
+
+      console.log('Personnel query result:', { personnelRows, personnelError });
 
       if (personnelError) {
         console.error('Personnel query error:', personnelError);
-        setError('Login service temporarily unavailable');
+        setError('Login service temporarily unavailable. Please check if RLS is disabled on personnel_tbl.');
         return;
       }
+
+      const personnelData = personnelRows?.[0];
 
       if (!personnelData) {
         setError('Invalid email or password');

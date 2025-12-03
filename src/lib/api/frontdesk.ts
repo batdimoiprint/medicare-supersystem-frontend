@@ -10,6 +10,11 @@ import type {
   AppointmentDetail,
   FollowupTableRow,
   FollowupDetail,
+  AdminAppointmentStats,
+  AdminPendingAppointment,
+  AdminCompletedAppointment,
+  AdminRescheduledAppointment,
+  AdminCancelledAppointment,
 } from '@/types/frontdesk'
 
 // Helper to access frontdesk schema
@@ -1364,3 +1369,511 @@ export async function createFollowup(input: CreateFollowupInput): Promise<number
 
   return data?.followup_id ?? 0
 }
+
+// ============================================
+// ADMIN APPOINTMENTS API FUNCTIONS
+// ============================================
+
+// Admin appointment status IDs - ensure these match your appointment_status_tbl
+const ADMIN_STATUS = {
+  PENDING: 1,      // Pending
+  CONFIRMED: 2,    // Confirmed/Approved
+  COMPLETED: 3,    // Completed
+  CANCELLED: 5,    // Cancelled
+  RESCHEDULED: 6,  // Rescheduled (if exists, otherwise check your schema)
+}
+
+/**
+ * Helper to fetch patient name
+ */
+async function getPatientName(patientId: number): Promise<string> {
+  const { data: patient } = await supabase
+    .schema('patient_record')
+    .from('patient_tbl')
+    .select('f_name, l_name')
+    .eq('patient_id', patientId)
+    .single()
+  return patient ? `${patient.f_name} ${patient.l_name}` : `Patient #${patientId}`
+}
+
+/**
+ * Helper to fetch personnel/dentist name
+ */
+async function getPersonnelName(personnelId: number | null): Promise<string> {
+  if (!personnelId) return 'Unassigned'
+  const { data: personnel } = await supabase
+    .from('personnel_tbl')
+    .select('f_name, l_name')
+    .eq('personnel_id', personnelId)
+    .single()
+  return personnel ? `Dr. ${personnel.f_name} ${personnel.l_name}` : 'Unassigned'
+}
+
+/**
+ * Helper to fetch service name
+ */
+async function getServiceName(serviceId: number | null): Promise<string> {
+  if (!serviceId) return 'No service'
+  const { data: service } = await supabase
+    .schema('dentist')
+    .from('services_tbl')
+    .select('service_name')
+    .eq('service_id', serviceId)
+    .single()
+  return service?.service_name ?? 'Unknown Service'
+}
+
+/**
+ * Fetch admin appointment statistics
+ */
+export async function fetchAdminAppointmentStats(): Promise<AdminAppointmentStats> {
+  const today = getTodayDate()
+
+  // Fetch all appointment statuses to get IDs
+  const { data: statuses } = await frontdesk()
+    .from('appointment_status_tbl')
+    .select('appointment_status_id, appointment_status_name')
+
+  const statusMap = new Map<string, number>()
+  statuses?.forEach(s => {
+    statusMap.set(s.appointment_status_name.toLowerCase(), s.appointment_status_id)
+  })
+
+  const pendingId = statusMap.get('pending') ?? ADMIN_STATUS.PENDING
+  const confirmedId = statusMap.get('confirmed') ?? ADMIN_STATUS.CONFIRMED
+  const cancelledId = statusMap.get('cancelled') ?? ADMIN_STATUS.CANCELLED
+
+  // Count pending requests (appointments with Pending status)
+  const { count: pendingRequests } = await frontdesk()
+    .from('appointment_tbl')
+    .select('*', { count: 'exact', head: true })
+    .eq('appointment_status_id', pendingId)
+
+  // Count approved today (confirmed appointments created/updated today)
+  const { count: approvedToday } = await frontdesk()
+    .from('appointment_tbl')
+    .select('*', { count: 'exact', head: true })
+    .eq('appointment_status_id', confirmedId)
+    .eq('appointment_date', today)
+
+  // Count rescheduled (we'll check for appointments with rescheduled status or notes containing reschedule)
+  // Since there might not be a dedicated "rescheduled" status, we can track this differently
+  // For now, we'll look for any rescheduled status or assume it's tracked via a flag/log
+  const rescheduledId = statusMap.get('rescheduled')
+  let rescheduledCount = 0
+  if (rescheduledId) {
+    const { count } = await frontdesk()
+      .from('appointment_tbl')
+      .select('*', { count: 'exact', head: true })
+      .eq('appointment_status_id', rescheduledId)
+    rescheduledCount = count ?? 0
+  }
+
+  // Count cancelled
+  const { count: cancelledCount } = await frontdesk()
+    .from('appointment_tbl')
+    .select('*', { count: 'exact', head: true })
+    .eq('appointment_status_id', cancelledId)
+
+  return {
+    pendingRequests: pendingRequests ?? 0,
+    approvedToday: approvedToday ?? 0,
+    rescheduledCount: rescheduledCount,
+    cancelledCount: cancelledCount ?? 0,
+  }
+}
+
+/**
+ * Fetch pending appointments for admin review
+ */
+export async function fetchAdminPendingAppointments(): Promise<AdminPendingAppointment[]> {
+  // Get pending status ID
+  const { data: statusData } = await frontdesk()
+    .from('appointment_status_tbl')
+    .select('appointment_status_id')
+    .eq('appointment_status_name', 'Pending')
+    .single()
+
+  const pendingId = statusData?.appointment_status_id ?? ADMIN_STATUS.PENDING
+
+  const { data, error } = await frontdesk()
+    .from('appointment_tbl')
+    .select(`
+      appointment_id,
+      patient_id,
+      service_id,
+      appointment_time,
+      appointment_date,
+      appointment_status_id,
+      personnel_id,
+      reservation_fee,
+      payment_receipt_url,
+      notes,
+      reference_number,
+      created_at
+    `)
+    .eq('appointment_status_id', pendingId)
+    .order('appointment_date', { ascending: true })
+    .order('appointment_time', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  if (!data || data.length === 0) return []
+
+  // Fetch related data for each appointment
+  const appointmentsWithDetails = await Promise.all(
+    data.map(async (apt) => {
+      const patientName = await getPatientName(apt.patient_id)
+      const dentistName = await getPersonnelName(apt.personnel_id)
+      const serviceName = await getServiceName(apt.service_id)
+
+      // Determine appointment type (new, followup, or reschedule request)
+      // Check if there's a related followup or previous appointment
+      let appointmentType: 'new' | 'followup' | 'reschedule' = 'new'
+
+      // Check if this appointment was created from a followup
+      const { data: followupData } = await frontdesk()
+        .from('followup_tbl')
+        .select('followup_id')
+        .eq('appointment_id', apt.appointment_id)
+        .limit(1)
+
+      if (followupData && followupData.length > 0) {
+        appointmentType = 'followup'
+      }
+
+      // Check notes for reschedule indication
+      if (apt.notes?.toLowerCase().includes('reschedule')) {
+        appointmentType = 'reschedule'
+      }
+
+      return {
+        id: apt.appointment_id,
+        patient: patientName,
+        patientId: apt.patient_id,
+        service: serviceName,
+        serviceId: apt.service_id,
+        date: apt.appointment_date ?? '',
+        time: apt.appointment_time,
+        dentist: dentistName,
+        dentistId: apt.personnel_id,
+        type: appointmentType,
+        status: 'pending',
+        reservationFee: apt.reservation_fee,
+        paymentReceiptUrl: apt.payment_receipt_url,
+        notes: apt.notes,
+        referenceNumber: apt.reference_number,
+        createdAt: apt.created_at,
+      }
+    })
+  )
+
+  return appointmentsWithDetails
+}
+
+/**
+ * Fetch completed appointments for admin view
+ */
+export async function fetchAdminCompletedAppointments(): Promise<AdminCompletedAppointment[]> {
+  // Get completed status ID
+  const { data: statusData } = await frontdesk()
+    .from('appointment_status_tbl')
+    .select('appointment_status_id')
+    .eq('appointment_status_name', 'Completed')
+    .single()
+
+  const completedId = statusData?.appointment_status_id ?? ADMIN_STATUS.COMPLETED
+
+  const { data, error } = await frontdesk()
+    .from('appointment_tbl')
+    .select(`
+      appointment_id,
+      patient_id,
+      service_id,
+      appointment_time,
+      appointment_date,
+      appointment_status_id,
+      personnel_id,
+      created_at
+    `)
+    .eq('appointment_status_id', completedId)
+    .order('appointment_date', { ascending: false })
+    .limit(50) // Limit to recent 50
+
+  if (error) {
+    throw error
+  }
+
+  if (!data || data.length === 0) return []
+
+  const appointmentsWithDetails = await Promise.all(
+    data.map(async (apt) => {
+      const patientName = await getPatientName(apt.patient_id)
+      const dentistName = await getPersonnelName(apt.personnel_id)
+      const serviceName = await getServiceName(apt.service_id)
+
+      return {
+        id: apt.appointment_id,
+        patient: patientName,
+        patientId: apt.patient_id,
+        service: serviceName,
+        serviceId: apt.service_id,
+        date: apt.appointment_date ?? '',
+        time: apt.appointment_time,
+        dentist: dentistName,
+        dentistId: apt.personnel_id,
+        status: 'completed',
+        completedAt: apt.created_at, // Using created_at as proxy; ideally track completion timestamp
+      }
+    })
+  )
+
+  return appointmentsWithDetails
+}
+
+/**
+ * Fetch rescheduled appointments for admin view
+ * Note: This requires tracking original date - might need a separate table or notes field
+ */
+export async function fetchAdminRescheduledAppointments(): Promise<AdminRescheduledAppointment[]> {
+  // Check if there's a rescheduled status
+  const { data: statusData } = await frontdesk()
+    .from('appointment_status_tbl')
+    .select('appointment_status_id')
+    .ilike('appointment_status_name', '%reschedule%')
+    .limit(1)
+
+  // If no rescheduled status exists, try to find appointments with reschedule in notes
+  let query = frontdesk()
+    .from('appointment_tbl')
+    .select(`
+      appointment_id,
+      patient_id,
+      service_id,
+      appointment_time,
+      appointment_date,
+      appointment_status_id,
+      personnel_id,
+      notes,
+      created_at
+    `)
+
+  if (statusData && statusData.length > 0) {
+    query = query.eq('appointment_status_id', statusData[0].appointment_status_id)
+  } else {
+    // Fallback: look for notes containing "reschedule"
+    query = query.ilike('notes', '%reschedule%')
+  }
+
+  const { data, error } = await query
+    .order('appointment_date', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    throw error
+  }
+
+  if (!data || data.length === 0) return []
+
+  const appointmentsWithDetails = await Promise.all(
+    data.map(async (apt) => {
+      const patientName = await getPatientName(apt.patient_id)
+      const dentistName = await getPersonnelName(apt.personnel_id)
+      const serviceName = await getServiceName(apt.service_id)
+
+      // Try to extract original date from notes or use null
+      let originalDate: string | null = null
+      if (apt.notes) {
+        // Try to parse original date from notes (e.g., "Rescheduled from 2025-01-15")
+        const dateMatch = apt.notes.match(/from\s*(\d{4}-\d{2}-\d{2})/i)
+        if (dateMatch) {
+          originalDate = dateMatch[1]
+        }
+      }
+
+      return {
+        id: apt.appointment_id,
+        patient: patientName,
+        patientId: apt.patient_id,
+        service: serviceName,
+        serviceId: apt.service_id,
+        originalDate: originalDate,
+        newDate: apt.appointment_date ?? '',
+        newTime: apt.appointment_time,
+        dentist: dentistName,
+        dentistId: apt.personnel_id,
+        reason: apt.notes,
+      }
+    })
+  )
+
+  return appointmentsWithDetails
+}
+
+/**
+ * Fetch cancelled appointments for admin view
+ */
+export async function fetchAdminCancelledAppointments(): Promise<AdminCancelledAppointment[]> {
+  const { data, error } = await frontdesk()
+    .from('appointment_tbl')
+    .select(`
+      appointment_id,
+      patient_id,
+      service_id,
+      appointment_time,
+      appointment_date,
+      appointment_status_id,
+      personnel_id,
+      notes,
+      created_at
+    `)
+    .eq('appointment_status_id', CANCELLED_STATUS_ID)
+    .order('appointment_date', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    throw error
+  }
+
+  if (!data || data.length === 0) return []
+
+  const appointmentsWithDetails = await Promise.all(
+    data.map(async (apt) => {
+      const patientName = await getPatientName(apt.patient_id)
+      const dentistName = await getPersonnelName(apt.personnel_id)
+      const serviceName = await getServiceName(apt.service_id)
+
+      // Determine who cancelled (from notes or default to System)
+      let cancelledBy = 'System'
+      if (apt.notes?.toLowerCase().includes('patient')) {
+        cancelledBy = 'Patient'
+      } else if (apt.notes?.toLowerCase().includes('admin')) {
+        cancelledBy = 'Admin'
+      } else if (apt.notes?.toLowerCase().includes('dentist') || apt.notes?.toLowerCase().includes('doctor')) {
+        cancelledBy = 'Dentist'
+      }
+
+      return {
+        id: apt.appointment_id,
+        patient: patientName,
+        patientId: apt.patient_id,
+        service: serviceName,
+        serviceId: apt.service_id,
+        date: apt.appointment_date ?? '',
+        dentist: dentistName,
+        dentistId: apt.personnel_id,
+        reason: apt.notes,
+        cancelledBy: cancelledBy,
+        cancelledAt: apt.created_at,
+      }
+    })
+  )
+
+  return appointmentsWithDetails
+}
+
+/**
+ * Approve a pending appointment (set status to Confirmed with status_id = 2)
+ */
+export async function approveAppointment(appointmentId: number): Promise<void> {
+  const { error } = await frontdesk()
+    .from('appointment_tbl')
+    .update({ appointment_status_id: 2 })
+    .eq('appointment_id', appointmentId)
+
+  if (error) {
+    throw error
+  }
+}
+
+/**
+ * Decline a pending appointment (set status to Cancelled with reason)
+ */
+export async function declineAppointment(appointmentId: number, reason?: string): Promise<void> {
+  // Update status to Cancelled
+  const { data: statusData } = await frontdesk()
+    .from('appointment_status_tbl')
+    .select('appointment_status_id')
+    .eq('appointment_status_name', 'Cancelled')
+    .single()
+
+  const cancelledId = statusData?.appointment_status_id ?? CANCELLED_STATUS_ID
+
+  const updateData: { appointment_status_id: number; notes?: string } = {
+    appointment_status_id: cancelledId,
+  }
+
+  if (reason) {
+    // Append decline reason to notes
+    const { data: currentApt } = await frontdesk()
+      .from('appointment_tbl')
+      .select('notes')
+      .eq('appointment_id', appointmentId)
+      .single()
+
+    const existingNotes = currentApt?.notes ?? ''
+    updateData.notes = existingNotes
+      ? `${existingNotes}\nDeclined by Admin: ${reason}`
+      : `Declined by Admin: ${reason}`
+  }
+
+  const { error } = await frontdesk()
+    .from('appointment_tbl')
+    .update(updateData)
+    .eq('appointment_id', appointmentId)
+
+  if (error) {
+    throw error
+  }
+}
+
+/**
+ * Reschedule an appointment with tracking (sets status_id = 7 for Rescheduled)
+ */
+export async function rescheduleAppointmentAdmin(
+  appointmentId: number,
+  newDate: string,
+  newTime: string | null,
+  reason?: string
+): Promise<void> {
+  // Get current appointment date for tracking
+  const { data: currentApt } = await frontdesk()
+    .from('appointment_tbl')
+    .select('appointment_date, appointment_time, notes')
+    .eq('appointment_id', appointmentId)
+    .single()
+
+  const existingNotes = currentApt?.notes ?? ''
+  const originalDate = currentApt?.appointment_date ?? 'unknown'
+  const rescheduleNote = `Rescheduled from ${originalDate}${reason ? `: ${reason}` : ''}`
+  const newNotes = existingNotes
+    ? `${existingNotes}\n${rescheduleNote}`
+    : rescheduleNote
+
+  const updateData: {
+    appointment_date: string
+    appointment_time?: string | null
+    notes: string
+    appointment_status_id: number
+  } = {
+    appointment_date: newDate,
+    notes: newNotes,
+    appointment_status_id: 7, // Rescheduled status
+  }
+
+  if (newTime !== undefined) {
+    updateData.appointment_time = newTime
+  }
+
+  const { error } = await frontdesk()
+    .from('appointment_tbl')
+    .update(updateData)
+    .eq('appointment_id', appointmentId)
+
+  if (error) {
+    throw error
+  }
+}
+

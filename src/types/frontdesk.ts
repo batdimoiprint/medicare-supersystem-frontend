@@ -246,3 +246,90 @@ export interface FollowupDetail {
   original_appointment_time: string | null
   original_appointment_service: string | null
 }
+
+// ==========================================
+// ADMIN APPOINTMENTS TYPES
+// ==========================================
+
+/**
+ * Admin Dashboard Appointment Stats
+ */
+export interface AdminAppointmentStats {
+  pendingRequests: number
+  approvedToday: number
+  rescheduledCount: number
+  cancelledCount: number
+}
+
+/**
+ * Pending appointment for admin view
+ */
+export interface AdminPendingAppointment {
+  id: number
+  patient: string
+  patientId: number
+  service: string
+  serviceId: number | null
+  date: string
+  time: string | null
+  dentist: string
+  dentistId: number | null
+  type: 'new' | 'followup' | 'reschedule'
+  status: string
+  reservationFee: number | null
+  paymentReceiptUrl: string | null
+  notes: string | null
+  referenceNumber: string | null
+  createdAt: string | null
+}
+
+/**
+ * Completed appointment for admin view
+ */
+export interface AdminCompletedAppointment {
+  id: number
+  patient: string
+  patientId: number
+  service: string
+  serviceId: number | null
+  date: string
+  time: string | null
+  dentist: string
+  dentistId: number | null
+  status: string
+  completedAt: string | null
+}
+
+/**
+ * Rescheduled appointment for admin view
+ */
+export interface AdminRescheduledAppointment {
+  id: number
+  patient: string
+  patientId: number
+  service: string
+  serviceId: number | null
+  originalDate: string | null
+  newDate: string
+  newTime: string | null
+  dentist: string
+  dentistId: number | null
+  reason: string | null
+}
+
+/**
+ * Cancelled appointment for admin view
+ */
+export interface AdminCancelledAppointment {
+  id: number
+  patient: string
+  patientId: number
+  service: string
+  serviceId: number | null
+  date: string
+  dentist: string
+  dentistId: number | null
+  reason: string | null
+  cancelledBy: string
+  cancelledAt: string | null
+}
