@@ -35,11 +35,10 @@ import {
   useDentistPatients,
   useDentistTreatmentLogs,
   useDentistPrescriptions,
-  useDentistFollowUps,
 } from "@/hooks/use-dentist-management";
 import type { DentistInfo } from "@/types/dentist";
 
-type DetailTab = 'overview' | 'patients' | 'treatments' | 'prescriptions' | 'followups';
+type DetailTab = 'overview' | 'patients' | 'treatments' | 'prescriptions';
 
 export default function DentistManagement() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,7 +58,6 @@ export default function DentistManagement() {
   const { data: dentistPatients = [] } = useDentistPatients(selectedPersonnelId);
   const { data: dentistTreatments = [] } = useDentistTreatmentLogs(selectedPersonnelId);
   const { data: dentistPrescriptions = [] } = useDentistPrescriptions(selectedPersonnelId);
-  const { data: dentistFollowUps = [] } = useDentistFollowUps(selectedPersonnelId);
 
   // Stats for the dashboard - using real data
   const dentistStats = [
@@ -100,19 +98,7 @@ export default function DentistManagement() {
     { id: 'patients', label: 'Patients', icon: Users },
     { id: 'treatments', label: 'Treatments', icon: ClipboardList },
     { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
-    { id: 'followups', label: 'Follow-ups', icon: Calendar },
   ];
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'medium':
-        return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      default:
-        return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 space-y-6">
@@ -595,46 +581,7 @@ export default function DentistManagement() {
                     </div>
                   )}
 
-                  {/* Follow-ups Tab */}
-                  {detailTab === 'followups' && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-semibold text-muted-foreground">Follow-up Recommendations</h4>
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500">
-                          {dentistFollowUps.length} follow-ups
-                        </Badge>
-                      </div>
-                      {dentistFollowUps.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Calendar className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                          <p>No follow-up recommendations</p>
-                        </div>
-                      ) : (
-                        dentistFollowUps.map((followUp, idx) => (
-                          <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-semibold">{followUp.service}</p>
-                                  <Badge variant="outline" className={cn("text-xs", getPriorityColor(followUp.priority))}>
-                                    {followUp.priority} priority
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">Patient: {followUp.patientName}</p>
-                                {followUp.notes && <p className="text-sm text-muted-foreground mt-1">{followUp.notes}</p>}
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className="text-xs text-muted-foreground">Recommended</p>
-                                <p className="text-sm font-medium text-primary">
-                                  {new Date(followUp.recommendedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
+
                 </div>
               </ScrollArea>
 
