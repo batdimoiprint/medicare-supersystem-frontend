@@ -14,29 +14,29 @@ export default function FollowupDetails() {
     const { appointment_id } = useParams()
     const navigate = useNavigate()
     const followupId = appointment_id ? parseInt(appointment_id, 10) : undefined
-    
+
     const { data: followup, isLoading, isError } = useFollowup(followupId)
     const { data: statuses } = useFollowupStatuses()
     const updateStatusMutation = useUpdateFollowupStatus()
-    
+
     const [selectedStatus, setSelectedStatus] = useState<string>('')
     const [hasChanges, setHasChanges] = useState(false)
-    
+
     // Set initial status when followup loads
     useEffect(() => {
         if (followup?.appointment_status_id) {
             setSelectedStatus(followup.appointment_status_id.toString())
         }
     }, [followup?.appointment_status_id])
-    
+
     const handleStatusChange = (value: string) => {
         setSelectedStatus(value)
         setHasChanges(value !== followup?.appointment_status_id?.toString())
     }
-    
+
     const handleSave = async () => {
         if (!followupId || !selectedStatus) return
-        
+
         await updateStatusMutation.mutateAsync({
             followupId,
             statusId: parseInt(selectedStatus, 10)
@@ -45,7 +45,7 @@ export default function FollowupDetails() {
         // Navigate back to followups list after successful update
         navigate('/receptionist/followup')
     }
-    
+
     if (isLoading) {
         return (
             <div className="p-6 space-y-6">
@@ -58,7 +58,7 @@ export default function FollowupDetails() {
             </div>
         )
     }
-    
+
     if (isError || !followup) {
         return (
             <div className="p-6">
@@ -76,8 +76,8 @@ export default function FollowupDetails() {
                 <h1 className="text-3xl font-bold tracking-tight">Follow-up Details</h1>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
-                    <Button 
-                        onClick={handleSave} 
+                    <Button
+                        onClick={handleSave}
                         disabled={!hasChanges || updateStatusMutation.isPending}
                     >
                         {updateStatusMutation.isPending && (
@@ -97,17 +97,45 @@ export default function FollowupDetails() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label>Full Name</Label>
-                            <Input value={followup.patient_first_name && followup.patient_last_name 
-                                ? `${followup.patient_first_name} ${followup.patient_last_name}` 
-                                : 'N/A'} readOnly className="bg-muted" />
+                            <Input value={
+                                [
+                                    followup.patient_first_name,
+                                    followup.patient_middle_name,
+                                    followup.patient_last_name,
+                                    followup.patient_suffix
+                                ].filter(Boolean).join(' ') || 'N/A'
+                            } readOnly className="bg-muted" />
                         </div>
                         <div className="space-y-2">
                             <Label>Patient ID</Label>
                             <Input value={followup.patient_id?.toString() || 'N/A'} readOnly className="bg-muted" />
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Gender</Label>
+                                <Input value={followup.patient_gender || 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Birthdate</Label>
+                                <Input value={followup.patient_birthdate || 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                        </div>
                         <div className="space-y-2">
-                            <Label>Contact Number</Label>
+                            <Label>Primary Contact</Label>
                             <Input value={followup.patient_contact || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Secondary Contact</Label>
+                            <Input value={followup.patient_secondary_contact || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Email</Label>
+                            <Input value={followup.patient_email || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <Separator />
+                        <div className="space-y-2">
+                            <Label>Address</Label>
+                            <Input value={followup.patient_address || 'N/A'} readOnly className="bg-muted" />
                         </div>
                     </CardContent>
                 </Card>
@@ -147,6 +175,18 @@ export default function FollowupDetails() {
                             <Label>Service</Label>
                             <Input value={followup.service_name || 'N/A'} readOnly className="bg-muted" />
                         </div>
+                        {followup.service_category_name && (
+                            <div className="space-y-2">
+                                <Label>Category</Label>
+                                <Input value={followup.service_category_name} readOnly className="bg-muted" />
+                            </div>
+                        )}
+                        {followup.service_description && (
+                            <div className="space-y-2">
+                                <Label>Service Description</Label>
+                                <Input value={followup.service_description} readOnly className="bg-muted" />
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label>Assigned Dentist</Label>
                             <Input value={followup.personnel_first_name && followup.personnel_last_name
@@ -163,6 +203,16 @@ export default function FollowupDetails() {
                                 <Input value={followup.followup_time || 'N/A'} readOnly className="bg-muted" />
                             </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Service Fee</Label>
+                                <Input value={followup.service_fee ? `₱ ${followup.service_fee.toFixed(2)}` : 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Duration</Label>
+                                <Input value={followup.service_duration || 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                        </div>
                         <Separator />
                         <div className="space-y-2">
                             <Label>Status</Label>
@@ -172,8 +222,8 @@ export default function FollowupDetails() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {statuses?.map(status => (
-                                        <SelectItem 
-                                            key={status.appointment_status_id} 
+                                        <SelectItem
+                                            key={status.appointment_status_id}
                                             value={status.appointment_status_id.toString()}
                                         >
                                             {status.appointment_status_name}

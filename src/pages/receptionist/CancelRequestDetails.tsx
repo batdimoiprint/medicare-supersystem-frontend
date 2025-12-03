@@ -12,23 +12,23 @@ export default function CancelRequestDetails() {
     const { appointment_id } = useParams()
     const navigate = useNavigate()
     const appointmentId = appointment_id ? parseInt(appointment_id, 10) : undefined
-    
+
     const { data: appointment, isLoading, isError } = useCancelRequestDetails(appointmentId)
     const approveMutation = useApproveCancellation()
     const rejectMutation = useRejectCancellation()
-    
+
     const handleApprove = async () => {
         if (!appointmentId) return
         await approveMutation.mutateAsync(appointmentId)
         navigate('/receptionist/cancel-requests')
     }
-    
+
     const handleReject = async () => {
         if (!appointmentId) return
         await rejectMutation.mutateAsync(appointmentId)
         navigate('/receptionist/cancel-requests')
     }
-    
+
     if (isLoading) {
         return (
             <div className="p-6 space-y-6">
@@ -41,7 +41,7 @@ export default function CancelRequestDetails() {
             </div>
         )
     }
-    
+
     if (isError || !appointment) {
         return (
             <div className="p-6">
@@ -59,15 +59,15 @@ export default function CancelRequestDetails() {
                 <h1 className="text-3xl font-bold tracking-tight">Cancel Request Details</h1>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
-                    <Button 
-                        variant="destructive" 
+                    <Button
+                        variant="destructive"
                         onClick={handleApprove}
                         disabled={approveMutation.isPending || rejectMutation.isPending}
                     >
                         {approveMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                         Approve Cancellation
                     </Button>
-                    <Button 
+                    <Button
                         onClick={handleReject}
                         disabled={approveMutation.isPending || rejectMutation.isPending}
                     >
@@ -86,17 +86,45 @@ export default function CancelRequestDetails() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label>Full Name</Label>
-                            <Input value={appointment.patient_first_name && appointment.patient_last_name 
-                                ? `${appointment.patient_first_name} ${appointment.patient_last_name}` 
-                                : 'N/A'} readOnly className="bg-muted" />
+                            <Input value={
+                                [
+                                    appointment.patient_first_name,
+                                    appointment.patient_middle_name,
+                                    appointment.patient_last_name,
+                                    appointment.patient_suffix
+                                ].filter(Boolean).join(' ') || 'N/A'
+                            } readOnly className="bg-muted" />
                         </div>
                         <div className="space-y-2">
                             <Label>Patient ID</Label>
                             <Input value={appointment.patient_id?.toString() || 'N/A'} readOnly className="bg-muted" />
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Gender</Label>
+                                <Input value={appointment.patient_gender || 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Birthdate</Label>
+                                <Input value={appointment.patient_birthdate || 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                        </div>
                         <div className="space-y-2">
-                            <Label>Contact Number</Label>
+                            <Label>Primary Contact</Label>
                             <Input value={appointment.patient_contact || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Secondary Contact</Label>
+                            <Input value={appointment.patient_secondary_contact || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Email</Label>
+                            <Input value={appointment.patient_email || 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <Separator />
+                        <div className="space-y-2">
+                            <Label>Address</Label>
+                            <Input value={appointment.patient_address || 'N/A'} readOnly className="bg-muted" />
                         </div>
                     </CardContent>
                 </Card>
@@ -115,6 +143,18 @@ export default function CancelRequestDetails() {
                             <Label>Service</Label>
                             <Input value={appointment.service_name || 'N/A'} readOnly className="bg-muted" />
                         </div>
+                        {appointment.service_category_name && (
+                            <div className="space-y-2">
+                                <Label>Category</Label>
+                                <Input value={appointment.service_category_name} readOnly className="bg-muted" />
+                            </div>
+                        )}
+                        {appointment.service_description && (
+                            <div className="space-y-2">
+                                <Label>Description</Label>
+                                <Input value={appointment.service_description} readOnly className="bg-muted" />
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label>Dentist</Label>
                             <Input value={appointment.personnel_first_name && appointment.personnel_last_name
@@ -131,9 +171,15 @@ export default function CancelRequestDetails() {
                                 <Input value={appointment.appointment_time || 'N/A'} readOnly className="bg-muted" />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Service Fee</Label>
-                            <Input value={appointment.service_fee ? `₱ ${appointment.service_fee.toFixed(2)}` : 'N/A'} readOnly className="bg-muted" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Service Fee</Label>
+                                <Input value={appointment.service_fee ? `₱ ${appointment.service_fee.toFixed(2)}` : 'N/A'} readOnly className="bg-muted" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Duration</Label>
+                                <Input value={appointment.service_duration || 'N/A'} readOnly className="bg-muted" />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -150,8 +196,8 @@ export default function CancelRequestDetails() {
                         </div>
                         <div className="space-y-2">
                             <Label>Created At</Label>
-                            <Input value={appointment.created_at 
-                                ? new Date(appointment.created_at).toLocaleDateString() 
+                            <Input value={appointment.created_at
+                                ? new Date(appointment.created_at).toLocaleDateString()
                                 : 'N/A'} readOnly className="bg-muted" />
                         </div>
                         <Separator />

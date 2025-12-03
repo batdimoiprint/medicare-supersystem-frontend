@@ -18,9 +18,9 @@ export default function Appointments() {
                         Manage and view all patient appointments.
                     </p>
                 </div>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
+                <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => refetch()}
                     disabled={isFetching}
                 >
@@ -51,17 +51,17 @@ export default function Appointments() {
                     </CardContent>
                 </Card>
             ) : (
-                <div className="mt-4">
-                    <ReceptionistTable 
-                        items={appointments} 
-                        basePath="/receptionist/appointments" 
+                <Card className="p-4">
+                    <ReceptionistTable
+                        items={appointments}
+                        basePath="/receptionist/appointments"
                     />
                     {appointments?.length === 0 && (
                         <p className="text-center text-muted-foreground py-8">
                             No appointments found.
                         </p>
                     )}
-                </div>
+                </Card>
             )}
         </div>
     )
