@@ -19,7 +19,15 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import Chart from 'react-apexcharts';
 import { useTheme } from '@/components/theme-provider';
 import type { ApexOptions } from 'apexcharts';
-import { patientRecordClient, dentistClient, inventoryClient, frontdeskClient } from '@/utils/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
+const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
+const inventoryClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'inventory' } });
+const frontdeskClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'frontdesk' } });
 
 const Dashboard = () => {
   const { theme } = useTheme();

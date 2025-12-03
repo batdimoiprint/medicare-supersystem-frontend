@@ -21,7 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { dentistClient } from '@/utils/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
 
 // --- Type Definitions ---
 interface TimeSlot {

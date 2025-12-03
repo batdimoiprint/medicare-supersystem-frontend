@@ -29,8 +29,14 @@ import {
 } from '@/components/ui/select';
 import { PatientNav } from '@/components/dentist/PatientNav';
 import { PatientSelector } from '@/components/dentist/PatientSelector';
-import { patientRecordClient, dentistClient } from '@/utils/supabase';
-import supabase from '@/utils/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
+const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
 
 // --- Type Definitions ---
 interface PatientRow {

@@ -26,7 +26,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field';
-import supabase, { dentistClient, frontdeskClient, patientRecordClient } from '@/utils/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
+const frontdeskClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'frontdesk' } });
+const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
 
 // --- Type Definitions ---
 interface Service {
