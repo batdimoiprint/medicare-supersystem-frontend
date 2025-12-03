@@ -941,6 +941,7 @@ const PatientWorkflow = () => {
 
         await dentistClient.from('prescription_tbl').insert({
           prescription_id: nextPrescriptionId,
+          patient_id: Number(selectedPatientId),
           medicine_id: prescription.medicine_id,
           instructions: prescription.instructions || null,
           dosage: prescription.dosage || null,

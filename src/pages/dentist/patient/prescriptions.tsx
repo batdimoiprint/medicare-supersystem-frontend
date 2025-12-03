@@ -59,6 +59,7 @@ interface Dentist {
 
 interface Prescription {
   prescription_id: number; // bigint in database
+  patient_id?: number; // bigint in database - FK to patient_tbl
   medicine_id: number; // bigint in database
   instructions?: string;
   dosage?: string;
@@ -188,11 +189,11 @@ const PrescriptionsPage = () => {
     if (!selectedPatient) return;
     setLoading(true);
     try {
-      // Load prescriptions from dentist.prescription_tbl
-      // Note: prescription_tbl doesn't have patient_id column, so we load all prescriptions
+      // Load prescriptions filtered by patient_id
       const { data, error } = await dentistClient
         .from('prescription_tbl')
-        .select('prescription_id, medicine_id, instructions, dosage, frequency, duration, quantity, created_at, personnel_id')
+        .select('prescription_id, patient_id, medicine_id, instructions, dosage, frequency, duration, quantity, created_at, personnel_id')
+        .eq('patient_id', Number(selectedPatient))
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -342,6 +343,7 @@ const PrescriptionsPage = () => {
 
         const prescriptionData = {
           prescription_id: nextPrescriptionId,
+          patient_id: Number(selectedPatient),
           medicine_id: formData.medicine_id,
           instructions: formData.instructions || null,
           dosage: formData.dosage || null,
