@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Settings,
@@ -14,8 +14,10 @@ import {
   Calendar,
   MessageSquare,
   X,
-  ChevronRight,
+  Loader2,
+  Trash2,
 } from "lucide-react";
+import supabase from "@/utils/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,99 +37,31 @@ interface NotificationHistory {
   id: string;
   title: string;
   message: string;
-  sentTo: string[];
-  sentAt: string;
-  sentBy: string;
+  sent_to: string[];
+  sent_at: string;
+  sent_by: string;
   type: "info" | "warning" | "critical" | "maintenance";
 }
 
 interface MaintenanceLog {
   id: string;
   action: string;
-  startTime: string;
-  endTime: string | null;
+  start_time: string;
+  end_time: string | null;
+  estimated_duration: string | null;
   reason: string;
-  initiatedBy: string;
+  initiated_by: string;
   status: "active" | "completed" | "scheduled";
 }
 
-// Mock Data
-const mockSubsystemNames = [
+// Subsystem Names
+const SUBSYSTEM_NAMES = [
   "Patient Portal",
   "Dentist System",
   "Inventory Management",
   "Reception/Front Desk",
   "Billing & Payments",
   "Admin Dashboard",
-];
-
-const mockNotificationHistory: NotificationHistory[] = [
-  {
-    id: "NOT001",
-    title: "Scheduled Maintenance Notice",
-    message: "System will undergo maintenance on Dec 5, 2025 from 2:00 AM to 4:00 AM.",
-    sentTo: ["All Subsystems"],
-    sentAt: "2025-12-02 03:00 PM",
-    sentBy: "Admin User",
-    type: "maintenance",
-  },
-  {
-    id: "NOT002",
-    title: "New Feature Update",
-    message: "New patient scheduling features are now available across all subsystems.",
-    sentTo: ["Patient Portal", "Reception/Front Desk", "Dentist System"],
-    sentAt: "2025-12-01 09:00 AM",
-    sentBy: "System Admin",
-    type: "info",
-  },
-  {
-    id: "NOT003",
-    title: "Security Alert",
-    message: "Please update your passwords within the next 7 days as per security policy.",
-    sentTo: ["All Subsystems"],
-    sentAt: "2025-11-28 11:30 AM",
-    sentBy: "Security Team",
-    type: "warning",
-  },
-  {
-    id: "NOT004",
-    title: "Critical System Update",
-    message: "Emergency patch applied to fix payment processing issue.",
-    sentTo: ["Billing & Payments"],
-    sentAt: "2025-11-25 06:45 PM",
-    sentBy: "Admin User",
-    type: "critical",
-  },
-];
-
-const mockMaintenanceLogs: MaintenanceLog[] = [
-  {
-    id: "MAINT001",
-    action: "System-wide Maintenance",
-    startTime: "2025-12-01 02:00 AM",
-    endTime: "2025-12-01 03:45 AM",
-    reason: "Database optimization and security patches",
-    initiatedBy: "Admin User",
-    status: "completed",
-  },
-  {
-    id: "MAINT002",
-    action: "Scheduled Maintenance",
-    startTime: "2025-12-05 02:00 AM",
-    endTime: null,
-    reason: "Monthly system updates and backups",
-    initiatedBy: "System Admin",
-    status: "scheduled",
-  },
-  {
-    id: "MAINT003",
-    action: "Emergency Maintenance",
-    startTime: "2025-11-25 06:00 PM",
-    endTime: "2025-11-25 07:30 PM",
-    reason: "Payment gateway connection issue",
-    initiatedBy: "Admin User",
-    status: "completed",
-  },
 ];
 
 // Animation variants
@@ -150,9 +84,21 @@ const listItemVariants = {
 };
 
 export default function AdminSettings() {
+  // Data states
+  const [notifications, setNotifications] = useState<NotificationHistory[]>([]);
+  const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  
+  // Loading states
+  const [loading, setLoading] = useState(true);
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [togglingMaintenance, setTogglingMaintenance] = useState(false);
+  
+  // Modal states
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  
+  // Form states
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationType, setNotificationType] = useState<string>("info");
@@ -160,33 +106,223 @@ export default function AdminSettings() {
   const [maintenanceReason, setMaintenanceReason] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
 
+  // Current admin user (you can get this from auth context)
+  const currentAdmin = "Admin User";
+
+  // Load data on mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        loadNotifications(),
+        loadMaintenanceLogs(),
+        loadMaintenanceMode(),
+      ]);
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadNotifications = async () => {
+    const { data, error } = await supabase
+      .from("system_notifications")
+      .select("*")
+      .order("sent_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error("Error loading notifications:", error);
+      return;
+    }
+
+    setNotifications(data || []);
+  };
+
+  const loadMaintenanceLogs = async () => {
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .select("*")
+      .order("start_time", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error("Error loading maintenance logs:", error);
+      return;
+    }
+
+    setMaintenanceLogs(data || []);
+  };
+
+  const loadMaintenanceMode = async () => {
+    const { data, error } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "maintenance_mode")
+      .single();
+
+    if (error) {
+      console.error("Error loading maintenance mode:", error);
+      return;
+    }
+
+    if (data?.setting_value) {
+      setMaintenanceMode(data.setting_value.enabled || false);
+    }
+  };
+
   const handleToggleMaintenanceMode = () => {
     if (!maintenanceMode) {
       setShowMaintenanceModal(true);
     } else {
-      setMaintenanceMode(false);
+      disableMaintenanceMode();
     }
   };
 
-  const handleEnableMaintenance = () => {
-    setMaintenanceMode(true);
-    setShowMaintenanceModal(false);
-    setMaintenanceReason("");
-    setScheduledTime("");
+  const disableMaintenanceMode = async () => {
+    setTogglingMaintenance(true);
+    try {
+      // Update maintenance mode setting
+      const { error: settingsError } = await supabase
+        .from("system_settings")
+        .update({
+          setting_value: { enabled: false, reason: null, started_at: null },
+          updated_at: new Date().toISOString(),
+          updated_by: currentAdmin,
+        })
+        .eq("setting_key", "maintenance_mode");
+
+      if (settingsError) throw settingsError;
+
+      // Update active maintenance log to completed
+      const { error: logError } = await supabase
+        .from("maintenance_logs")
+        .update({
+          status: "completed",
+          end_time: new Date().toISOString(),
+        })
+        .eq("status", "active");
+
+      if (logError) throw logError;
+
+      setMaintenanceMode(false);
+      await loadMaintenanceLogs();
+    } catch (error) {
+      console.error("Error disabling maintenance mode:", error);
+    } finally {
+      setTogglingMaintenance(false);
+    }
   };
 
-  const handleSendNotification = () => {
-    console.log({
-      title: notificationTitle,
-      message: notificationMessage,
-      type: notificationType,
-      recipients: selectedSubsystems,
+  const handleEnableMaintenance = async () => {
+    setTogglingMaintenance(true);
+    try {
+      const now = new Date().toISOString();
+
+      // Update maintenance mode setting
+      const { error: settingsError } = await supabase
+        .from("system_settings")
+        .update({
+          setting_value: { enabled: true, reason: maintenanceReason, started_at: now },
+          updated_at: now,
+          updated_by: currentAdmin,
+        })
+        .eq("setting_key", "maintenance_mode");
+
+      if (settingsError) throw settingsError;
+
+      // Create maintenance log entry
+      const { error: logError } = await supabase
+        .from("maintenance_logs")
+        .insert({
+          action: "System Maintenance",
+          reason: maintenanceReason,
+          start_time: now,
+          estimated_duration: scheduledTime || null,
+          initiated_by: currentAdmin,
+          status: "active",
+        });
+
+      if (logError) throw logError;
+
+      // Send maintenance notification if needed
+      if (maintenanceReason) {
+        await supabase.from("system_notifications").insert({
+          title: "Maintenance Mode Enabled",
+          message: maintenanceReason,
+          type: "maintenance",
+          sent_to: ["All Subsystems"],
+          sent_by: currentAdmin,
+          sent_at: now,
+        });
+      }
+
+      setMaintenanceMode(true);
+      setShowMaintenanceModal(false);
+      setMaintenanceReason("");
+      setScheduledTime("");
+      await Promise.all([loadMaintenanceLogs(), loadNotifications()]);
+    } catch (error) {
+      console.error("Error enabling maintenance mode:", error);
+    } finally {
+      setTogglingMaintenance(false);
+    }
+  };
+
+  const handleSendNotification = async () => {
+    setSendingNotification(true);
+    try {
+      const { error } = await supabase.from("system_notifications").insert({
+        title: notificationTitle,
+        message: notificationMessage,
+        type: notificationType,
+        sent_to: selectedSubsystems,
+        sent_by: currentAdmin,
+        sent_at: new Date().toISOString(),
+      });
+
+      if (error) throw error;
+
+      setShowNotificationModal(false);
+      setNotificationTitle("");
+      setNotificationMessage("");
+      setNotificationType("info");
+      setSelectedSubsystems([]);
+      await loadNotifications();
+    } catch (error) {
+      console.error("Error sending notification:", error);
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("system_notifications")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+      await loadNotifications();
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     });
-    setShowNotificationModal(false);
-    setNotificationTitle("");
-    setNotificationMessage("");
-    setNotificationType("info");
-    setSelectedSubsystems([]);
   };
 
   const toggleSubsystemSelection = (subsystemName: string) => {
@@ -305,13 +441,16 @@ export default function AdminSettings() {
                 </div>
                 <Button
                   onClick={handleToggleMaintenanceMode}
+                  disabled={togglingMaintenance}
                   className={
                     maintenanceMode
                       ? "bg-green-600 hover:bg-green-700"
                       : "bg-yellow-600 hover:bg-yellow-700"
                   }
                 >
-                  {maintenanceMode ? (
+                  {togglingMaintenance ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : maintenanceMode ? (
                     <>
                       <CheckCircle2 className="h-4 w-4 mr-2" />
                       Disable
@@ -374,9 +513,9 @@ export default function AdminSettings() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-muted/50 rounded-lg border text-center">
                   <p className="text-2xl font-bold text-foreground">
-                    {mockNotificationHistory.length}
+                    {notifications.length}
                   </p>
-                  <p className="text-muted-foreground text-xs">Notifications Sent (30d)</p>
+                  <p className="text-muted-foreground text-xs">Notifications Sent</p>
                 </div>
                 <div className="p-3 bg-muted/50 rounded-lg border text-center">
                   <p className="text-2xl font-bold text-foreground">6</p>
@@ -406,15 +545,25 @@ export default function AdminSettings() {
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[300px] pr-4">
+                {loading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <Bell className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-sm">No notifications sent yet</p>
+                  </div>
+                ) : (
                 <div className="space-y-3">
-                  {mockNotificationHistory.map((notification, index) => (
+                  {notifications.map((notification, index) => (
                     <motion.div
                       key={notification.id}
                       custom={index}
                       initial="hidden"
                       animate="visible"
                       variants={listItemVariants}
-                      className="p-4 bg-muted/50 rounded-lg border hover:border-primary/50 transition-colors cursor-pointer"
+                      className="p-4 bg-muted/50 rounded-lg border hover:border-primary/50 transition-colors group"
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-2">
@@ -425,18 +574,24 @@ export default function AdminSettings() {
                             {notification.title}
                           </span>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <button
+                          onClick={() => handleDeleteNotification(notification.id)}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                       <p className="text-muted-foreground text-xs mb-2 line-clamp-2">
                         {notification.message}
                       </p>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>To: {notification.sentTo.join(", ")}</span>
-                        <span>{notification.sentAt}</span>
+                        <span>To: {notification.sent_to.join(", ")}</span>
+                        <span>{formatDateTime(notification.sent_at)}</span>
                       </div>
                     </motion.div>
                   ))}
                 </div>
+                )}
               </ScrollArea>
             </CardContent>
           </Card>
@@ -458,8 +613,18 @@ export default function AdminSettings() {
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[300px] pr-4">
+                {loading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : maintenanceLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <Database className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-sm">No maintenance logs yet</p>
+                  </div>
+                ) : (
                 <div className="space-y-3">
-                  {mockMaintenanceLogs.map((log, index) => (
+                  {maintenanceLogs.map((log, index) => (
                     <motion.div
                       key={log.id}
                       custom={index}
@@ -478,14 +643,15 @@ export default function AdminSettings() {
                       </div>
                       <p className="text-muted-foreground text-xs mb-2">{log.reason}</p>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>By: {log.initiatedBy}</span>
+                        <span>By: {log.initiated_by}</span>
                         <span>
-                          {log.startTime} {log.endTime ? `- ${log.endTime}` : ""}
+                          {formatDateTime(log.start_time)} {log.end_time ? `- ${formatDateTime(log.end_time)}` : ""}
                         </span>
                       </div>
                     </motion.div>
                   ))}
                 </div>
+                )}
               </ScrollArea>
             </CardContent>
           </Card>
@@ -568,7 +734,7 @@ export default function AdminSettings() {
                   >
                     All Subsystems
                   </button>
-                  {mockSubsystemNames.map((name) => (
+                  {SUBSYSTEM_NAMES.map((name) => (
                     <button
                       key={name}
                       onClick={() => toggleSubsystemSelection(name)}
@@ -599,14 +765,24 @@ export default function AdminSettings() {
               <Button
                 onClick={handleSendNotification}
                 disabled={
+                  sendingNotification ||
                   !notificationTitle ||
                   !notificationMessage ||
                   selectedSubsystems.length === 0
                 }
                 className="bg-primary hover:bg-primary/90 disabled:opacity-50"
               >
-                <Send className="h-4 w-4 mr-2" />
-                Send Notification
+                {sendingNotification ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Notification
+                  </>
+                )}
               </Button>
             </div>
           </motion.div>
@@ -683,11 +859,20 @@ export default function AdminSettings() {
               </Button>
               <Button
                 onClick={handleEnableMaintenance}
-                disabled={!maintenanceReason}
+                disabled={togglingMaintenance || !maintenanceReason}
                 className="bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50"
               >
-                <Power className="h-4 w-4 mr-2" />
-                Enable Maintenance
+                {togglingMaintenance ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enabling...
+                  </>
+                ) : (
+                  <>
+                    <Power className="h-4 w-4 mr-2" />
+                    Enable Maintenance
+                  </>
+                )}
               </Button>
             </div>
           </motion.div>

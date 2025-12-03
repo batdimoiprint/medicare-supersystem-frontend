@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -22,7 +22,9 @@ import {
   Pill,
   Users,
   BadgeCheck,
-  RotateCcw
+  RotateCcw,
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,90 +39,214 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import supabase from "@/utils/supabase";
 
 // Subsystem types
-type SubsystemType = 'all' | 'frontdesk' | 'inventory' | 'patient' | 'dentist';
+type SubsystemType = 'all' | 'frontdesk' | 'inventory' | 'patient' | 'dentist' | 'admin' | 'cashier';
 
-// Log entry interface
+// Log entry interface matching Supabase schema
 interface LogEntry {
-  id: number;
-  subsystem: 'frontdesk' | 'inventory' | 'patient' | 'dentist';
+  id: string;
+  subsystem: 'frontdesk' | 'inventory' | 'patient' | 'dentist' | 'admin' | 'cashier';
   action: string;
   description: string;
-  user?: string;
-  timestamp: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  icon: any;
+  user_name?: string;
+  created_at: string;
+  log_type: 'info' | 'success' | 'warning' | 'error';
+  icon_name: string;
+  metadata?: Record<string, unknown>;
 }
 
-// Dummy log data
-const systemLogs: LogEntry[] = [
-  // Front Desk Logs
-  { id: 1, subsystem: 'frontdesk', action: 'Appointment Approved', description: 'Appointment #APT-2025-1234 for Maria Santos has been approved', user: 'Reception Staff', timestamp: '2 mins ago', type: 'success', icon: CalendarCheck },
-  { id: 2, subsystem: 'frontdesk', action: 'Follow-up Scheduled', description: 'Follow-up appointment created for Juan Dela Cruz on Dec 10, 2025', user: 'Reception Staff', timestamp: '5 mins ago', type: 'info', icon: Calendar },
-  { id: 3, subsystem: 'frontdesk', action: 'Payment Received', description: 'Payment of ₱2,500.00 received for invoice #INV-2025-0892', user: 'Cashier', timestamp: '12 mins ago', type: 'success', icon: CreditCard },
-  { id: 4, subsystem: 'frontdesk', action: 'Refund Approved', description: 'Refund of ₱500.00 approved for patient Ana Reyes', user: 'Admin', timestamp: '18 mins ago', type: 'warning', icon: RotateCcw },
-  { id: 5, subsystem: 'frontdesk', action: 'Appointment Cancelled', description: 'Appointment #APT-2025-1230 cancelled by patient request', user: 'Reception Staff', timestamp: '25 mins ago', type: 'error', icon: CalendarX },
-  
-  // Inventory Logs
-  { id: 6, subsystem: 'inventory', action: 'Low Stock Alert', description: 'Lidocaine Injection is running low (15 vials remaining, min: 50)', timestamp: '8 mins ago', type: 'warning', icon: AlertTriangle },
-  { id: 7, subsystem: 'inventory', action: 'Expiration Warning', description: 'Composite Resin Batch #CR-2024-05 expires in 30 days', timestamp: '15 mins ago', type: 'warning', icon: Clock },
-  { id: 8, subsystem: 'inventory', action: 'Stock Restocked', description: 'Dental Floss restocked: +100 boxes added to inventory', user: 'Inventory Staff', timestamp: '32 mins ago', type: 'success', icon: Package },
-  { id: 9, subsystem: 'inventory', action: 'Critical Stock', description: 'Composite Resin is critically low (3 tubes remaining)', timestamp: '45 mins ago', type: 'error', icon: AlertTriangle },
-  { id: 10, subsystem: 'inventory', action: 'Item Expired', description: 'Anesthetic Cartridges Batch #AC-2024-02 has expired and removed', timestamp: '1 hour ago', type: 'error', icon: Pill },
-  
-  // Patient Records Logs
-  { id: 11, subsystem: 'patient', action: 'Reservation Fee Paid', description: 'Sofia Martinez paid ₱500.00 reservation fee for appointment on Dec 8', timestamp: '3 mins ago', type: 'success', icon: DollarSign },
-  { id: 12, subsystem: 'patient', action: 'Appointment Booked', description: 'New appointment booked by Carlos Mendoza for Teeth Whitening', timestamp: '10 mins ago', type: 'info', icon: CalendarCheck },
-  { id: 13, subsystem: 'patient', action: 'Reschedule Request', description: 'Pedro Garcia requested to reschedule appointment from Dec 6 to Dec 12', timestamp: '22 mins ago', type: 'warning', icon: RefreshCw },
-  { id: 14, subsystem: 'patient', action: 'Refund Request', description: 'Lisa Wong requested refund for cancelled appointment #APT-2025-1225', timestamp: '35 mins ago', type: 'warning', icon: RotateCcw },
-  { id: 15, subsystem: 'patient', action: 'Patient Registered', description: 'New patient Mark Rivera registered in the system', user: 'System', timestamp: '50 mins ago', type: 'info', icon: Users },
-  
-  // Dentist Logs
-  { id: 16, subsystem: 'dentist', action: 'Treatment Completed', description: 'Dr. Smith completed Root Canal treatment for Emma Cruz', timestamp: '7 mins ago', type: 'success', icon: BadgeCheck },
-  { id: 17, subsystem: 'dentist', action: 'Treatment Completed', description: 'Dr. Johnson completed Dental Cleaning for David Tan', timestamp: '28 mins ago', type: 'success', icon: BadgeCheck },
-  { id: 18, subsystem: 'dentist', action: 'Treatment Notes Added', description: 'Dr. Lee added treatment notes for patient Grace Lim', timestamp: '40 mins ago', type: 'info', icon: FileText },
-  { id: 19, subsystem: 'dentist', action: 'Prescription Issued', description: 'Dr. Smith issued prescription for Michael Sy', timestamp: '55 mins ago', type: 'info', icon: FileText },
-  { id: 20, subsystem: 'dentist', action: 'Treatment Completed', description: 'Dr. Johnson completed Orthodontic Adjustment for Nicole Reyes', timestamp: '1 hour ago', type: 'success', icon: BadgeCheck },
-];
+// Icon mapping
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  Activity,
+  Calendar,
+  CalendarCheck,
+  CalendarX,
+  CreditCard,
+  Package,
+  AlertTriangle,
+  User,
+  Stethoscope,
+  CheckCircle2,
+  XCircle,
+  Bell,
+  FileText,
+  DollarSign,
+  Pill,
+  Users,
+  BadgeCheck,
+  RotateCcw,
+  RefreshCw
+};
 
-// Stats by subsystem
-const subsystemStats = [
-  { id: 'frontdesk', label: 'Front Desk', count: 28, icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'inventory', label: 'Inventory', count: 15, icon: Package, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  { id: 'patient', label: 'Patient Records', count: 42, icon: User, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { id: 'dentist', label: 'Dentist', count: 19, icon: Stethoscope, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-];
+// Get icon component from name
+const getIconComponent = (iconName: string) => {
+  return iconMap[iconName] || Activity;
+};
+
+// Subsystem config
+const SUBSYSTEM_CONFIG = {
+  frontdesk: { label: 'Front Desk', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  inventory: { label: 'Inventory', icon: Package, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  patient: { label: 'Patient Records', icon: User, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  dentist: { label: 'Dentist', icon: Stethoscope, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  admin: { label: 'Admin', icon: Users, color: 'text-red-500', bg: 'bg-red-500/10' },
+  cashier: { label: 'Cashier', icon: CreditCard, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+};
 
 export default function SystemLogs() {
   const [selectedSubsystem, setSelectedSubsystem] = useState<SubsystemType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [stats, setStats] = useState<Record<string, number>>({
+    frontdesk: 0,
+    inventory: 0,
+    patient: 0,
+    dentist: 0,
+    admin: 0,
+    cashier: 0
+  });
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [isLive, setIsLive] = useState(true);
 
-  const handleRefresh = () => {
+  // Load logs from Supabase
+  const loadLogs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('system_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setLogs(data || []);
+      setTotalLogs(data?.length || 0);
+
+      // Calculate stats by subsystem
+      const newStats: Record<string, number> = {
+        frontdesk: 0,
+        inventory: 0,
+        patient: 0,
+        dentist: 0,
+        admin: 0,
+        cashier: 0
+      };
+      
+      data?.forEach(log => {
+        if (newStats[log.subsystem] !== undefined) {
+          newStats[log.subsystem]++;
+        }
+      });
+      
+      setStats(newStats);
+    } catch (error) {
+      console.error('Error loading logs:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Setup real-time subscription
+  useEffect(() => {
+    loadLogs();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('system_logs_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'system_logs'
+        },
+        (payload) => {
+          console.log('Real-time update:', payload);
+          if (payload.eventType === 'INSERT') {
+            const newLog = payload.new as LogEntry;
+            setLogs(prev => [newLog, ...prev]);
+            setTotalLogs(prev => prev + 1);
+            setStats(prev => ({
+              ...prev,
+              [newLog.subsystem]: (prev[newLog.subsystem] || 0) + 1
+            }));
+          } else if (payload.eventType === 'DELETE') {
+            const deletedLog = payload.old as LogEntry;
+            setLogs(prev => prev.filter(log => log.id !== deletedLog.id));
+            setTotalLogs(prev => prev - 1);
+            setStats(prev => ({
+              ...prev,
+              [deletedLog.subsystem]: Math.max(0, (prev[deletedLog.subsystem] || 0) - 1)
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadLogs]);
+
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1000);
+    await loadLogs();
+    setIsRefreshing(false);
+  };
+
+  const handleClearLogs = async () => {
+    if (!confirm('Are you sure you want to clear all logs?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('system_logs')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      
+      if (error) throw error;
+      setLogs([]);
+      setTotalLogs(0);
+      setStats({
+        frontdesk: 0,
+        inventory: 0,
+        patient: 0,
+        dentist: 0,
+        admin: 0,
+        cashier: 0
+      });
+    } catch (error) {
+      console.error('Error clearing logs:', error);
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
   };
 
   const getSubsystemColor = (subsystem: string) => {
-    switch (subsystem) {
-      case 'frontdesk': return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-      case 'inventory': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      case 'patient': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-      case 'dentist': return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-      default: return 'bg-muted text-muted-foreground';
+    const config = SUBSYSTEM_CONFIG[subsystem as keyof typeof SUBSYSTEM_CONFIG];
+    if (config) {
+      return `${config.bg} ${config.color} border-${config.color.replace('text-', '')}/20`;
     }
+    return 'bg-muted text-muted-foreground';
   };
 
   const getSubsystemLabel = (subsystem: string) => {
-    switch (subsystem) {
-      case 'frontdesk': return 'Front Desk';
-      case 'inventory': return 'Inventory';
-      case 'patient': return 'Patient Records';
-      case 'dentist': return 'Dentist';
-      default: return subsystem;
-    }
+    return SUBSYSTEM_CONFIG[subsystem as keyof typeof SUBSYSTEM_CONFIG]?.label || subsystem;
   };
 
   const getTypeIcon = (type: string) => {
@@ -141,14 +267,26 @@ export default function SystemLogs() {
     }
   };
 
-  const filteredLogs = systemLogs.filter(log => {
+  const filteredLogs = logs.filter(log => {
     const matchesSubsystem = selectedSubsystem === 'all' || log.subsystem === selectedSubsystem;
     const matchesSearch = log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
       log.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.user && log.user.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesType = filterType === 'all' || log.type === filterType;
+      (log.user_name && log.user_name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesType = filterType === 'all' || log.log_type === filterType;
     return matchesSubsystem && matchesSearch && matchesType;
   });
+
+  // Create subsystem stats array for rendering
+  const subsystemStatsArray = Object.entries(SUBSYSTEM_CONFIG)
+    .filter(([key]) => ['frontdesk', 'inventory', 'patient', 'dentist'].includes(key))
+    .map(([id, config]) => ({
+      id,
+      label: config.label,
+      count: stats[id] || 0,
+      icon: config.icon,
+      color: config.color,
+      bg: config.bg
+    }));
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 space-y-6">
@@ -166,18 +304,39 @@ export default function SystemLogs() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live Updates
+              <div className={cn(
+                "flex items-center gap-2 px-3 py-1 rounded-full text-sm",
+                isLive ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500" : "bg-muted text-muted-foreground"
+              )}>
+                <div className={cn("w-2 h-2 rounded-full", isLive ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground")} />
+                {isLive ? "Live Updates" : "Paused"}
               </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsLive(!isLive)}
+              >
+                {isLive ? "Pause" : "Resume"}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={handleRefresh}
                 disabled={isRefreshing}
               >
-                <RefreshCw className={cn("w-4 h-4 mr-2", isRefreshing && "animate-spin")} />
-                Refresh
+                {isRefreshing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleClearLogs}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -186,7 +345,7 @@ export default function SystemLogs() {
 
       {/* Subsystem Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {subsystemStats.map((stat, index) => (
+        {subsystemStatsArray.map((stat, index) => (
           <motion.div
             key={stat.id}
             initial={{ opacity: 0, y: 20 }}
@@ -205,7 +364,7 @@ export default function SystemLogs() {
                   <div>
                     <p className="text-sm text-muted-foreground">{stat.label}</p>
                     <p className="text-3xl font-bold mt-1">{stat.count}</p>
-                    <p className="text-xs text-muted-foreground mt-1">logs today</p>
+                    <p className="text-xs text-muted-foreground mt-1">logs</p>
                   </div>
                   <div className={cn("p-3 rounded-xl", stat.bg)}>
                     <stat.icon className={cn("w-6 h-6", stat.color)} />
@@ -265,59 +424,66 @@ export default function SystemLogs() {
         <CardContent>
           <ScrollArea className="h-[500px] pr-4">
             <div className="space-y-3">
-              {filteredLogs.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : filteredLogs.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>No logs found matching your criteria</p>
                 </div>
               ) : (
-                filteredLogs.map((log, index) => (
-                  <motion.div
-                    key={log.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.03 }}
-                    className={cn(
-                      "p-4 rounded-xl border bg-card hover:bg-muted/30 transition-all border-l-4",
-                      getTypeBg(log.type)
-                    )}
-                  >
-                    <div className="flex items-start gap-4">
-                      {/* Icon */}
-                      <div className={cn("p-2 rounded-lg shrink-0", getSubsystemColor(log.subsystem).split(' ')[0])}>
-                        <log.icon className={cn("w-5 h-5", getSubsystemColor(log.subsystem).split(' ')[1])} />
-                      </div>
+                filteredLogs.map((log, index) => {
+                  const IconComponent = getIconComponent(log.icon_name);
+                  return (
+                    <motion.div
+                      key={log.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: Math.min(index * 0.03, 0.5) }}
+                      className={cn(
+                        "p-4 rounded-xl border bg-card hover:bg-muted/30 transition-all border-l-4",
+                        getTypeBg(log.log_type)
+                      )}
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Icon */}
+                        <div className={cn("p-2 rounded-lg shrink-0", getSubsystemColor(log.subsystem).split(' ')[0])}>
+                          <IconComponent className={cn("w-5 h-5", getSubsystemColor(log.subsystem).split(' ')[1])} />
+                        </div>
 
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-sm">{log.action}</p>
-                              <Badge variant="outline" className={cn("text-xs", getSubsystemColor(log.subsystem))}>
-                                {getSubsystemLabel(log.subsystem)}
-                              </Badge>
-                              {getTypeIcon(log.type)}
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1">{log.description}</p>
-                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {log.timestamp}
-                              </span>
-                              {log.user && (
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-sm">{log.action}</p>
+                                <Badge variant="outline" className={cn("text-xs", getSubsystemColor(log.subsystem))}>
+                                  {getSubsystemLabel(log.subsystem)}
+                                </Badge>
+                                {getTypeIcon(log.log_type)}
+                              </div>
+                              <p className="text-sm text-muted-foreground mt-1">{log.description}</p>
+                              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1">
-                                  <User className="w-3 h-3" />
-                                  {log.user}
+                                  <Clock className="w-3 h-3" />
+                                  {formatTimeAgo(log.created_at)}
                                 </span>
-                              )}
+                                {log.user_name && (
+                                  <span className="flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    {log.user_name}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))
+                    </motion.div>
+                  );
+                })
               )}
             </div>
           </ScrollArea>
@@ -325,10 +491,11 @@ export default function SystemLogs() {
           {/* Footer */}
           <div className="mt-4 pt-4 border-t flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing {filteredLogs.length} of {systemLogs.length} logs
+              Showing {filteredLogs.length} of {totalLogs} logs
             </p>
-            <Button variant="outline" size="sm">
-              Load More
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+              {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Refresh
             </Button>
           </div>
         </CardContent>

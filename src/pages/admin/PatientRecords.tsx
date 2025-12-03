@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users,
@@ -17,9 +17,9 @@ import {
   ClipboardList,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Save,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,134 +34,104 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, formatCurrency } from "@/lib/utils";
+import { createClient } from '@supabase/supabase-js';
 
-// Patient Data
-const patients = [
-  {
-    id: 'PAT-001',
-    name: 'Maria Santos',
-    email: 'maria.santos@email.com',
-    phone: '+63 917 123 4567',
-    address: '123 Rizal St., Makati City',
-    birthDate: '1990-05-15',
-    gender: 'Female',
-    bloodType: 'O+',
-    allergies: ['Penicillin'],
-    emergencyContact: 'Juan Santos - +63 918 765 4321',
-    registeredDate: '2024-01-15',
-    lastVisit: '2025-11-28',
-    status: 'active',
-    totalVisits: 12,
-    totalSpent: 45000
-  },
-  {
-    id: 'PAT-002',
-    name: 'Juan Dela Cruz',
-    email: 'juan.delacruz@email.com',
-    phone: '+63 918 234 5678',
-    address: '456 Bonifacio Ave., Quezon City',
-    birthDate: '1985-08-22',
-    gender: 'Male',
-    bloodType: 'A+',
-    allergies: [],
-    emergencyContact: 'Ana Dela Cruz - +63 919 876 5432',
-    registeredDate: '2023-06-10',
-    lastVisit: '2025-12-01',
-    status: 'active',
-    totalVisits: 24,
-    totalSpent: 78500
-  },
-  {
-    id: 'PAT-003',
-    name: 'Ana Reyes',
-    email: 'ana.reyes@email.com',
-    phone: '+63 919 345 6789',
-    address: '789 Mabini Blvd., Manila',
-    birthDate: '1995-12-03',
-    gender: 'Female',
-    bloodType: 'B+',
-    allergies: ['Ibuprofen', 'Latex'],
-    emergencyContact: 'Pedro Reyes - +63 920 987 6543',
-    registeredDate: '2024-03-20',
-    lastVisit: '2025-11-15',
-    status: 'active',
-    totalVisits: 8,
-    totalSpent: 32000
-  },
-  {
-    id: 'PAT-004',
-    name: 'Pedro Garcia',
-    email: 'pedro.garcia@email.com',
-    phone: '+63 920 456 7890',
-    address: '321 Luna St., Pasig City',
-    birthDate: '1978-03-10',
-    gender: 'Male',
-    bloodType: 'AB+',
-    allergies: [],
-    emergencyContact: 'Maria Garcia - +63 921 098 7654',
-    registeredDate: '2022-11-05',
-    lastVisit: '2025-10-20',
-    status: 'inactive',
-    totalVisits: 35,
-    totalSpent: 125000
-  },
-  {
-    id: 'PAT-005',
-    name: 'Sofia Martinez',
-    email: 'sofia.martinez@email.com',
-    phone: '+63 921 567 8901',
-    address: '654 Aguinaldo Highway, Cavite',
-    birthDate: '2000-07-25',
-    gender: 'Female',
-    bloodType: 'O-',
-    allergies: ['Aspirin'],
-    emergencyContact: 'Carlos Martinez - +63 922 109 8765',
-    registeredDate: '2024-08-12',
-    lastVisit: '2025-12-02',
-    status: 'active',
-    totalVisits: 5,
-    totalSpent: 18500
-  },
-];
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-// Treatment History
-const treatmentHistory = [
-  { id: 1, patientId: 'PAT-001', date: '2025-11-28', service: 'Dental Cleaning', dentist: 'Dr. Smith', notes: 'Regular cleaning, no issues found', status: 'completed', cost: 2500 },
-  { id: 2, patientId: 'PAT-001', date: '2025-10-15', service: 'Dental Filling', dentist: 'Dr. Johnson', notes: 'Composite filling on tooth #14', status: 'completed', cost: 3500 },
-  { id: 3, patientId: 'PAT-001', date: '2025-08-20', service: 'Root Canal', dentist: 'Dr. Lee', notes: 'Root canal treatment on tooth #36', status: 'completed', cost: 8500 },
-  { id: 4, patientId: 'PAT-002', date: '2025-12-01', service: 'Teeth Whitening', dentist: 'Dr. Smith', notes: 'Professional whitening treatment', status: 'completed', cost: 5000 },
-  { id: 5, patientId: 'PAT-002', date: '2025-11-10', service: 'Dental Cleaning', dentist: 'Dr. Johnson', notes: 'Routine checkup and cleaning', status: 'completed', cost: 2500 },
-];
+const supabase = createClient(supabaseUrl, supabaseKey);
+const patientRecordClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'patient_record' } });
+const frontdeskClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'frontdesk' } });
+const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
+const inventoryClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'inventory' } });
 
-// Prescriptions
-const prescriptions = [
-  { id: 1, patientId: 'PAT-001', date: '2025-11-28', medication: 'Amoxicillin 500mg', dosage: '3x daily for 7 days', prescribedBy: 'Dr. Smith', status: 'active' },
-  { id: 2, patientId: 'PAT-001', date: '2025-10-15', medication: 'Ibuprofen 400mg', dosage: 'As needed for pain', prescribedBy: 'Dr. Johnson', status: 'completed' },
-  { id: 3, patientId: 'PAT-002', date: '2025-12-01', medication: 'Sensodyne Toothpaste', dosage: 'Use twice daily', prescribedBy: 'Dr. Smith', status: 'active' },
-];
+// Type definitions
+interface Patient {
+  patient_id: number;
+  f_name: string;
+  m_name?: string;
+  l_name: string;
+  suffix?: string;
+  email?: string;
+  pri_contact_no?: string;
+  sec_contact_no?: string;
+  address?: string;
+  birthdate?: string;
+  gender?: string;
+  blood_type?: string;
+  created_at?: string;
+  status?: string;
+}
 
-// Follow-up Recommendations
-const followUps = [
-  { id: 1, patientId: 'PAT-001', scheduledDate: '2025-12-28', service: 'Dental Cleaning', dentist: 'Dr. Smith', notes: 'Regular 6-month checkup', status: 'scheduled' },
-  { id: 2, patientId: 'PAT-001', scheduledDate: '2026-02-15', service: 'Root Canal Follow-up', dentist: 'Dr. Lee', notes: 'Check healing progress', status: 'recommended' },
-  { id: 3, patientId: 'PAT-002', scheduledDate: '2026-01-01', service: 'Teeth Whitening Touch-up', dentist: 'Dr. Smith', notes: 'Optional touch-up session', status: 'recommended' },
-];
+interface EmergencyContact {
+  ec_id?: number;
+  patient_id: number;
+  ec_name?: string;
+  ec_relationship?: string;
+  ec_contact_no?: string;
+}
 
-// Billing Summary
-const billingHistory = [
-  { id: 1, patientId: 'PAT-001', date: '2025-11-28', service: 'Dental Cleaning', amount: 2500, method: 'cash', status: 'paid' },
-  { id: 2, patientId: 'PAT-001', date: '2025-10-15', service: 'Dental Filling', amount: 3500, method: 'paymongo', status: 'paid' },
-  { id: 3, patientId: 'PAT-001', date: '2025-08-20', service: 'Root Canal', amount: 8500, method: 'paymongo', status: 'paid' },
-  { id: 4, patientId: 'PAT-002', date: '2025-12-01', service: 'Teeth Whitening', amount: 5000, method: 'cash', status: 'paid' },
-];
+interface EMRRecord {
+  id: number;
+  patient_id: number;
+  date: string;
+  time?: string;
+  chief_complaint?: string;
+  diagnosis?: string;
+  treatment?: number;
+  notes?: string;
+  dentist?: number;
+  status?: string;
+}
 
-// Stats
-const patientStats = [
-  { title: 'Total Patients', value: '1,234', icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
-  { title: 'Active Patients', value: '1,089', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { title: 'New This Month', value: '45', icon: User, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
-  { title: 'Visits This Month', value: '328', icon: Calendar, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-];
+interface Prescription {
+  prescription_id: number;
+  patient_id: number;
+  medicine_id: number;
+  instructions?: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  quantity?: string;
+  created_at?: string;
+  personnel_id?: string;
+}
+
+interface Billing {
+  bill_id: number;
+  patient_id: number;
+  appointment_id?: number;
+  total_amount?: number;
+  payable_amount?: number;
+  cash_paid?: number;
+  payment_option?: string;
+  payment_status_id?: number;
+  created_at?: string;
+}
+
+interface Service {
+  service_id: number;
+  service_name: string;
+}
+
+interface Medicine {
+  medicine_id: number;
+  medicine_name: string;
+}
+
+interface Dentist {
+  personnel_id: number;
+  f_name?: string;
+  m_name?: string;
+  l_name?: string;
+}
+
+interface Appointment {
+  appointment_id: number;
+  patient_id: number;
+  appointment_date?: string;
+  status_id?: number;
+}
 
 type DetailTab = 'overview' | 'treatments' | 'prescriptions' | 'followups' | 'billing';
 
@@ -170,17 +140,181 @@ export default function PatientRecords() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<typeof patients[0] | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editData, setEditData] = useState<typeof patients[0] | null>(null);
+  const [editData, setEditData] = useState<Patient | null>(null);
+  
+  // Data states
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
+  const [emrRecords, setEmrRecords] = useState<EMRRecord[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [billings, setBillings] = useState<Billing[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [dentists, setDentists] = useState<Dentist[]>([]);
+  
+  // Loading states
+  const [loading, setLoading] = useState(true);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [savingChanges, setSavingChanges] = useState(false);
 
-  const openDetailModal = (patient: typeof patients[0]) => {
+  // Stats
+  const [stats, setStats] = useState({
+    totalPatients: 0,
+    activePatients: 0,
+    newThisMonth: 0,
+    visitsThisMonth: 0
+  });
+
+  // Load initial data
+  useEffect(() => {
+    loadPatients();
+    loadServices();
+    loadMedicines();
+    loadDentists();
+  }, []);
+
+  const loadPatients = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await patientRecordClient
+        .from('patient_tbl')
+        .select('*')
+        .order('l_name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching patients:', error);
+        return;
+      }
+
+      setPatients(data || []);
+      
+      // Calculate stats
+      const total = data?.length || 0;
+      const active = data?.filter(p => p.status !== 'inactive').length || 0;
+      const thisMonth = new Date();
+      const startOfMonth = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1);
+      const newPatients = data?.filter(p => {
+        const createdAt = p.created_at ? new Date(p.created_at) : null;
+        return createdAt && createdAt >= startOfMonth;
+      }).length || 0;
+
+      setStats(prev => ({
+        ...prev,
+        totalPatients: total,
+        activePatients: active,
+        newThisMonth: newPatients
+      }));
+
+      // Load emergency contacts for all patients
+      const { data: ecData } = await patientRecordClient
+        .from('emergency_contact_tbl')
+        .select('*');
+      setEmergencyContacts(ecData || []);
+
+    } catch (err) {
+      console.error('Error loading patients:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadServices = async () => {
+    try {
+      const { data } = await dentistClient
+        .from('services_tbl')
+        .select('service_id, service_name');
+      setServices(data || []);
+    } catch (err) {
+      console.error('Error loading services:', err);
+    }
+  };
+
+  const loadMedicines = async () => {
+    try {
+      const { data } = await inventoryClient
+        .from('medicine_tbl')
+        .select('medicine_id, medicine_name');
+      setMedicines(data || []);
+    } catch (err) {
+      console.error('Error loading medicines:', err);
+    }
+  };
+
+  const loadDentists = async () => {
+    try {
+      const { data } = await supabase
+        .from('personnel_tbl')
+        .select('personnel_id, f_name, m_name, l_name')
+        .eq('role_id', 1);
+      setDentists(data || []);
+    } catch (err) {
+      console.error('Error loading dentists:', err);
+    }
+  };
+
+  const loadPatientDetails = async (patientId: number) => {
+    setLoadingDetails(true);
+    try {
+      // Load EMR records
+      const { data: emrData } = await patientRecordClient
+        .from('emr_records')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('date', { ascending: false });
+      setEmrRecords(emrData || []);
+
+      // Load prescriptions
+      const { data: prescData } = await patientRecordClient
+        .from('prescription_tbl')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+      setPrescriptions(prescData || []);
+
+      // Load billing
+      const { data: billData } = await frontdeskClient
+        .from('billing_tbl')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('bill_id', { ascending: false });
+      setBillings(billData || []);
+
+      // Load appointments (for follow-ups)
+      const { data: apptData } = await frontdeskClient
+        .from('appointments_tbl')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('appointment_date', { ascending: false });
+      setAppointments(apptData || []);
+
+      // Update visits this month stat
+      const thisMonth = new Date();
+      const startOfMonth = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1);
+      const visitsCount = emrData?.filter(r => {
+        const recordDate = r.date ? new Date(r.date) : null;
+        return recordDate && recordDate >= startOfMonth;
+      }).length || 0;
+      
+      setStats(prev => ({ ...prev, visitsThisMonth: visitsCount }));
+
+    } catch (err) {
+      console.error('Error loading patient details:', err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const openDetailModal = (patient: Patient) => {
     setSelectedPatient(patient);
     setEditData({ ...patient });
     setDetailTab('overview');
     setIsEditMode(false);
     setShowDetailModal(true);
+    loadPatientDetails(patient.patient_id);
     setTimeout(() => setIsDetailOpen(true), 10);
   };
 
@@ -194,29 +328,61 @@ export default function PatientRecords() {
     }, 200);
   };
 
-  const handleSaveChanges = () => {
-    // In real app, save to backend
-    console.log('Saving changes:', editData);
-    setIsEditMode(false);
+  const handleSaveChanges = async () => {
+    if (!editData || !selectedPatient) return;
+    setSavingChanges(true);
+    
+    try {
+      const { error } = await patientRecordClient
+        .from('patient_tbl')
+        .update({
+          f_name: editData.f_name,
+          m_name: editData.m_name,
+          l_name: editData.l_name,
+          suffix: editData.suffix,
+          email: editData.email,
+          pri_contact_no: editData.pri_contact_no,
+          sec_contact_no: editData.sec_contact_no,
+          address: editData.address,
+          birthdate: editData.birthdate,
+          gender: editData.gender,
+          blood_type: editData.blood_type,
+        })
+        .eq('patient_id', selectedPatient.patient_id);
+
+      if (error) {
+        console.error('Error updating patient:', error);
+        alert('Failed to save changes');
+        return;
+      }
+
+      // Update local state
+      setPatients(prev => prev.map(p => 
+        p.patient_id === selectedPatient.patient_id ? { ...p, ...editData } : p
+      ));
+      setSelectedPatient({ ...selectedPatient, ...editData });
+      setIsEditMode(false);
+    } catch (err) {
+      console.error('Error saving changes:', err);
+      alert('Failed to save changes');
+    } finally {
+      setSavingChanges(false);
+    }
   };
 
-  const filteredPatients = patients.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.phone.includes(searchQuery);
-    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // Helper functions
+  const getPatientName = (patient: Patient) => {
+    return `${patient.f_name || ''} ${patient.m_name || ''} ${patient.l_name || ''}`.trim();
+  };
 
-  const getPatientTreatments = (patientId: string) => treatmentHistory.filter(t => t.patientId === patientId);
-  const getPatientPrescriptions = (patientId: string) => prescriptions.filter(p => p.patientId === patientId);
-  const getPatientFollowUps = (patientId: string) => followUps.filter(f => f.patientId === patientId);
-  const getPatientBilling = (patientId: string) => billingHistory.filter(b => b.patientId === patientId);
+  const getPatientInitials = (patient: Patient) => {
+    return `${patient.f_name?.[0] || ''}${patient.l_name?.[0] || ''}`.toUpperCase();
+  };
 
-  const calculateAge = (birthDate: string) => {
+  const calculateAge = (birthdate?: string) => {
+    if (!birthdate) return 0;
     const today = new Date();
-    const birth = new Date(birthDate);
+    const birth = new Date(birthdate);
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
@@ -225,11 +391,53 @@ export default function PatientRecords() {
     return age;
   };
 
+  const getServiceName = (serviceId?: number) => {
+    if (!serviceId) return 'Unknown Service';
+    const service = services.find(s => s.service_id === serviceId);
+    return service?.service_name || `Service #${serviceId}`;
+  };
+
+  const getMedicineName = (medicineId?: number) => {
+    if (!medicineId) return 'Unknown Medicine';
+    const medicine = medicines.find(m => m.medicine_id === medicineId);
+    return medicine?.medicine_name || `Medicine #${medicineId}`;
+  };
+
+  const getDentistName = (dentistId?: number) => {
+    if (!dentistId) return 'Unknown';
+    const dentist = dentists.find(d => d.personnel_id === dentistId);
+    if (!dentist) return `Dentist #${dentistId}`;
+    return `Dr. ${dentist.f_name || ''} ${dentist.l_name || ''}`.trim();
+  };
+
+  const getEmergencyContact = (patientId: number) => {
+    return emergencyContacts.find(ec => ec.patient_id === patientId);
+  };
+
+  const filteredPatients = patients.filter(p => {
+    const fullName = getPatientName(p).toLowerCase();
+    const matchesSearch = fullName.includes(searchQuery.toLowerCase()) ||
+      (p.email?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      String(p.patient_id).includes(searchQuery) ||
+      (p.pri_contact_no?.includes(searchQuery));
+    const matchesStatus = statusFilter === 'all' || 
+      (statusFilter === 'active' && p.status !== 'inactive') ||
+      (statusFilter === 'inactive' && p.status === 'inactive');
+    return matchesSearch && matchesStatus;
+  });
+
+  const patientStats = [
+    { title: 'Total Patients', value: stats.totalPatients.toLocaleString(), icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
+    { title: 'Active Patients', value: stats.activePatients.toLocaleString(), icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { title: 'New This Month', value: stats.newThisMonth.toLocaleString(), icon: User, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+    { title: 'Records This Month', value: stats.visitsThisMonth.toLocaleString(), icon: Calendar, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  ];
+
   const detailTabs = [
     { id: 'overview', label: 'Overview', icon: User },
     { id: 'treatments', label: 'Treatments', icon: Stethoscope },
     { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
-    { id: 'followups', label: 'Follow-ups', icon: ClipboardList },
+    { id: 'followups', label: 'Appointments', icon: ClipboardList },
     { id: 'billing', label: 'Billing', icon: CreditCard },
   ];
 
@@ -311,65 +519,76 @@ export default function PatientRecords() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {filteredPatients.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No patients found</p>
-              </div>
-            ) : (
-              filteredPatients.map((patient, index) => (
-                <motion.div
-                  key={patient.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => openDetailModal(patient)}
-                  className="p-4 rounded-xl border bg-card hover:bg-muted/30 transition-all cursor-pointer group"
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className={cn("w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold",
-                        patient.status === 'active' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                      )}>
-                        {patient.name.split(' ').map(n => n[0]).join('')}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="ml-2 text-muted-foreground">Loading patients...</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredPatients.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No patients found</p>
+                </div>
+              ) : (
+                filteredPatients.map((patient, index) => (
+                  <motion.div
+                    key={patient.patient_id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => openDetailModal(patient)}
+                    className="p-4 rounded-xl border bg-card hover:bg-muted/30 transition-all cursor-pointer group"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className={cn("w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold",
+                          patient.status !== 'inactive' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                        )}>
+                          {getPatientInitials(patient)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold group-hover:text-primary transition-colors">{getPatientName(patient)}</p>
+                            <Badge variant="outline" className={cn("text-xs",
+                              patient.status !== 'inactive' 
+                                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
+                                : 'bg-muted text-muted-foreground'
+                            )}>
+                              {patient.status !== 'inactive' ? 'active' : 'inactive'}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">PAT-{String(patient.patient_id).padStart(4, '0')} • {patient.email || 'No email'}</p>
+                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                            {patient.pri_contact_no && (
+                              <span className="flex items-center gap-1">
+                                <Phone className="w-3 h-3" />
+                                {patient.pri_contact_no}
+                              </span>
+                            )}
+                            {patient.created_at && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                Registered: {new Date(patient.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold group-hover:text-primary transition-colors">{patient.name}</p>
-                          <Badge variant="outline" className={cn("text-xs",
-                            patient.status === 'active' 
-                              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
-                              : 'bg-muted text-muted-foreground'
-                          )}>
-                            {patient.status}
-                          </Badge>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">{patient.gender || 'N/A'}</p>
+                          <p className="font-semibold text-primary">{patient.birthdate ? `${calculateAge(patient.birthdate)} yrs` : 'N/A'}</p>
                         </div>
-                        <p className="text-sm text-muted-foreground">{patient.id} • {patient.email}</p>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {patient.phone}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            Last visit: {new Date(patient.lastVisit).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">{patient.totalVisits} visits</p>
-                        <p className="font-semibold text-primary">{formatCurrency(patient.totalSpent)}</p>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -389,11 +608,11 @@ export default function PatientRecords() {
               <div className="bg-[#00a8a8] px-5 py-4 flex items-center justify-between text-white shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">
-                    {selectedPatient.name.split(' ').map(n => n[0]).join('')}
+                    {getPatientInitials(selectedPatient)}
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">{selectedPatient.name}</h3>
-                    <p className="text-xs text-white/70">{selectedPatient.id} • {calculateAge(selectedPatient.birthDate)} years old</p>
+                    <h3 className="text-lg font-semibold">{getPatientName(selectedPatient)}</h3>
+                    <p className="text-xs text-white/70">PAT-{String(selectedPatient.patient_id).padStart(4, '0')} • {selectedPatient.birthdate ? `${calculateAge(selectedPatient.birthdate)} years old` : 'Age N/A'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -441,6 +660,13 @@ export default function PatientRecords() {
               {/* Modal Content */}
               <ScrollArea className="flex-1 overflow-auto">
                 <div className="p-6">
+                  {loadingDetails ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      <span className="ml-2 text-muted-foreground">Loading details...</span>
+                    </div>
+                  ) : (
+                    <>
                   {/* Overview Tab */}
                   {detailTab === 'overview' && (
                     <div className="space-y-6">
@@ -449,26 +675,42 @@ export default function PatientRecords() {
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-sm text-muted-foreground">Full Name</label>
+                              <label className="text-sm text-muted-foreground">First Name</label>
                               <Input
-                                value={editData.name}
-                                onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                                value={editData.f_name || ''}
+                                onChange={(e) => setEditData({ ...editData, f_name: e.target.value })}
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-sm text-muted-foreground">Last Name</label>
+                              <Input
+                                value={editData.l_name || ''}
+                                onChange={(e) => setEditData({ ...editData, l_name: e.target.value })}
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-sm text-muted-foreground">Middle Name</label>
+                              <Input
+                                value={editData.m_name || ''}
+                                onChange={(e) => setEditData({ ...editData, m_name: e.target.value })}
                                 className="mt-1"
                               />
                             </div>
                             <div>
                               <label className="text-sm text-muted-foreground">Email</label>
                               <Input
-                                value={editData.email}
+                                value={editData.email || ''}
                                 onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                                 className="mt-1"
                               />
                             </div>
                             <div>
-                              <label className="text-sm text-muted-foreground">Phone</label>
+                              <label className="text-sm text-muted-foreground">Primary Contact</label>
                               <Input
-                                value={editData.phone}
-                                onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                                value={editData.pri_contact_no || ''}
+                                onChange={(e) => setEditData({ ...editData, pri_contact_no: e.target.value })}
                                 className="mt-1"
                               />
                             </div>
@@ -476,16 +718,16 @@ export default function PatientRecords() {
                               <label className="text-sm text-muted-foreground">Birth Date</label>
                               <Input
                                 type="date"
-                                value={editData.birthDate}
-                                onChange={(e) => setEditData({ ...editData, birthDate: e.target.value })}
+                                value={editData.birthdate || ''}
+                                onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })}
                                 className="mt-1"
                               />
                             </div>
                             <div>
                               <label className="text-sm text-muted-foreground">Gender</label>
-                              <Select value={editData.gender} onValueChange={(v) => setEditData({ ...editData, gender: v })}>
+                              <Select value={editData.gender || ''} onValueChange={(v) => setEditData({ ...editData, gender: v })}>
                                 <SelectTrigger className="mt-1">
-                                  <SelectValue />
+                                  <SelectValue placeholder="Select gender" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="Male">Male</SelectItem>
@@ -496,9 +738,9 @@ export default function PatientRecords() {
                             </div>
                             <div>
                               <label className="text-sm text-muted-foreground">Blood Type</label>
-                              <Select value={editData.bloodType} onValueChange={(v) => setEditData({ ...editData, bloodType: v })}>
+                              <Select value={editData.blood_type || ''} onValueChange={(v) => setEditData({ ...editData, blood_type: v })}>
                                 <SelectTrigger className="mt-1">
-                                  <SelectValue />
+                                  <SelectValue placeholder="Select blood type" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="A+">A+</SelectItem>
@@ -515,23 +757,15 @@ export default function PatientRecords() {
                             <div className="md:col-span-2">
                               <label className="text-sm text-muted-foreground">Address</label>
                               <Input
-                                value={editData.address}
+                                value={editData.address || ''}
                                 onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-                                className="mt-1"
-                              />
-                            </div>
-                            <div className="md:col-span-2">
-                              <label className="text-sm text-muted-foreground">Emergency Contact</label>
-                              <Input
-                                value={editData.emergencyContact}
-                                onChange={(e) => setEditData({ ...editData, emergencyContact: e.target.value })}
                                 className="mt-1"
                               />
                             </div>
                           </div>
                           <div className="flex items-center gap-3 pt-4 border-t">
-                            <Button onClick={handleSaveChanges} className="bg-emerald-600 hover:bg-emerald-700">
-                              <Save className="w-4 h-4 mr-2" />
+                            <Button onClick={handleSaveChanges} className="bg-emerald-600 hover:bg-emerald-700" disabled={savingChanges}>
+                              {savingChanges ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                               Save Changes
                             </Button>
                             <Button variant="outline" onClick={() => {
@@ -553,21 +787,21 @@ export default function PatientRecords() {
                                 <Mail className="w-4 h-4 text-muted-foreground" />
                                 <div>
                                   <p className="text-xs text-muted-foreground">Email</p>
-                                  <p className="text-sm font-medium">{selectedPatient.email}</p>
+                                  <p className="text-sm font-medium">{selectedPatient.email || 'Not provided'}</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                                 <Phone className="w-4 h-4 text-muted-foreground" />
                                 <div>
                                   <p className="text-xs text-muted-foreground">Phone</p>
-                                  <p className="text-sm font-medium">{selectedPatient.phone}</p>
+                                  <p className="text-sm font-medium">{selectedPatient.pri_contact_no || 'Not provided'}</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 md:col-span-2">
                                 <MapPin className="w-4 h-4 text-muted-foreground" />
                                 <div>
                                   <p className="text-xs text-muted-foreground">Address</p>
-                                  <p className="text-sm font-medium">{selectedPatient.address}</p>
+                                  <p className="text-sm font-medium">{selectedPatient.address || 'Not provided'}</p>
                                 </div>
                               </div>
                             </div>
@@ -579,46 +813,39 @@ export default function PatientRecords() {
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <div className="p-3 rounded-lg bg-muted/50">
                                 <p className="text-xs text-muted-foreground">Birth Date</p>
-                                <p className="text-sm font-medium">{new Date(selectedPatient.birthDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                                <p className="text-sm font-medium">{selectedPatient.birthdate ? new Date(selectedPatient.birthdate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
                               </div>
                               <div className="p-3 rounded-lg bg-muted/50">
                                 <p className="text-xs text-muted-foreground">Age</p>
-                                <p className="text-sm font-medium">{calculateAge(selectedPatient.birthDate)} years</p>
+                                <p className="text-sm font-medium">{selectedPatient.birthdate ? `${calculateAge(selectedPatient.birthdate)} years` : 'N/A'}</p>
                               </div>
                               <div className="p-3 rounded-lg bg-muted/50">
                                 <p className="text-xs text-muted-foreground">Gender</p>
-                                <p className="text-sm font-medium">{selectedPatient.gender}</p>
+                                <p className="text-sm font-medium">{selectedPatient.gender || 'N/A'}</p>
                               </div>
                               <div className="p-3 rounded-lg bg-muted/50">
                                 <p className="text-xs text-muted-foreground">Blood Type</p>
-                                <p className="text-sm font-medium">{selectedPatient.bloodType}</p>
+                                <p className="text-sm font-medium">{selectedPatient.blood_type || 'N/A'}</p>
                               </div>
                             </div>
                           </div>
 
-                          {/* Medical Info */}
+                          {/* Emergency Contact */}
                           <div>
-                            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Medical Information</h4>
-                            <div className="space-y-3">
-                              <div className="p-3 rounded-lg bg-muted/50">
-                                <p className="text-xs text-muted-foreground">Allergies</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  {selectedPatient.allergies.length > 0 ? (
-                                    selectedPatient.allergies.map((allergy, idx) => (
-                                      <Badge key={idx} variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
-                                        <AlertCircle className="w-3 h-3 mr-1" />
-                                        {allergy}
-                                      </Badge>
-                                    ))
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">No known allergies</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="p-3 rounded-lg bg-muted/50">
-                                <p className="text-xs text-muted-foreground">Emergency Contact</p>
-                                <p className="text-sm font-medium">{selectedPatient.emergencyContact}</p>
-                              </div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Emergency Contact</h4>
+                            <div className="p-3 rounded-lg bg-muted/50">
+                              {(() => {
+                                const ec = getEmergencyContact(selectedPatient.patient_id);
+                                if (ec) {
+                                  return (
+                                    <div>
+                                      <p className="text-sm font-medium">{ec.ec_name || 'N/A'}</p>
+                                      <p className="text-xs text-muted-foreground">{ec.ec_relationship || 'N/A'} • {ec.ec_contact_no || 'N/A'}</p>
+                                    </div>
+                                  );
+                                }
+                                return <p className="text-sm text-muted-foreground">No emergency contact on file</p>;
+                              })()}
                             </div>
                           </div>
 
@@ -627,20 +854,20 @@ export default function PatientRecords() {
                             <h4 className="text-sm font-semibold text-muted-foreground mb-3">Patient Summary</h4>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                                <p className="text-xs text-muted-foreground">Total Visits</p>
-                                <p className="text-lg font-bold text-primary">{selectedPatient.totalVisits}</p>
+                                <p className="text-xs text-muted-foreground">Total Records</p>
+                                <p className="text-lg font-bold text-primary">{emrRecords.length}</p>
                               </div>
                               <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                                <p className="text-xs text-muted-foreground">Total Spent</p>
-                                <p className="text-lg font-bold text-emerald-500">{formatCurrency(selectedPatient.totalSpent)}</p>
+                                <p className="text-xs text-muted-foreground">Total Billed</p>
+                                <p className="text-lg font-bold text-emerald-500">{formatCurrency(billings.reduce((sum, b) => sum + (b.total_amount || 0), 0))}</p>
                               </div>
                               <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                                <p className="text-xs text-muted-foreground">Registered</p>
-                                <p className="text-sm font-medium text-cyan-500">{new Date(selectedPatient.registeredDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</p>
+                                <p className="text-xs text-muted-foreground">Prescriptions</p>
+                                <p className="text-lg font-bold text-cyan-500">{prescriptions.length}</p>
                               </div>
                               <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                                <p className="text-xs text-muted-foreground">Last Visit</p>
-                                <p className="text-sm font-medium text-amber-500">{new Date(selectedPatient.lastVisit).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                                <p className="text-xs text-muted-foreground">Appointments</p>
+                                <p className="text-lg font-bold text-amber-500">{appointments.length}</p>
                               </div>
                             </div>
                           </div>
@@ -652,29 +879,31 @@ export default function PatientRecords() {
                   {/* Treatments Tab */}
                   {detailTab === 'treatments' && (
                     <div className="space-y-3">
-                      {getPatientTreatments(selectedPatient.id).length === 0 ? (
+                      {emrRecords.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <Stethoscope className="w-10 h-10 mx-auto mb-2 opacity-50" />
                           <p>No treatment history</p>
                         </div>
                       ) : (
-                        getPatientTreatments(selectedPatient.id).map((treatment, idx) => (
+                        emrRecords.map((record, idx) => (
                           <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                             <div className="flex items-start justify-between">
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <p className="font-semibold">{treatment.service}</p>
+                                  <p className="font-semibold">{getServiceName(record.treatment)}</p>
                                   <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
                                     <CheckCircle2 className="w-3 h-3 mr-1" />
-                                    {treatment.status}
+                                    {record.status || 'completed'}
                                   </Badge>
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-1">{treatment.dentist}</p>
-                                <p className="text-sm text-muted-foreground mt-1">{treatment.notes}</p>
+                                <p className="text-sm text-muted-foreground mt-1">{getDentistName(record.dentist)}</p>
+                                {record.chief_complaint && <p className="text-sm text-muted-foreground mt-1">Complaint: {record.chief_complaint}</p>}
+                                {record.diagnosis && <p className="text-sm text-muted-foreground">Diagnosis: {record.diagnosis}</p>}
+                                {record.notes && <p className="text-sm text-muted-foreground">Notes: {record.notes}</p>}
                               </div>
                               <div className="text-right">
-                                <p className="text-sm text-muted-foreground">{new Date(treatment.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                                <p className="font-semibold text-primary mt-1">{formatCurrency(treatment.cost)}</p>
+                                <p className="text-sm text-muted-foreground">{record.date ? new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
+                                {record.time && <p className="text-xs text-muted-foreground">{record.time}</p>}
                               </div>
                             </div>
                           </div>
@@ -686,31 +915,26 @@ export default function PatientRecords() {
                   {/* Prescriptions Tab */}
                   {detailTab === 'prescriptions' && (
                     <div className="space-y-3">
-                      {getPatientPrescriptions(selectedPatient.id).length === 0 ? (
+                      {prescriptions.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <Pill className="w-10 h-10 mx-auto mb-2 opacity-50" />
                           <p>No prescriptions</p>
                         </div>
                       ) : (
-                        getPatientPrescriptions(selectedPatient.id).map((prescription, idx) => (
+                        prescriptions.map((prescription, idx) => (
                           <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                             <div className="flex items-start justify-between">
                               <div>
                                 <div className="flex items-center gap-2">
                                   <Pill className="w-4 h-4 text-primary" />
-                                  <p className="font-semibold">{prescription.medication}</p>
-                                  <Badge variant="outline" className={cn("text-xs",
-                                    prescription.status === 'active' 
-                                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                                      : 'bg-muted text-muted-foreground'
-                                  )}>
-                                    {prescription.status}
-                                  </Badge>
+                                  <p className="font-semibold">{getMedicineName(prescription.medicine_id)}</p>
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-1">Dosage: {prescription.dosage}</p>
-                                <p className="text-xs text-muted-foreground mt-1">Prescribed by: {prescription.prescribedBy}</p>
+                                {prescription.dosage && <p className="text-sm text-muted-foreground mt-1">Dosage: {prescription.dosage}</p>}
+                                {prescription.frequency && <p className="text-sm text-muted-foreground">Frequency: {prescription.frequency}</p>}
+                                {prescription.duration && <p className="text-sm text-muted-foreground">Duration: {prescription.duration}</p>}
+                                {prescription.instructions && <p className="text-sm text-muted-foreground">Instructions: {prescription.instructions}</p>}
                               </div>
-                              <p className="text-sm text-muted-foreground">{new Date(prescription.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                              <p className="text-sm text-muted-foreground">{prescription.created_at ? new Date(prescription.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
                             </div>
                           </div>
                         ))
@@ -721,32 +945,30 @@ export default function PatientRecords() {
                   {/* Follow-ups Tab */}
                   {detailTab === 'followups' && (
                     <div className="space-y-3">
-                      {getPatientFollowUps(selectedPatient.id).length === 0 ? (
+                      {appointments.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <ClipboardList className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                          <p>No follow-up recommendations</p>
+                          <p>No appointments</p>
                         </div>
                       ) : (
-                        getPatientFollowUps(selectedPatient.id).map((followUp, idx) => (
+                        appointments.map((appt, idx) => (
                           <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                             <div className="flex items-start justify-between">
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <p className="font-semibold">{followUp.service}</p>
+                                  <p className="font-semibold">Appointment #{appt.appointment_id}</p>
                                   <Badge variant="outline" className={cn("text-xs",
-                                    followUp.status === 'scheduled' 
-                                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                                      : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                    appt.status_id === 1 
+                                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                      : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                                   )}>
                                     <Clock className="w-3 h-3 mr-1" />
-                                    {followUp.status}
+                                    {appt.status_id === 1 ? 'Scheduled' : appt.status_id === 2 ? 'Completed' : 'Status ' + appt.status_id}
                                   </Badge>
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-1">{followUp.dentist}</p>
-                                <p className="text-sm text-muted-foreground mt-1">{followUp.notes}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm font-medium">{new Date(followUp.scheduledDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                <p className="text-sm font-medium">{appt.appointment_date ? new Date(appt.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
                               </div>
                             </div>
                           </div>
@@ -761,47 +983,51 @@ export default function PatientRecords() {
                       {/* Billing Summary */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                          <p className="text-sm text-muted-foreground">Total Spent</p>
-                          <p className="text-2xl font-bold text-primary">{formatCurrency(selectedPatient.totalSpent)}</p>
+                          <p className="text-sm text-muted-foreground">Total Billed</p>
+                          <p className="text-2xl font-bold text-primary">{formatCurrency(billings.reduce((sum, b) => sum + (b.total_amount || 0), 0))}</p>
                         </div>
                         <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                           <p className="text-sm text-muted-foreground">Total Transactions</p>
-                          <p className="text-2xl font-bold text-emerald-500">{getPatientBilling(selectedPatient.id).length}</p>
+                          <p className="text-2xl font-bold text-emerald-500">{billings.length}</p>
                         </div>
                       </div>
 
                       {/* Transaction List */}
                       <div className="space-y-3">
                         <h4 className="text-sm font-semibold text-muted-foreground">Transaction History</h4>
-                        {getPatientBilling(selectedPatient.id).length === 0 ? (
+                        {billings.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
                             <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-50" />
                             <p>No billing history</p>
                           </div>
                         ) : (
-                          getPatientBilling(selectedPatient.id).map((bill, idx) => (
+                          billings.map((bill, idx) => (
                             <div key={idx} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="font-semibold">{bill.service}</p>
+                                  <p className="font-semibold">Bill #{bill.bill_id}</p>
                                   <div className="flex items-center gap-2 mt-1">
                                     <Badge variant="outline" className={cn("text-xs",
-                                      bill.method === 'paymongo' 
+                                      bill.payment_option === 'paymongo' 
                                         ? 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20'
                                         : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                                     )}>
-                                      {bill.method === 'paymongo' ? 'PayMongo' : 'Cash'}
+                                      {bill.payment_option === 'paymongo' ? 'PayMongo' : bill.payment_option || 'Cash'}
                                     </Badge>
                                     <span className="text-xs text-muted-foreground">
-                                      {new Date(bill.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      {bill.created_at ? new Date(bill.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                                     </span>
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-semibold text-primary">{formatCurrency(bill.amount)}</p>
-                                  <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                                  <p className="font-semibold text-primary">{formatCurrency(bill.total_amount || 0)}</p>
+                                  <Badge variant="outline" className={cn("text-xs",
+                                    bill.payment_status_id === 2 
+                                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                      : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                  )}>
                                     <CheckCircle2 className="w-3 h-3 mr-1" />
-                                    {bill.status}
+                                    {bill.payment_status_id === 2 ? 'Paid' : bill.payment_status_id === 1 ? 'Pending' : 'Status ' + bill.payment_status_id}
                                   </Badge>
                                 </div>
                               </div>
@@ -810,6 +1036,8 @@ export default function PatientRecords() {
                         )}
                       </div>
                     </div>
+                  )}
+                  </>
                   )}
                 </div>
               </ScrollArea>
