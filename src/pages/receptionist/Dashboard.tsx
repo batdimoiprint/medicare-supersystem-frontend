@@ -13,7 +13,6 @@ import {
     ArrowRight,
     RefreshCw,
     Loader2,
-    Users,
     CalendarCheck,
     CalendarX,
     Receipt,
@@ -455,21 +454,6 @@ export default function Dashboard() {
                                         <div>
                                             <p className="font-medium">Cancellation Requests</p>
                                             <p className="text-xs text-muted-foreground">Process patient cancellation requests</p>
-                                        </div>
-                                    </div>
-                                    <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                                </div>
-                            </Link>
-
-                            <Link to="/receptionist/patients">
-                                <div className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/50 transition-all group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 group-hover:scale-110 transition-transform">
-                                            <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                        </div>
-                                        <div>
-                                            <p className="font-medium">Patient Directory</p>
-                                            <p className="text-xs text-muted-foreground">Search and view patient information</p>
                                         </div>
                                     </div>
                                     <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />

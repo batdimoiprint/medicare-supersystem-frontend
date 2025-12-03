@@ -54,7 +54,7 @@ export default function CancelRequests() {
                     <ReceptionistTable
                         items={cancelRequests}
                         basePath="/receptionist/cancel-requests"
-                        type="appointment"
+                        type="cancel-request"
                     />
                     {cancelRequests?.length === 0 && (
                         <p className="text-center text-muted-foreground py-8">

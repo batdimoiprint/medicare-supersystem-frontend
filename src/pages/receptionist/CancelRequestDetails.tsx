@@ -3,18 +3,21 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCancelRequestDetails, useApproveCancellation, useRejectCancellation } from '@/hooks/use-cancel-requests'
-import { Loader2, CheckCircle2, X } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Loader2, CheckCircle2, X, AlertCircle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function CancelRequestDetails() {
     const { appointment_id } = useParams()
     const navigate = useNavigate()
     const appointmentId = appointment_id ? parseInt(appointment_id, 10) : undefined
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
+    const [approvalNotes, setApprovalNotes] = useState('')
 
     const { data: appointment, isLoading, isError } = useCancelRequestDetails(appointmentId)
     const approveMutation = useApproveCancellation()
@@ -28,13 +31,22 @@ export default function CancelRequestDetails() {
         }, 2000) // Navigate after 2 seconds
     }
 
+    const showError = (message: string) => {
+        setErrorMessage(message)
+        setTimeout(() => setErrorMessage(null), 4000)
+    }
+
     const handleApprove = async () => {
         if (!appointmentId) return
         try {
-            await approveMutation.mutateAsync(appointmentId)
+            await approveMutation.mutateAsync({ 
+                appointmentId, 
+                notes: approvalNotes.trim() || undefined 
+            })
             showSuccess('Cancellation approved! Refund has been submitted for processing.')
         } catch (error) {
             console.error('Failed to approve cancellation:', error)
+            showError('Failed to approve cancellation. Please try again.')
         }
     }
 
@@ -45,6 +57,7 @@ export default function CancelRequestDetails() {
             showSuccess('Cancellation rejected. Appointment restored to Confirmed status.')
         } catch (error) {
             console.error('Failed to reject cancellation:', error)
+            showError('Failed to reject cancellation. Please try again.')
         }
     }
 
@@ -75,23 +88,46 @@ export default function CancelRequestDetails() {
     return (
         <div className="p-6 space-y-6">
             {/* Success Message */}
-            {successMessage && (
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="fixed top-4 right-4 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
-                >
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span className="font-medium">{successMessage}</span>
-                    <button
-                        onClick={() => setSuccessMessage(null)}
-                        className="ml-2 hover:bg-white/20 rounded p-1"
+            <AnimatePresence>
+                {successMessage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="fixed top-4 right-4 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
                     >
-                        <X className="w-4 h-4" />
-                    </button>
-                </motion.div>
-            )}
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-medium">{successMessage}</span>
+                        <button
+                            onClick={() => setSuccessMessage(null)}
+                            className="ml-2 hover:bg-white/20 rounded p-1"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Error Message */}
+            <AnimatePresence>
+                {errorMessage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="fixed top-4 right-4 z-[100] bg-destructive text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
+                    >
+                        <AlertCircle className="w-5 h-5" />
+                        <span className="font-medium">{errorMessage}</span>
+                        <button
+                            onClick={() => setErrorMessage(null)}
+                            className="ml-2 hover:bg-white/20 rounded p-1"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight">Cancel Request Details</h1>
@@ -237,6 +273,17 @@ export default function CancelRequestDetails() {
                             <Input value={appointment.created_at
                                 ? new Date(appointment.created_at).toLocaleDateString()
                                 : 'N/A'} readOnly className="bg-muted" />
+                        </div>
+                        <Separator />
+                        <div className="space-y-2">
+                            <Label htmlFor="approval-notes">Approval Notes (Optional)</Label>
+                            <Textarea
+                                id="approval-notes"
+                                placeholder="Add notes for this cancellation approval..."
+                                value={approvalNotes}
+                                onChange={(e) => setApprovalNotes(e.target.value)}
+                                className="min-h-[80px]"
+                            />
                         </div>
                         <Separator />
                         <div className="space-y-2 pt-2">

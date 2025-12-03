@@ -15,8 +15,9 @@ import {
     usePersonnel,
 } from '@/hooks/use-appointments'
 import { useState, useEffect } from 'react'
-import { Loader2, CalendarIcon } from 'lucide-react'
+import { Loader2, CalendarIcon, CheckCircle2, X, AlertCircle } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function AppointmentDetails() {
     const { appointment_id } = useParams()
@@ -33,6 +34,8 @@ export default function AppointmentDetails() {
     const [selectedStatus, setSelectedStatus] = useState<string>('')
     const [selectedDoctor, setSelectedDoctor] = useState<string>('')
     const [hasChanges, setHasChanges] = useState(false)
+    const [successMessage, setSuccessMessage] = useState<string | null>(null)
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
     // Reschedule modal state
     const [rescheduleOpen, setRescheduleOpen] = useState(false)
@@ -49,6 +52,19 @@ export default function AppointmentDetails() {
         }
     }, [appointment?.appointment_status_id, appointment?.personnel_id])
 
+    const showSuccess = (message: string) => {
+        setSuccessMessage(message)
+        setTimeout(() => {
+            setSuccessMessage(null)
+            navigate('/receptionist/appointments')
+        }, 2000)
+    }
+
+    const showError = (message: string) => {
+        setErrorMessage(message)
+        setTimeout(() => setErrorMessage(null), 4000)
+    }
+
     const handleStatusChange = (value: string) => {
         setSelectedStatus(value)
         setHasChanges(value !== appointment?.appointment_status_id?.toString() ||
@@ -64,41 +80,52 @@ export default function AppointmentDetails() {
     const handleSave = async () => {
         if (!appointmentId) return
 
-        const promises: Promise<void>[] = []
+        try {
+            const promises: Promise<void>[] = []
 
-        // Update status if changed
-        if (selectedStatus && selectedStatus !== appointment?.appointment_status_id?.toString()) {
-            promises.push(updateStatusMutation.mutateAsync({
-                appointmentId,
-                statusId: parseInt(selectedStatus, 10)
-            }))
+            // Update status if changed
+            if (selectedStatus && selectedStatus !== appointment?.appointment_status_id?.toString()) {
+                promises.push(updateStatusMutation.mutateAsync({
+                    appointmentId,
+                    statusId: parseInt(selectedStatus, 10)
+                }))
+            }
+
+            // Assign doctor if changed
+            if (selectedDoctor && selectedDoctor !== appointment?.personnel_id?.toString()) {
+                promises.push(assignDoctorMutation.mutateAsync({
+                    appointmentId,
+                    personnelId: parseInt(selectedDoctor, 10)
+                }))
+            }
+
+            await Promise.all(promises)
+            setHasChanges(false)
+            showSuccess('Appointment updated successfully!')
+        } catch (error) {
+            console.error('Failed to update appointment:', error)
+            showError('Failed to update appointment. Please try again.')
         }
-
-        // Assign doctor if changed
-        if (selectedDoctor && selectedDoctor !== appointment?.personnel_id?.toString()) {
-            promises.push(assignDoctorMutation.mutateAsync({
-                appointmentId,
-                personnelId: parseInt(selectedDoctor, 10)
-            }))
-        }
-
-        await Promise.all(promises)
-        setHasChanges(false)
-        navigate('/receptionist/appointments')
     }
 
     const handleReschedule = async () => {
         if (!appointmentId || !newDate) return
 
-        await rescheduleMutation.mutateAsync({
-            appointmentId,
-            newDate,
-            newTime: newTime || undefined
-        })
+        try {
+            await rescheduleMutation.mutateAsync({
+                appointmentId,
+                newDate,
+                newTime: newTime || undefined
+            })
 
-        setRescheduleOpen(false)
-        setNewDate('')
-        setNewTime('')
+            setRescheduleOpen(false)
+            setNewDate('')
+            setNewTime('')
+            showSuccess('Appointment rescheduled successfully!')
+        } catch (error) {
+            console.error('Failed to reschedule appointment:', error)
+            showError('Failed to reschedule appointment. Please try again.')
+        }
     }
 
     const isSaving = updateStatusMutation.isPending || assignDoctorMutation.isPending
@@ -129,6 +156,48 @@ export default function AppointmentDetails() {
 
     return (
         <div className="p-6 space-y-6">
+            {/* Success Message */}
+            <AnimatePresence>
+                {successMessage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="fixed top-4 right-4 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
+                    >
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-medium">{successMessage}</span>
+                        <button
+                            onClick={() => setSuccessMessage(null)}
+                            className="ml-2 hover:bg-white/20 rounded p-1"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Error Message */}
+            <AnimatePresence>
+                {errorMessage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="fixed top-4 right-4 z-[100] bg-destructive text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
+                    >
+                        <AlertCircle className="w-5 h-5" />
+                        <span className="font-medium">{errorMessage}</span>
+                        <button
+                            onClick={() => setErrorMessage(null)}
+                            className="ml-2 hover:bg-white/20 rounded p-1"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight">Appointment Details</h1>
                 <div className="flex gap-2">

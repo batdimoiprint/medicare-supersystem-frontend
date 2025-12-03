@@ -1324,7 +1324,7 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
 /**
  * Approve a cancellation request - inserts into refund_tbl for processing
  */
-export async function approveCancellation(appointmentId: number): Promise<void> {
+export async function approveCancellation(appointmentId: number, notes?: string): Promise<void> {
   console.log('approveCancellation: Starting for appointment', appointmentId)
   
   // First, get the appointment details to get reservation_fee
@@ -1369,7 +1369,7 @@ export async function approveCancellation(appointmentId: number): Promise<void> 
   const insertData = {
     appointment_id: appointmentId,
     reservation_fee_id: reservationFee?.reservation_fee_id || null,
-    notes: 'Cancellation approved by receptionist',
+    notes: notes || 'Cancellation approved by receptionist',
     refund_amount: appointment.reservation_fee || 300,
   }
   
@@ -1410,12 +1410,34 @@ export interface Personnel {
 }
 
 /**
- * Fetch all personnel (doctors) for assignment dropdown
+ * Fetch all dentist personnel for assignment dropdown
+ * Only returns personnel with the 'dentist' role
  */
 export async function fetchAllPersonnel(): Promise<Personnel[]> {
+  // First, get the dentist role ID
+  const { data: roleData, error: roleError } = await supabase
+    .from('role_tbl')
+    .select('role_id')
+    .ilike('role_name', 'dentist')
+    .single()
+
+  if (roleError || !roleData) {
+    console.error('Failed to fetch dentist role:', roleError)
+    // Fall back to returning all personnel if role lookup fails
+    const { data, error } = await supabase
+      .from('personnel_tbl')
+      .select('personnel_id, f_name, l_name')
+      .order('l_name', { ascending: true })
+
+    if (error) throw error
+    return data ?? []
+  }
+
+  // Fetch personnel with dentist role
   const { data, error } = await supabase
     .from('personnel_tbl')
     .select('personnel_id, f_name, l_name')
+    .eq('role_id', roleData.role_id)
     .order('l_name', { ascending: true })
 
   if (error) {
