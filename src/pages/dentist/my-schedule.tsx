@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Calendar,
@@ -21,6 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const dentistClient = createClient(supabaseUrl, supabaseKey, { db: { schema: 'dentist' } });
 
 // --- Type Definitions ---
 interface TimeSlot {
@@ -35,6 +41,15 @@ interface ScheduleDay {
   day: string;
   isWorking: boolean;
   slots: TimeSlot[];
+}
+
+interface DentistSchedule {
+  schedule_id?: number;
+  personnel_id: string;
+  day_of_week: string;
+  date: string;
+  time_in: string;
+  time_out: string;
 }
 
 // --- Constants ---
@@ -56,16 +71,37 @@ const TIME_SLOTS = [
 
 // --- Main Component ---
 const MySchedule = () => {
+  // Get personnel_id from sessionStorage (adjust based on your auth implementation)
+  const getPersonnelId = (): string | null => {
+    // Check sessionStorage for user_id (as stored in LoginPage.tsx)
+    const userId = sessionStorage.getItem('user_id');
+    if (userId) {
+      return userId;
+    }
+    // Fallback: try to get from user object
+    const userData = sessionStorage.getItem('user') || localStorage.getItem('user');
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        return user.personnel_id || user.id || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const [personnelId, setPersonnelId] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<ScheduleDay[]>(() => {
     return DAYS_OF_WEEK.map((day) => ({
       day,
-      isWorking: day !== 'Sunday',
+      isWorking: false,
       slots: TIME_SLOTS.map((time, index) => ({
         id: index,
         day,
         startTime: time,
         endTime: TIME_SLOTS[index + 1] || '6:00 PM',
-        isAvailable: day !== 'Sunday',
+        isAvailable: false,
       })),
     }));
   });
@@ -76,6 +112,110 @@ const MySchedule = () => {
     startTime: '',
     endTime: '',
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Convert time from "9:00 AM" to "HH:MM:SS" format
+  const convertTimeTo24Hour = (time12: string): string => {
+    const [time, period] = time12.split(' ');
+    const [hours, minutes] = time.split(':');
+    let hour24 = parseInt(hours, 10);
+    if (period === 'PM' && hour24 !== 12) hour24 += 12;
+    if (period === 'AM' && hour24 === 12) hour24 = 0;
+    return `${hour24.toString().padStart(2, '0')}:${minutes}:00`;
+  };
+
+  // Convert time from "HH:MM:SS" to "9:00 AM" format
+  const convertTimeTo12Hour = (time24: string): string => {
+    const [hours, minutes] = time24.split(':');
+    let hour = parseInt(hours, 10);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    if (hour > 12) hour -= 12;
+    if (hour === 0) hour = 12;
+    return `${hour}:${minutes} ${period}`;
+  };
+
+  // Load schedules from database
+  useEffect(() => {
+    const loadSchedules = async () => {
+      const pid = getPersonnelId();
+      if (!pid) {
+        console.warn('No personnel_id found. Please ensure you are logged in.');
+        console.warn('sessionStorage user_id:', sessionStorage.getItem('user_id'));
+        setLoading(false);
+        return;
+      }
+
+      console.log('Loaded personnel_id:', pid);
+      setPersonnelId(pid);
+      setLoading(true);
+
+      try {
+        // Get today's date to find schedules for the current week
+        const today = new Date();
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+
+        const { data, error } = await dentistClient
+          .from('dentist_schedule_tbl')
+          .select('*')
+          .eq('personnel_id', String(pid))
+          .gte('date', startOfWeek.toISOString().split('T')[0])
+          .lte('date', endOfWeek.toISOString().split('T')[0])
+          .order('day_of_week', { ascending: true })
+          .order('time_in', { ascending: true });
+
+        if (error) throw error;
+
+        // Initialize schedule with default values
+        const newSchedule = DAYS_OF_WEEK.map((day) => ({
+          day,
+          isWorking: false,
+          slots: TIME_SLOTS.map((time, index) => ({
+            id: index,
+            day,
+            startTime: time,
+            endTime: TIME_SLOTS[index + 1] || '6:00 PM',
+            isAvailable: false,
+          })),
+        }));
+
+        // Process database schedules
+        if (data && data.length > 0) {
+          data.forEach((dbSchedule: DentistSchedule) => {
+            const dayIndex = DAYS_OF_WEEK.indexOf(dbSchedule.day_of_week);
+            if (dayIndex !== -1) {
+              const daySchedule = newSchedule[dayIndex];
+              daySchedule.isWorking = true;
+
+              const timeIn12 = convertTimeTo12Hour(dbSchedule.time_in);
+              const timeOut12 = convertTimeTo12Hour(dbSchedule.time_out);
+
+              const startIndex = TIME_SLOTS.indexOf(timeIn12);
+              const endIndex = TIME_SLOTS.indexOf(timeOut12);
+
+              if (startIndex !== -1 && endIndex !== -1) {
+                daySchedule.slots.forEach((slot, index) => {
+                  slot.isAvailable = index >= startIndex && index <= endIndex;
+                });
+              }
+            }
+          });
+        }
+
+        setSchedule(newSchedule);
+      } catch (err) {
+        console.error('Failed to load schedules:', err);
+        alert('Failed to load schedule. Using default schedule.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSchedules();
+  }, [personnelId]);
 
   const toggleDayWorking = (day: string) => {
     setSchedule(schedule.map(d =>
@@ -141,8 +281,94 @@ const MySchedule = () => {
     return daySchedule?.slots.filter(s => s.isAvailable).length || 0;
   };
 
+  const handleSaveSchedule = async () => {
+    // Try to get personnelId if not set
+    let pid = personnelId;
+    if (!pid) {
+      pid = getPersonnelId();
+      if (!pid) {
+        alert('No personnel ID found. Please ensure you are logged in and refresh the page.');
+        console.error('personnelId is null. sessionStorage user_id:', sessionStorage.getItem('user_id'));
+        return;
+      }
+      setPersonnelId(pid);
+    }
+
+    setSaving(true);
+    try {
+      // Get today's date to determine the week
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+
+      // Prepare schedules to save
+      const schedulesToSave: Omit<DentistSchedule, 'schedule_id'>[] = [];
+
+      schedule.forEach((daySchedule) => {
+        if (daySchedule.isWorking) {
+          const availableSlots = daySchedule.slots.filter(s => s.isAvailable);
+          if (availableSlots.length > 0) {
+            const firstSlot = availableSlots[0];
+            const lastSlot = availableSlots[availableSlots.length - 1];
+
+            const dayIndex = DAYS_OF_WEEK.indexOf(daySchedule.day);
+            const scheduleDate = new Date(startOfWeek);
+            scheduleDate.setDate(startOfWeek.getDate() + dayIndex);
+
+            schedulesToSave.push({
+              personnel_id: pid,
+              day_of_week: daySchedule.day,
+              date: scheduleDate.toISOString().split('T')[0],
+              time_in: convertTimeTo24Hour(firstSlot.startTime),
+              time_out: convertTimeTo24Hour(lastSlot.endTime),
+            });
+          }
+        }
+      });
+
+      // Delete existing schedules for this week and personnel
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+      await dentistClient
+        .from('dentist_schedule_tbl')
+        .delete()
+        .eq('personnel_id', String(pid))
+        .gte('date', startOfWeek.toISOString().split('T')[0])
+        .lte('date', endOfWeek.toISOString().split('T')[0]);
+
+      // Insert new schedules
+      if (schedulesToSave.length > 0) {
+        const { error } = await dentistClient
+          .from('dentist_schedule_tbl')
+          .insert(schedulesToSave);
+
+        if (error) throw error;
+      }
+
+      alert('Schedule saved successfully!');
+    } catch (err) {
+      console.error('Failed to save schedule:', err);
+      alert('Failed to save schedule. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const totalAvailableSlots = schedule.reduce((sum, d) => sum + getAvailableCount(d.day), 0);
   const workingDays = schedule.filter(d => d.isWorking).length;
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="text-center text-muted-foreground">
+            <p className="text-lg font-medium">Loading schedule...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -164,9 +390,12 @@ const MySchedule = () => {
                 <Printer className="w-4 h-4 mr-2" />
                 Print
               </Button>
-              <Button>
+              <Button 
+                onClick={handleSaveSchedule} 
+                disabled={saving}
+              >
                 <Save className="w-4 h-4 mr-2" />
-                Save Schedule
+                {saving ? 'Saving...' : 'Save Schedule'}
               </Button>
             </div>
           </div>

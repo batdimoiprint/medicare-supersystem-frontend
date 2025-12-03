@@ -9,6 +9,8 @@ import {
   completeFollowup,
   setPendingFollowup,
   fetchAppointmentStatuses,
+  createFollowup,
+  type CreateFollowupInput,
 } from '@/lib/api/frontdesk'
 
 /**
@@ -135,6 +137,22 @@ export function useSetPendingFollowup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'followups'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist', 'dashboard'] })
+    },
+  })
+}
+
+/**
+ * Hook to create a new followup
+ */
+export function useCreateFollowup() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (input: CreateFollowupInput) => createFollowup(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['receptionist', 'followups'] })
+      queryClient.invalidateQueries({ queryKey: ['receptionist', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['receptionist', 'appointments'] })
     },
   })
 }

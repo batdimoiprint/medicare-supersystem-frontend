@@ -1,14 +1,15 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Bell, MessageSquare, List, Minus, Plus } from 'lucide-react'
+import { Bell, MessageSquare, List, Minus, Plus, Package, Calendar, AlertTriangle } from 'lucide-react'
 import { X, CheckCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
-import { Field, FieldLabel, FieldContent } from '@/components/ui/field'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Badge } from '@/components/ui/badge'
 
 import { useState } from 'react';
 // framer-motion removed — use simple transitions for now
@@ -53,6 +54,13 @@ export default function InventoryTable() {
     const [noteItemTab, setNoteItemTab] = useState<'Consumables' | 'Medicines' | 'Equipment'>('Consumables');
     const [noteContent, setNoteContent] = useState('');
     const [noteModalType, setNoteModalType] = useState<'inventory'|'stockout'>('inventory');
+
+    // Batch Modal State
+    const [showBatchModal, setShowBatchModal] = useState(false);
+    const [isBatchOpen, setIsBatchOpen] = useState(false);
+    const [batchItem, setBatchItem] = useState<any>(null);
+    const [batches, setBatches] = useState<any[]>([]);
+    const [batchesLoading, setBatchesLoading] = useState(false);
 
     useEffect(() => {
         fetchInventory();
@@ -282,8 +290,8 @@ export default function InventoryTable() {
         const [showRestockModal, setShowRestockModal] = useState(false);
         const [isRestockOpen, setIsRestockOpen] = useState(false);
         
-        const [restockStage, setRestockStage] = useState<'selected' | 'success'>('selected');
         const [restockQuantities, setRestockQuantities] = useState<Record<string, number>>({});
+        const [restockExpiryDates, setRestockExpiryDates] = useState<Record<string, string>>({});
         const [isRestockSuccessOpen, setIsRestockSuccessOpen] = useState(false);
 
     const renderStatusBadge = (status: string) => {
@@ -367,6 +375,8 @@ export default function InventoryTable() {
                 const qtyToAdd = restockQuantities[item.id] || 0;
                 if (qtyToAdd <= 0) return;
 
+                const expiryDate = restockExpiryDates[item.id] || null;
+
                 // 1. Log to stock_in as "Restocked"
                 const { error: logError } = await supabase
                     .schema('inventory')
@@ -381,6 +391,7 @@ export default function InventoryTable() {
                         status: 'Received', // Auto-received since it's a direct restock
                         supplier: item.supplier,
                         created_at: new Date().toISOString(),
+                        expiry_date: expiryDate,
                         // No lock needed for direct restock
                     });
 
@@ -414,6 +425,7 @@ export default function InventoryTable() {
             setIsRestockOpen(false); 
             setTimeout(() => setShowRestockModal(false), 200); 
             setIsRestockSuccessOpen(true);
+            setRestockExpiryDates({});
             fetchInventory();
             setSelectedIds([]);
 
@@ -431,6 +443,54 @@ export default function InventoryTable() {
         setNoteModalType(type);
         setShowNoteModal(true);
         setTimeout(() => setIsNoteOpen(true), 10);
+    }
+
+    // Batch modal helpers
+    async function openBatchModal(item: any) {
+        setBatchItem(item);
+        setBatches([]);
+        setBatchesLoading(true);
+        setShowBatchModal(true);
+        setTimeout(() => setIsBatchOpen(true), 10);
+
+        try {
+            // Fetch all stock_in records for this item (batches)
+            const { data, error } = await supabase
+                .schema('inventory')
+                .from('stock_in')
+                .select('*')
+                .eq('item_name', item.name)
+                .eq('category', item.category || activeTab)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setBatches(data || []);
+        } catch (error) {
+            console.error('Error fetching batches:', error);
+            setBatches([]);
+        } finally {
+            setBatchesLoading(false);
+        }
+    }
+
+    function closeBatchModal() {
+        setIsBatchOpen(false);
+        setTimeout(() => setShowBatchModal(false), 200);
+    }
+
+    // Helper to check if a date is expired or expiring soon
+    function getExpiryStatus(expiryDate: string | null): 'expired' | 'expiring-soon' | 'ok' | 'none' {
+        if (!expiryDate) return 'none';
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expDate = new Date(expiryDate);
+        expDate.setHours(0, 0, 0, 0);
+        
+        const diffDays = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) return 'expired';
+        if (diffDays <= 30) return 'expiring-soon';
+        return 'ok';
     }
 
         async function handleSaveNote() {
@@ -492,9 +552,13 @@ export default function InventoryTable() {
         function openRestock() {
             if (selectedIds.length === 0) return
             const defaults: Record<string, number> = {}
-            selectedIds.forEach(id => defaults[id] = 1)
+            const defaultExpiry: Record<string, string> = {}
+            selectedIds.forEach(id => {
+                defaults[id] = 1
+                defaultExpiry[id] = ''
+            })
             setRestockQuantities(defaults)
-            setRestockStage('selected')
+            setRestockExpiryDates(defaultExpiry)
             setShowRestockModal(true)
             setTimeout(() => setIsRestockOpen(true), 10)
         }
@@ -629,9 +693,14 @@ export default function InventoryTable() {
                                     {filteredItems.map((item) => (
                                         <tr
                                             key={item.id}
-                                            className={`border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#071a1b] text-slate-800 dark:text-slate-200 transition-colors ${selectedIds.includes(item.id) ? 'ring-2 ring-cyan-600 dark:bg-[#0b2f31]' : 'hover:bg-slate-50 dark:hover:bg-[#092325]'}`}
+                                            onClick={() => actionMode === 'view' && openBatchModal(item)}
+                                            className={cn(
+                                                "border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#071a1b] text-slate-800 dark:text-slate-200 transition-all",
+                                                selectedIds.includes(item.id) ? "ring-2 ring-cyan-600 dark:bg-[#0b2f31]" : "",
+                                                actionMode === 'view' && "cursor-pointer hover:bg-cyan-50/50 dark:hover:bg-cyan-900/20 hover:shadow-sm"
+                                            )}
                                         >
-                                            <td className="px-4 py-5 align-middle">
+                                            <td className="px-4 py-5 align-middle" onClick={(e) => e.stopPropagation()}>
                                                 {actionMode === 'select' && (
                                                     <input
                                                         type="checkbox"
@@ -644,7 +713,7 @@ export default function InventoryTable() {
                                             </td>
                                             <td className="px-8 py-5 font-semibold align-middle">
                                                 {actionMode === 'edit' ? (
-                                                    <div className="space-y-1">
+                                                    <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
                                                         <Input 
                                                             value={item.name} 
                                                             onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)}
@@ -653,10 +722,10 @@ export default function InventoryTable() {
                                                         <div className="text-xs tracking-wide text-slate-500 dark:text-slate-400 px-3">{item.id}</div>
                                                     </div>
                                                 ) : (
-                                                    <>
+                                                    <div>
                                                         <div className="text-slate-900 dark:text-slate-100 leading-snug">{item.name}</div>
                                                         <div className="mt-1 text-xs tracking-wide text-slate-500 dark:text-slate-400">{item.id}</div>
-                                                    </>
+                                                    </div>
                                                 )}
                                             </td>
                                             <td className="px-6 py-5 align-middle text-slate-700 dark:text-slate-300 whitespace-nowrap">
@@ -688,7 +757,7 @@ export default function InventoryTable() {
                                                 )}
                                             </td>
                                             <td className="px-6 py-5 align-middle">{renderStatusBadge(item.status)}</td>
-                                            <td className="px-6 py-5 align-middle text-slate-500 dark:text-slate-400">
+                                            <td className="px-6 py-5 align-middle text-slate-500 dark:text-slate-400" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center gap-3 relative">
                                                     <TooltipProvider>
                                                         <Tooltip>
@@ -778,27 +847,51 @@ export default function InventoryTable() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div className={`fixed inset-0 transition-opacity duration-300 ease-out ${isNewOrderOpen ? 'bg-black/50 backdrop-blur-sm opacity-100' : 'bg-black/0 opacity-0'}`} onClick={() => { setIsNewOrderOpen(false); setTimeout(() => setShowNewOrderModal(false), 200) }} />
                     <div className={`relative z-10 transform-gpu transition-all duration-350 ease-[cubic-bezier(.2,.9,.2,1)] ${isNewOrderOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-95'}`} onClick={(e) => e.stopPropagation()}>
-                        <Card className="w-full max-w-2xl rounded-2xl overflow-hidden m-4">
-                            <div className="bg-gradient-to-r from-[#00a8a8] to-[#008a8a] rounded-t-2xl px-6 py-4 flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-white">New Order Sheet</h3>
-                                <button className="text-white" onClick={() => { setIsNewOrderOpen(false); setTimeout(() => setShowNewOrderModal(false), 200) }} aria-label="Close">
-                                    <X className="w-6 h-6" />
-                                </button>
+                        <div className="w-full max-w-xl rounded-lg overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl m-4">
+                            {/* Header */}
+                            <div className="bg-[#00a8a8] px-4 py-3 flex items-center justify-between text-white">
+                                <div className="flex items-center gap-3">
+                                    <Plus className="w-5 h-5" />
+                                    <span className="text-lg font-semibold">New Order</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 bg-white/10 rounded-full px-2 py-1 text-sm">
+                                        <Calendar className="w-4 h-4" />
+                                        <span className="text-xs">{new Date().toLocaleDateString()}</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => { setIsNewOrderOpen(false); setTimeout(() => setShowNewOrderModal(false), 200) }} 
+                                        aria-label="Close"
+                                        className="hover:bg-white/20 rounded p-1 transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
                             </div>
-                            <CardContent className="space-y-4 pt-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Field orientation="vertical">
-                                        <FieldLabel>Item Name <span className="text-red-500">*</span></FieldLabel>
-                                        <FieldContent>
-                                            <Input placeholder="Dental Chair" value={newOrder.item} onChange={(e) => setNewOrder({ ...newOrder, item: e.target.value })} />
-                                        </FieldContent>
-                                    </Field>
-                                    <Field orientation="vertical">
-                                        <FieldLabel>Supplier Name <span className="text-red-500">*</span></FieldLabel>
-                                        <FieldContent>
+
+                            {/* Content */}
+                            <div className="p-6 space-y-5">
+                                {/* Form Fields */}
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                Item Name <span className="text-red-500">*</span>
+                                            </label>
+                                            <Input 
+                                                placeholder="Enter item name" 
+                                                value={newOrder.item} 
+                                                onChange={(e) => setNewOrder({ ...newOrder, item: e.target.value })}
+                                                className="h-10 border-slate-200 dark:border-slate-700"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                Supplier <span className="text-red-500">*</span>
+                                            </label>
                                             <Select onValueChange={(v) => setNewOrder({ ...newOrder, supplier: v })}>
-                                                <SelectTrigger size="sm">
-                                                    <SelectValue placeholder="Select Supplier" />
+                                                <SelectTrigger className="h-10 border-slate-200 dark:border-slate-700">
+                                                    <SelectValue placeholder="Select supplier" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     {suppliers.map((supplier) => (
@@ -808,35 +901,58 @@ export default function InventoryTable() {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                        </FieldContent>
-                                    </Field>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Field orientation="vertical">
-                                        <FieldLabel>Quantity <span className="text-red-500">*</span></FieldLabel>
-                                        <FieldContent>
-                                            <Input placeholder="100" value={newOrder.quantity} onChange={(e) => setNewOrder({ ...newOrder, quantity: e.target.value })} />
-                                        </FieldContent>
-                                    </Field>
-                                    <Field orientation="vertical">
-                                        <FieldLabel>Unit Cost <span className="text-red-500">*</span></FieldLabel>
-                                        <FieldContent>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                Quantity <span className="text-red-500">*</span>
+                                            </label>
+                                            <Input 
+                                                type="number"
+                                                placeholder="Enter quantity" 
+                                                value={newOrder.quantity} 
+                                                onChange={(e) => setNewOrder({ ...newOrder, quantity: e.target.value })}
+                                                className="h-10 border-slate-200 dark:border-slate-700"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                Unit Cost <span className="text-red-500">*</span>
+                                            </label>
                                             <Input 
                                                 placeholder={formatCurrency(0)} 
                                                 value={newOrder.unitCost} 
-                                                readOnly 
-                                                className="bg-slate-100 text-slate-500 cursor-not-allowed"
-                                                onChange={(e) => setNewOrder({ ...newOrder, unitCost: e.target.value })} 
+                                                onChange={(e) => setNewOrder({ ...newOrder, unitCost: e.target.value })}
+                                                className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
                                             />
-                                        </FieldContent>
-                                    </Field>
+                                        </div>
+                                    </div>
                                 </div>
-                            </CardContent>
-                            <CardContent className="flex justify-end gap-2 pt-0 pb-6">
-                                <Button variant="outline" onClick={() => { setIsNewOrderOpen(false); setTimeout(() => setShowNewOrderModal(false), 200) }}>Cancel</Button>
-                                <Button onClick={handleSaveNewOrder}>Save</Button>
-                            </CardContent>
-                        </Card>
+
+                                {/* Info text */}
+                                <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                                    New orders will be added to pending stock-in records
+                                </p>
+
+                                {/* Footer Actions */}
+                                <div className="flex justify-center gap-3 pt-2">
+                                    <Button 
+                                        variant="outline"
+                                        className="rounded-full px-6"
+                                        onClick={() => { setIsNewOrderOpen(false); setTimeout(() => setShowNewOrderModal(false), 200) }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button 
+                                        className="rounded-full px-8 font-semibold bg-[#00b8b8] hover:bg-[#009e9e] text-white shadow-lg shadow-cyan-500/20"
+                                        onClick={handleSaveNewOrder}
+                                    >
+                                        Save Order
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -846,24 +962,57 @@ export default function InventoryTable() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div className={`fixed inset-0 transition-opacity duration-300 ease-out ${isNoteOpen ? 'bg-black/50 backdrop-blur-sm opacity-100' : 'bg-black/0 opacity-0'}`} onClick={() => { setIsNoteOpen(false); setTimeout(() => setShowNoteModal(false), 200) }} />
                     <div className={`relative z-10 transform-gpu transition-all duration-350 ease-[cubic-bezier(.2,.9,.2,1)] ${isNoteOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-95'}`} onClick={(e) => e.stopPropagation()}>
-                        <Card className="w-full max-w-[640px] rounded-2xl overflow-hidden m-4">
-                            <div className="bg-gradient-to-r from-[#00a8a8] to-[#008a8a] rounded-t-2xl px-6 py-4 flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-white">Item Note</h3>
-                                <button className="text-white" onClick={() => { setIsNoteOpen(false); setTimeout(() => setShowNoteModal(false), 200) }} aria-label="Close">
-                                    <X className="w-6 h-6" />
+                        <div className="w-full max-w-lg rounded-2xl overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl m-4 border border-slate-200 dark:border-slate-700">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-[#00a8a8] to-[#008a8a] px-6 py-4 flex items-center justify-between text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-white/20 rounded-lg">
+                                        <MessageSquare className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-bold">Item Note</h3>
+                                        <p className="text-xs text-white/70">Add or edit note</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => { setIsNoteOpen(false); setTimeout(() => setShowNoteModal(false), 200) }} 
+                                    aria-label="Close"
+                                    className="hover:bg-white/20 rounded-full p-1.5 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
                                 </button>
                             </div>
-                            <CardContent className="space-y-4 pt-6">
-                                <div className="text-sm text-slate-700 dark:text-slate-300">Leave a note for the doctor or staff. This will be saved directly to the item's record.</div>
-                                <div>
-                                    <Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} placeholder="Type your note here..." className="min-h-[120px]" />
+
+                            {/* Content */}
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Leave a note for the doctor or staff. This will be saved directly to the item's record.
+                                </p>
+                                <Textarea 
+                                    value={noteContent} 
+                                    onChange={(e) => setNoteContent(e.target.value)} 
+                                    placeholder="Type your note here..." 
+                                    className="min-h-[120px] border-slate-200 dark:border-slate-700 resize-none"
+                                />
+
+                                {/* Footer Actions */}
+                                <div className="flex justify-center gap-3 pt-2">
+                                    <Button 
+                                        variant="outline"
+                                        className="rounded-full px-6"
+                                        onClick={() => { setIsNoteOpen(false); setTimeout(() => setShowNoteModal(false), 200) }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button 
+                                        className="rounded-full px-8 font-semibold bg-[#00b8b8] hover:bg-[#009e9e] text-white shadow-lg shadow-cyan-500/20"
+                                        onClick={handleSaveNote}
+                                    >
+                                        Save Note
+                                    </Button>
                                 </div>
-                            </CardContent>
-                            <CardContent className="flex justify-end gap-2 pt-0 pb-6">
-                                <Button variant="outline" onClick={() => { setIsNoteOpen(false); setTimeout(() => setShowNoteModal(false), 200) }}>Cancel</Button>
-                                <Button onClick={handleSaveNote}>Save</Button>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -897,17 +1046,21 @@ export default function InventoryTable() {
                         
                         {/* Input Step */}
                         {stockFlowStep === 'input' && (
-                            <div className="w-full max-w-2xl rounded-2xl overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl m-4 border border-slate-200 dark:border-slate-700">
-                                <div className="bg-[#00b8b8] px-6 py-4 flex items-center justify-between text-white">
+                            <div className="w-full max-w-2xl rounded-lg overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl m-4">
+                                <div className="bg-[#00a8a8] px-4 py-3 flex items-center justify-between text-white">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-1.5 bg-white/20 rounded-lg">
-                                            <List className="w-5 h-5 text-white" />
-                                        </div>
-                                        <h3 className="text-lg font-bold tracking-wide">Stock Out</h3>
+                                        <Minus className="w-5 h-5" />
+                                        <span className="text-lg font-semibold">Stock Out</span>
                                     </div>
-                                    <button onClick={() => { setIsStockOpen(false); setTimeout(() => setShowStockModal(false), 200) }} aria-label="Close" className="hover:bg-white/20 rounded-full p-1 transition-colors">
-                                        <X className="w-5 h-5 text-white" />
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2 bg-white/10 rounded-full px-2 py-1 text-sm">
+                                            <Calendar className="w-4 h-4" />
+                                            <span className="text-xs">{new Date().toLocaleDateString()}</span>
+                                        </div>
+                                        <button onClick={() => { setIsStockOpen(false); setTimeout(() => setShowStockModal(false), 200) }} aria-label="Close" className="hover:bg-white/20 rounded p-1 transition-colors">
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 <div className="p-8 space-y-8">
@@ -925,7 +1078,7 @@ export default function InventoryTable() {
                                         <div className="bg-slate-50 dark:bg-[#0b2527] px-6 py-3 grid grid-cols-12 gap-4 text-sm font-semibold text-slate-600 dark:text-slate-400">
                                             <div className="col-span-6">Item Name</div>
                                             <div className="col-span-3 text-center">Status</div>
-                                            <div className="col-span-3 text-center">Quantity</div>
+                                            <div className="col-span-3 text-center">Quantity <span className="text-red-500">*</span></div>
                                         </div>
                                         <div className="divide-y divide-slate-100 dark:divide-slate-800">
                                             {selectedItems.map(it => (
@@ -1159,89 +1312,115 @@ export default function InventoryTable() {
                 <div className="fixed inset-0 z-60 flex items-center justify-center">
                     <div className={`fixed inset-0 transition-opacity duration-300 ease-out ${isRestockOpen ? 'bg-black/50 backdrop-blur-sm opacity-100' : 'bg-black/0 opacity-0'}`} onClick={() => { setIsRestockOpen(false); setTimeout(() => setShowRestockModal(false), 200) }} />
                     <div className={`relative z-10 transform-gpu transition-all duration-350 ease-[cubic-bezier(.2,.9,.2,1)] ${isRestockOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-95'}`} onClick={(e) => e.stopPropagation()}>
-                        <div className="w-full max-w-2xl rounded-2xl overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl m-4 border border-slate-200 dark:border-slate-700">
-                            <div className="bg-[#00b8b8] px-6 py-4 flex items-center justify-between text-white">
-                                    <div className="flex items-center gap-3">
-                                    <div className="p-1.5 bg-white/20 rounded-lg">
-                                        <List className="w-5 h-5 text-white" />
-                                    </div>
-                                    <h3 className="text-lg font-bold tracking-wide">{restockStage === 'selected' ? 'Restock' : 'Restock (Completed)'}</h3>
+                        <div className="w-full max-w-2xl rounded-lg overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl m-4">
+                            <div className="bg-[#00a8a8] px-4 py-3 flex items-center justify-between text-white">
+                                <div className="flex items-center gap-3">
+                                    <Plus className="w-5 h-5" />
+                                    <span className="text-lg font-semibold">Restock</span>
                                 </div>
-                                <button onClick={() => { setIsRestockOpen(false); setTimeout(() => setShowRestockModal(false), 200) }} aria-label="Close" className="hover:bg-white/20 rounded-full p-1 transition-colors">
-                                    <X className="w-5 h-5 text-white" />
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 bg-white/10 rounded-full px-2 py-1 text-sm">
+                                        <Calendar className="w-4 h-4" />
+                                        <span className="text-xs">{new Date().toLocaleDateString()}</span>
+                                    </div>
+                                    <button onClick={() => { setIsRestockOpen(false); setTimeout(() => setShowRestockModal(false), 200) }} aria-label="Close" className="hover:bg-white/20 rounded p-1 transition-colors">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
                             </div>
                             
-                            <div className="p-8 space-y-6">
+                            <div className="p-6 space-y-5">
                                 {/* Header Info */}
                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-xl font-bold text-cyan-500 dark:text-cyan-400">
+                                    <h4 className="text-lg font-bold text-cyan-500 dark:text-cyan-400">
                                         {selectedItems[0]?.supplier || 'Unknown Supplier'}
                                     </h4>
-                                    <div className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-2">
+                                    <div className="text-sm text-slate-500 dark:text-slate-400 font-medium flex items-center gap-2">
                                         {new Date().toLocaleDateString()}
-                                        <List className="w-4 h-4" />
+                                        <Calendar className="w-4 h-4" />
                                     </div>
                                 </div>
 
                                 {/* Items List */}
                                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                    <div className="bg-slate-50 dark:bg-[#0b2527] px-6 py-3 grid grid-cols-12 gap-4 text-sm font-semibold text-slate-600 dark:text-slate-400">
-                                        <div className="col-span-8">Item Name</div>
-                                        <div className="col-span-4 text-center">Quantity</div>
+                                    <div className="bg-slate-50 dark:bg-[#0b2527] px-4 py-2.5 grid grid-cols-12 gap-3 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                        <div className="col-span-4">Item Name</div>
+                                        <div className="col-span-4 text-center">Quantity <span className="text-red-500">*</span></div>
+                                        <div className="col-span-4 text-center">Expiry Date</div>
                                     </div>
-                                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {selectedItems.map(it => (
-                                            <div key={it.id} className="px-6 py-6 grid grid-cols-12 gap-4 items-center bg-white dark:bg-[#0f2e30]">
-                                                <div className="col-span-8">
-                                                    <div className="font-bold text-slate-800 dark:text-slate-100 text-lg">{it.name}</div>
-                                                    <div className="text-sm text-slate-500 dark:text-slate-400">{it.quantity}</div>
-                                                </div>
-                                                <div className="col-span-4 flex justify-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <Button 
-                                                            variant="outline" 
-                                                            size="icon" 
-                                                            className="h-10 w-10 rounded-lg border-slate-200 dark:border-slate-700"
-                                                            onClick={() => setRestockQuantities(prev => ({ ...prev, [it.id]: Math.max(0, (prev[it.id] || 0) - 1) }))}
-                                                        >
-                                                            <Minus className="h-4 w-4" />
-                                                        </Button>
+                                    <ScrollArea className="max-h-[280px]">
+                                        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {selectedItems.map(it => (
+                                                <div key={it.id} className="px-4 py-4 grid grid-cols-12 gap-3 items-center bg-white dark:bg-[#0f2e30]">
+                                                    <div className="col-span-4">
+                                                        <div className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{it.name}</div>
+                                                        <div className="text-xs text-slate-500 dark:text-slate-400">Current: {it.quantity}</div>
+                                                    </div>
+                                                    <div className="col-span-4 flex justify-center">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 rounded-lg border-slate-200 dark:border-slate-700"
+                                                                onClick={() => setRestockQuantities(prev => ({ ...prev, [it.id]: Math.max(0, (prev[it.id] || 0) - 1) }))}
+                                                            >
+                                                                <Minus className="h-3 w-3" />
+                                                            </Button>
+                                                            <Input 
+                                                                type="number" 
+                                                                value={restockQuantities[it.id] ?? 0} 
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    if (val === '') {
+                                                                        setRestockQuantities(prev => ({ ...prev, [it.id]: 0 }));
+                                                                        return;
+                                                                    }
+                                                                    const num = parseInt(val);
+                                                                    setRestockQuantities(prev => ({ ...prev, [it.id]: isNaN(num) ? 0 : num }))
+                                                                }}
+                                                                onFocus={(e) => e.target.select()}
+                                                                className="w-16 text-center font-semibold h-8 text-sm border-slate-200 dark:border-slate-700"
+                                                            />
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 rounded-lg border-slate-200 dark:border-slate-700"
+                                                                onClick={() => setRestockQuantities(prev => ({ ...prev, [it.id]: (prev[it.id] || 0) + 1 }))}
+                                                            >
+                                                                <Plus className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-span-4 flex justify-center">
                                                         <Input 
-                                                            type="number" 
-                                                            value={restockQuantities[it.id] ?? 0} 
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                if (val === '') {
-                                                                    setRestockQuantities(prev => ({ ...prev, [it.id]: 0 }));
-                                                                    return;
-                                                                }
-                                                                const num = parseInt(val);
-                                                                setRestockQuantities(prev => ({ ...prev, [it.id]: isNaN(num) ? 0 : num }))
-                                                            }}
-                                                            onFocus={(e) => e.target.select()}
-                                                            className="w-20 text-center font-bold h-10 border-slate-200 dark:border-slate-700 focus:ring-[#00b8b8]"
+                                                            type="date" 
+                                                            value={restockExpiryDates[it.id] || ''} 
+                                                            onChange={(e) => setRestockExpiryDates(prev => ({ ...prev, [it.id]: e.target.value }))}
+                                                            className="w-full h-8 text-sm border-slate-200 dark:border-slate-700"
                                                         />
-                                                        <Button 
-                                                            variant="outline" 
-                                                            size="icon" 
-                                                            className="h-10 w-10 rounded-lg border-slate-200 dark:border-slate-700"
-                                                            onClick={() => setRestockQuantities(prev => ({ ...prev, [it.id]: (prev[it.id] || 0) + 1 }))}
-                                                        >
-                                                            <Plus className="h-4 w-4" />
-                                                        </Button>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
                                 </div>
 
+                                {/* Info text */}
+                                <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                                    Set expiry date for each batch to track inventory freshness
+                                </p>
+
                                 {/* Footer Actions */}
-                                <div className="flex flex-col items-center gap-4 pt-4">
+                                <div className="flex justify-center gap-3 pt-2">
                                     <Button 
-                                        size="lg"
-                                        className="w-40 rounded-full font-bold text-lg bg-[#00b8b8] hover:bg-[#009e9e] text-white shadow-lg shadow-cyan-500/20"
+                                        variant="outline"
+                                        className="rounded-full px-6"
+                                        onClick={() => { setIsRestockOpen(false); setTimeout(() => setShowRestockModal(false), 200) }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button 
+                                        className="rounded-full px-8 font-semibold bg-[#00b8b8] hover:bg-[#009e9e] text-white shadow-lg shadow-cyan-500/20"
                                         onClick={handleRestock}
                                     >
                                         Restock
@@ -1305,6 +1484,162 @@ export default function InventoryTable() {
                                 </Button>
                             </CardContent>
                         </Card>
+                    </div>
+                </div>
+            )}
+
+            {/* Batch Details Modal */}
+            {showBatchModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                    <div 
+                        className={cn(
+                            "fixed inset-0 transition-opacity duration-200",
+                            isBatchOpen ? "bg-black/40 opacity-100" : "bg-black/0 opacity-0"
+                        )} 
+                        onClick={closeBatchModal} 
+                    />
+                    <div 
+                        className={cn(
+                            "relative z-10 transform-gpu transition-all duration-200",
+                            isBatchOpen ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-95"
+                        )} 
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-full max-w-2xl rounded-2xl overflow-hidden bg-white dark:bg-[#0f2e30] shadow-2xl border border-slate-200 dark:border-slate-700">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-[#00a8a8] to-[#008a8a] px-5 py-4 flex items-center justify-between text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-white/20 rounded-lg">
+                                        <Package className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-bold">{batchItem?.name}</h3>
+                                        <p className="text-xs text-white/70">Batch History</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={closeBatchModal} 
+                                    aria-label="Close" 
+                                    className="hover:bg-white/20 rounded-full p-1.5 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-5 space-y-4">
+                                {/* Item Summary */}
+                                {batchItem && (
+                                    <div className="flex flex-wrap items-center gap-3 text-sm bg-slate-50 dark:bg-[#0b2527] rounded-xl p-3">
+                                        <span className="px-2.5 py-1 bg-white dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 font-medium">
+                                            {batchItem.category || activeTab}
+                                        </span>
+                                        <span className="text-slate-600 dark:text-slate-400">
+                                            Total: <span className="font-semibold text-slate-800 dark:text-slate-200">{batchItem.quantity}</span>
+                                        </span>
+                                        <span className="text-slate-600 dark:text-slate-400">
+                                            Supplier: <span className="font-semibold text-slate-800 dark:text-slate-200">{batchItem.supplier || '--'}</span>
+                                        </span>
+                                        {renderStatusBadge(batchItem.status)}
+                                    </div>
+                                )}
+
+                                {/* Batches List */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                            <Calendar className="w-4 h-4 text-cyan-600" />
+                                            Stock-In Batches
+                                        </span>
+                                        <span className="text-sm text-slate-500">{batches.length} batch{batches.length !== 1 ? 'es' : ''} found</span>
+                                    </div>
+
+                                    {batchesLoading ? (
+                                        <div className="flex items-center justify-center py-10">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-500"></div>
+                                        </div>
+                                    ) : batches.length === 0 ? (
+                                        <div className="text-center py-10 bg-slate-50 dark:bg-[#0b2527] rounded-xl">
+                                            <Package className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                                            <p className="text-sm text-slate-500">No batch records found</p>
+                                            <p className="text-xs text-slate-400 mt-1">Records appear when items are restocked</p>
+                                        </div>
+                                    ) : (
+                                        <ScrollArea className="h-[280px] rounded-xl border border-slate-200 dark:border-slate-700">
+                                            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                {batches.map((batch, index) => {
+                                                    const expiryStatus = getExpiryStatus(batch.expiry_date);
+                                                    return (
+                                                        <div 
+                                                            key={batch.id || index} 
+                                                            className={cn(
+                                                                "px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-[#0b2527] transition-colors",
+                                                                expiryStatus === 'expired' && "bg-red-50/50 dark:bg-red-900/10",
+                                                                expiryStatus === 'expiring-soon' && "bg-amber-50/50 dark:bg-amber-900/10"
+                                                            )}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-3 mb-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-mono text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                                                        Batch #{batches.length - index}
+                                                                    </span>
+                                                                    <Badge 
+                                                                        variant={batch.status === 'Received' ? 'default' : 'secondary'}
+                                                                        className={cn(
+                                                                            "text-xs",
+                                                                            batch.status === 'Received' && "bg-emerald-500 hover:bg-emerald-500",
+                                                                            batch.status === 'Pending' && "bg-amber-500 hover:bg-amber-500 text-white"
+                                                                        )}
+                                                                    >
+                                                                        {batch.status}
+                                                                    </Badge>
+                                                                    {expiryStatus === 'expired' && (
+                                                                        <Badge variant="destructive" className="text-xs gap-1">
+                                                                            <AlertTriangle className="w-3 h-3" />
+                                                                            Expired
+                                                                        </Badge>
+                                                                    )}
+                                                                    {expiryStatus === 'expiring-soon' && (
+                                                                        <Badge className="bg-amber-500 hover:bg-amber-500 text-white text-xs gap-1">
+                                                                            <AlertTriangle className="w-3 h-3" />
+                                                                            Expiring Soon
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-xs text-slate-400">
+                                                                    {new Date(batch.created_at).toLocaleDateString()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-6 text-sm text-slate-700 dark:text-slate-300">
+                                                                <span>Qty: <span className="font-semibold">{batch.quantity}</span></span>
+                                                                <span>Cost: <span className="font-semibold">{formatCurrency(batch.unit_cost || 0)}</span></span>
+                                                                <span className={cn(
+                                                                    expiryStatus === 'expired' && "text-red-600 dark:text-red-400",
+                                                                    expiryStatus === 'expiring-soon' && "text-amber-600 dark:text-amber-400"
+                                                                )}>
+                                                                    Expiry: <span className="font-semibold">{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '--'}</span>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </ScrollArea>
+                                    )}
+                                </div>
+
+                                {/* Footer */}
+                                <div className="flex justify-end pt-2">
+                                    <Button 
+                                        variant="outline" 
+                                        onClick={closeBatchModal}
+                                        className="rounded-full px-6"
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
