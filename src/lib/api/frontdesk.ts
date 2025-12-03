@@ -39,7 +39,7 @@ const getDateDaysAgo = (days: number) => {
  */
 export async function fetchTodaysAppointmentCount(): Promise<number> {
   const today = getTodayDate()
-  
+
   const { count, error } = await frontdesk()
     .from('appointment_tbl')
     .select('*', { count: 'exact', head: true })
@@ -162,7 +162,7 @@ export async function fetchAppointmentsLast7Days(): Promise<AppointmentsByDay[]>
     const day = String(date.getDate()).padStart(2, '0')
     const dateStr = `${year}-${month}-${day}`
     const dayName = days[date.getDay()]
-    
+
     result.push({
       day: dayName,
       count: countsByDate[dateStr] || 0,
@@ -242,12 +242,12 @@ export async function fetchRecentActivity(): Promise<RecentActivity[]> {
   appointments?.forEach(apt => {
     // Handle the joined relation - cast through unknown first for type safety
     const statusData = apt.appointment_status_tbl as unknown
-    const statusObj = Array.isArray(statusData) 
+    const statusObj = Array.isArray(statusData)
       ? statusData[0] as { appointment_status_name: string } | undefined
       : statusData as { appointment_status_name: string } | null
     const statusName = statusObj?.appointment_status_name?.toLowerCase() ?? ''
     let type: RecentActivity['type'] = 'appointment_confirmed'
-    
+
     if (statusName.includes('cancel')) {
       type = 'appointment_cancelled'
     } else if (statusName.includes('confirm')) {
@@ -383,7 +383,7 @@ export async function fetchAllAppointments(): Promise<AppointmentTableRow[]> {
     patientName: patientMap.get(apt.patient_id) ?? `Patient #${apt.patient_id}`,
     doctorAssigned: apt.personnel_id ? (personnelMap.get(apt.personnel_id) ?? 'Unassigned') : 'Unassigned',
     status: statusMap.get(apt.appointment_status_id) ?? 'Unknown',
-    appointmentDate: apt.appointment_date 
+    appointmentDate: apt.appointment_date
       ? `${apt.appointment_date}${apt.appointment_time ? ' ' + apt.appointment_time : ''}`
       : 'No date',
     appointmentTime: apt.appointment_time,
@@ -471,7 +471,7 @@ export async function fetchAppointmentsFiltered(options?: {
     patientName: patientMap.get(apt.patient_id) ?? `Patient #${apt.patient_id}`,
     doctorAssigned: apt.personnel_id ? (personnelMap.get(apt.personnel_id) ?? 'Unassigned') : 'Unassigned',
     status: statusMap.get(apt.appointment_status_id) ?? 'Unknown',
-    appointmentDate: apt.appointment_date 
+    appointmentDate: apt.appointment_date
       ? `${apt.appointment_date}${apt.appointment_time ? ' ' + apt.appointment_time : ''}`
       : 'No date',
     appointmentTime: apt.appointment_time,
@@ -616,7 +616,7 @@ export async function rescheduleAppointment(
   const updateData: { appointment_date: string; appointment_time?: string } = {
     appointment_date: newDate,
   }
-  
+
   if (newTime) {
     updateData.appointment_time = newTime
   }
@@ -679,7 +679,7 @@ export async function getAppointmentById(appointmentId: number): Promise<Appoint
       .select('f_name, l_name')
       .eq('personnel_id', data.personnel_id)
       .single()
-    
+
     if (personnel) {
       personnelName = `Dr. ${personnel.f_name} ${personnel.l_name}`
     }
@@ -690,7 +690,7 @@ export async function getAppointmentById(appointmentId: number): Promise<Appoint
     patientName: patient ? `${patient.f_name} ${patient.l_name}` : `Patient #${data.patient_id}`,
     doctorAssigned: personnelName,
     status: status?.appointment_status_name ?? 'Unknown',
-    appointmentDate: data.appointment_date 
+    appointmentDate: data.appointment_date
       ? `${data.appointment_date}${data.appointment_time ? ' ' + data.appointment_time : ''}`
       : 'No date',
     appointmentTime: data.appointment_time,
@@ -772,7 +772,7 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
       .select('f_name, l_name')
       .eq('personnel_id', data.personnel_id)
       .single()
-    
+
     if (personnel) {
       personnelFirstName = personnel.f_name
       personnelLastName = personnel.l_name
@@ -785,7 +785,7 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
   let serviceFee: number | null = null
   let serviceDuration: string | null = null
   let serviceCategoryName: string | null = null
-  
+
   if (data.service_id) {
     const { data: service } = await supabase
       .schema('dentist')
@@ -799,13 +799,13 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
       `)
       .eq('service_id', data.service_id)
       .single()
-    
+
     if (service) {
       serviceName = service.service_name
       serviceDescription = service.service_description
       serviceFee = service.service_fee
       serviceDuration = service.service_duration
-      
+
       // Fetch category name
       if (service.service_category_id) {
         const { data: category } = await supabase
@@ -814,7 +814,7 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
           .select('category_name')
           .eq('service_category_id', service.service_category_id)
           .single()
-        
+
         if (category) {
           serviceCategoryName = category.category_name
         }
@@ -926,7 +926,7 @@ export async function fetchAllFollowups(): Promise<FollowupTableRow[]> {
         patientName,
         doctorAssigned: personnelName,
         status: statusName,
-        appointmentDate: followup.followup_date 
+        appointmentDate: followup.followup_date
           ? `${followup.followup_date}${followup.followup_time ? ' ' + followup.followup_time : ''}`
           : 'No date',
         followupTime: followup.followup_time,
@@ -1013,7 +1013,7 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
       .select('f_name, l_name')
       .eq('personnel_id', data.personnel_id)
       .single()
-    
+
     if (personnel) {
       personnelFirstName = personnel.f_name
       personnelLastName = personnel.l_name
@@ -1025,7 +1025,8 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
   let serviceDescription: string | null = null
   let serviceFee: number | null = null
   let serviceDuration: string | null = null
-  
+  let serviceCategoryName: string | null = null
+
   if (data.service_id) {
     const { data: service } = await supabase
       .schema('dentist')
@@ -1034,16 +1035,28 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
         service_name,
         service_description,
         service_fee,
-        service_duration
+        service_duration,
+        service_category_id
       `)
       .eq('service_id', data.service_id)
       .single()
-    
+
     if (service) {
       serviceName = service.service_name
       serviceDescription = service.service_description
       serviceFee = service.service_fee
       serviceDuration = service.service_duration
+
+      // Fetch category name if available
+      if (service.service_category_id) {
+        const { data: category } = await supabase
+          .schema('dentist')
+          .from('service_category_tbl')
+          .select('category_name')
+          .eq('service_category_id', service.service_category_id)
+          .single()
+        if (category) serviceCategoryName = category.category_name
+      }
     }
   }
 
@@ -1057,11 +1070,11 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
       .select('appointment_date, appointment_time, service_id')
       .eq('appointment_id', data.appointment_id)
       .single()
-    
+
     if (originalAppt) {
       originalAppointmentDate = originalAppt.appointment_date
       originalAppointmentTime = originalAppt.appointment_time
-      
+
       // Get original appointment service name
       if (originalAppt.service_id) {
         const { data: origService } = await supabase
@@ -1105,6 +1118,7 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     service_description: serviceDescription,
     service_fee: serviceFee,
     service_duration: serviceDuration,
+    service_category_name: serviceCategoryName,
     // Original appointment info
     original_appointment_date: originalAppointmentDate,
     original_appointment_time: originalAppointmentTime,
@@ -1246,7 +1260,7 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
         patientName,
         doctorAssigned: personnelName,
         status: 'Cancelled',
-        appointmentDate: apt.appointment_date 
+        appointmentDate: apt.appointment_date
           ? `${apt.appointment_date}${apt.appointment_time ? ' ' + apt.appointment_time : ''}`
           : 'No date',
         appointmentTime: apt.appointment_time,
