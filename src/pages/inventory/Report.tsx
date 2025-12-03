@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart, Coins, Calendar } from 'lucide-react'
+import { BarChart, Coins } from 'lucide-react'
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/select'
 import { cn, formatCurrency } from '@/lib/utils'
 import supabase from '@/utils/supabase'
@@ -228,20 +228,7 @@ const ReportPage: React.FC = () => {
         <div className="w-full max-w-screen-2xl mx-auto px-6">
           <Card>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start">
-                <div>
-                  <div className="text-xs text-slate-500 mb-1">Date Range</div>
-                  <Select value={dateRange} onValueChange={(v) => setDateRange(v)}>
-                    <SelectTrigger size="sm" className="rounded-3xl"> 
-                      <div className="inline-flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><SelectValue /></div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Last 6 Months">Last 6 Months</SelectItem>
-                      <SelectItem value="Last Month">Last Month</SelectItem>
-                      <SelectItem value="Year to Date">Year to Date</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
                 <div>
                   <div className="text-xs text-slate-500 mb-1">Category</div>
                   <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v)}>

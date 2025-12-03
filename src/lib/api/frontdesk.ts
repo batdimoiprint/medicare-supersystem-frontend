@@ -39,25 +39,13 @@ const getDateDaysAgo = (days: number) => {
  */
 export async function fetchTodaysAppointmentCount(): Promise<number> {
   const today = getTodayDate()
-  
-  // First, let's see what data exists in the table
-  const { data: allData } = await frontdesk()
-    .from('appointment_tbl')
-    .select('appointment_id, appointment_date')
-    .limit(10)
-  
-  console.log('All appointments (first 10):', allData)
-  console.log('Today date:', today)
-  
+
   const { count, error } = await frontdesk()
     .from('appointment_tbl')
     .select('*', { count: 'exact', head: true })
     .eq('appointment_date', today)
 
-  console.log('fetchTodaysAppointmentCount:', { today, count, error })
-
   if (error) {
-    console.error('Error fetching today\'s appointments:', error)
     throw error
   }
 
@@ -82,7 +70,6 @@ export async function fetchPendingFollowupsCount(): Promise<number> {
     .in('appointment_status_id', statusIds)
 
   if (error) {
-    console.error('Error fetching pending followups:', error)
     throw error
   }
 
@@ -111,7 +98,6 @@ export async function fetchCancelRequestsCount(): Promise<number> {
     .in('appointment_status_id', statusIds)
 
   if (error) {
-    console.error('Error fetching cancel requests:', error)
     throw error
   }
 
@@ -154,7 +140,6 @@ export async function fetchAppointmentsLast7Days(): Promise<AppointmentsByDay[]>
     .lte('appointment_date', endDate)
 
   if (error) {
-    console.error('Error fetching appointments last 7 days:', error)
     throw error
   }
 
@@ -177,7 +162,7 @@ export async function fetchAppointmentsLast7Days(): Promise<AppointmentsByDay[]>
     const day = String(date.getDate()).padStart(2, '0')
     const dateStr = `${year}-${month}-${day}`
     const dayName = days[date.getDay()]
-    
+
     result.push({
       day: dayName,
       count: countsByDate[dateStr] || 0,
@@ -204,10 +189,7 @@ export async function fetchAppointmentStatusDistribution(): Promise<AppointmentS
     .select('appointment_status_id')
     .eq('appointment_date', today)
 
-  console.log('fetchAppointmentStatusDistribution:', { today, appointments, statuses, error })
-
   if (error) {
-    console.error('Error fetching appointment status distribution:', error)
     throw error
   }
 
@@ -252,7 +234,6 @@ export async function fetchRecentActivity(): Promise<RecentActivity[]> {
     .limit(10)
 
   if (error) {
-    console.error('Error fetching recent activity:', error)
     throw error
   }
 
@@ -261,12 +242,12 @@ export async function fetchRecentActivity(): Promise<RecentActivity[]> {
   appointments?.forEach(apt => {
     // Handle the joined relation - cast through unknown first for type safety
     const statusData = apt.appointment_status_tbl as unknown
-    const statusObj = Array.isArray(statusData) 
+    const statusObj = Array.isArray(statusData)
       ? statusData[0] as { appointment_status_name: string } | undefined
       : statusData as { appointment_status_name: string } | null
     const statusName = statusObj?.appointment_status_name?.toLowerCase() ?? ''
     let type: RecentActivity['type'] = 'appointment_confirmed'
-    
+
     if (statusName.includes('cancel')) {
       type = 'appointment_cancelled'
     } else if (statusName.includes('confirm')) {
@@ -294,7 +275,6 @@ export async function fetchAppointmentStatuses(): Promise<AppointmentStatus[]> {
     .order('appointment_status_id')
 
   if (error) {
-    console.error('Error fetching appointment statuses:', error)
     throw error
   }
 
@@ -320,7 +300,6 @@ export async function fetchTodaysAppointments(): Promise<Appointment[]> {
     .order('appointment_time', { ascending: true })
 
   if (error) {
-    console.error('Error fetching today\'s appointments:', error)
     throw error
   }
 
@@ -363,7 +342,6 @@ export async function fetchAllAppointments(): Promise<AppointmentTableRow[]> {
     .order('appointment_time', { ascending: true })
 
   if (error) {
-    console.error('Error fetching all appointments:', error)
     throw error
   }
 
@@ -405,7 +383,7 @@ export async function fetchAllAppointments(): Promise<AppointmentTableRow[]> {
     patientName: patientMap.get(apt.patient_id) ?? `Patient #${apt.patient_id}`,
     doctorAssigned: apt.personnel_id ? (personnelMap.get(apt.personnel_id) ?? 'Unassigned') : 'Unassigned',
     status: statusMap.get(apt.appointment_status_id) ?? 'Unknown',
-    appointmentDate: apt.appointment_date 
+    appointmentDate: apt.appointment_date
       ? `${apt.appointment_date}${apt.appointment_time ? ' ' + apt.appointment_time : ''}`
       : 'No date',
     appointmentTime: apt.appointment_time,
@@ -453,7 +431,6 @@ export async function fetchAppointmentsFiltered(options?: {
     .order('appointment_time', { ascending: true })
 
   if (error) {
-    console.error('Error fetching filtered appointments:', error)
     throw error
   }
 
@@ -494,7 +471,7 @@ export async function fetchAppointmentsFiltered(options?: {
     patientName: patientMap.get(apt.patient_id) ?? `Patient #${apt.patient_id}`,
     doctorAssigned: apt.personnel_id ? (personnelMap.get(apt.personnel_id) ?? 'Unassigned') : 'Unassigned',
     status: statusMap.get(apt.appointment_status_id) ?? 'Unknown',
-    appointmentDate: apt.appointment_date 
+    appointmentDate: apt.appointment_date
       ? `${apt.appointment_date}${apt.appointment_time ? ' ' + apt.appointment_time : ''}`
       : 'No date',
     appointmentTime: apt.appointment_time,
@@ -526,7 +503,6 @@ export async function fetchPendingFollowups(): Promise<Followup[]> {
     .order('followup_date', { ascending: true })
 
   if (error) {
-    console.error('Error fetching pending followups:', error)
     throw error
   }
 
@@ -551,7 +527,6 @@ export async function updateAppointmentStatus(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error updating appointment status:', error)
     throw error
   }
 }
@@ -571,7 +546,6 @@ export async function updateAppointmentStatusByName(
     .single()
 
   if (statusError || !statusData) {
-    console.error('Error finding status:', statusError)
     throw new Error(`Status "${statusName}" not found`)
   }
 
@@ -582,7 +556,6 @@ export async function updateAppointmentStatusByName(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error updating appointment status:', error)
     throw error
   }
 }
@@ -628,7 +601,6 @@ export async function assignDoctorToAppointment(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error assigning doctor:', error)
     throw error
   }
 }
@@ -644,7 +616,7 @@ export async function rescheduleAppointment(
   const updateData: { appointment_date: string; appointment_time?: string } = {
     appointment_date: newDate,
   }
-  
+
   if (newTime) {
     updateData.appointment_time = newTime
   }
@@ -655,7 +627,6 @@ export async function rescheduleAppointment(
     .eq('appointment_id', appointmentId)
 
   if (error) {
-    console.error('Error rescheduling appointment:', error)
     throw error
   }
 }
@@ -680,7 +651,6 @@ export async function getAppointmentById(appointmentId: number): Promise<Appoint
     .single()
 
   if (error) {
-    console.error('Error fetching appointment:', error)
     throw error
   }
 
@@ -709,7 +679,7 @@ export async function getAppointmentById(appointmentId: number): Promise<Appoint
       .select('f_name, l_name')
       .eq('personnel_id', data.personnel_id)
       .single()
-    
+
     if (personnel) {
       personnelName = `Dr. ${personnel.f_name} ${personnel.l_name}`
     }
@@ -720,7 +690,7 @@ export async function getAppointmentById(appointmentId: number): Promise<Appoint
     patientName: patient ? `${patient.f_name} ${patient.l_name}` : `Patient #${data.patient_id}`,
     doctorAssigned: personnelName,
     status: status?.appointment_status_name ?? 'Unknown',
-    appointmentDate: data.appointment_date 
+    appointmentDate: data.appointment_date
       ? `${data.appointment_date}${data.appointment_time ? ' ' + data.appointment_time : ''}`
       : 'No date',
     appointmentTime: data.appointment_time,
@@ -748,7 +718,6 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
     .single()
 
   if (error) {
-    console.error('Error fetching appointment details:', error)
     throw error
   }
 
@@ -761,15 +730,40 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
     .eq('appointment_status_id', data.appointment_status_id)
     .single()
 
-  // Fetch patient info
+  // Fetch full patient info from patient_record schema
   const { data: patient } = await supabase
     .schema('patient_record')
     .from('patient_tbl')
-    .select('f_name, l_name, contact_number')
+    .select(`
+      f_name,
+      l_name,
+      m_name,
+      suffix,
+      email,
+      pri_contact_no,
+      sec_contact_no,
+      gender,
+      birthdate,
+      house_no,
+      street,
+      barangay,
+      city,
+      country
+    `)
     .eq('patient_id', data.patient_id)
     .single()
 
-  // Fetch personnel info
+  // Build full address
+  const addressParts = [
+    patient?.house_no,
+    patient?.street,
+    patient?.barangay,
+    patient?.city,
+    patient?.country
+  ].filter(Boolean)
+  const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null
+
+  // Fetch personnel info from public schema
   let personnelFirstName: string | null = null
   let personnelLastName: string | null = null
   if (data.personnel_id) {
@@ -778,26 +772,53 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
       .select('f_name, l_name')
       .eq('personnel_id', data.personnel_id)
       .single()
-    
+
     if (personnel) {
       personnelFirstName = personnel.f_name
       personnelLastName = personnel.l_name
     }
   }
 
-  // Fetch service info
+  // Fetch service info from dentist schema
   let serviceName: string | null = null
+  let serviceDescription: string | null = null
   let serviceFee: number | null = null
+  let serviceDuration: string | null = null
+  let serviceCategoryName: string | null = null
+
   if (data.service_id) {
     const { data: service } = await supabase
-      .from('service_tbl')
-      .select('service_name, service_fee')
+      .schema('dentist')
+      .from('services_tbl')
+      .select(`
+        service_name,
+        service_description,
+        service_fee,
+        service_duration,
+        service_category_id
+      `)
       .eq('service_id', data.service_id)
       .single()
-    
+
     if (service) {
       serviceName = service.service_name
+      serviceDescription = service.service_description
       serviceFee = service.service_fee
+      serviceDuration = service.service_duration
+
+      // Fetch category name
+      if (service.service_category_id) {
+        const { data: category } = await supabase
+          .schema('dentist')
+          .from('service_category_tbl')
+          .select('category_name')
+          .eq('service_category_id', service.service_category_id)
+          .single()
+
+        if (category) {
+          serviceCategoryName = category.category_name
+        }
+      }
     }
   }
 
@@ -810,14 +831,28 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
     appointment_status_id: data.appointment_status_id,
     personnel_id: data.personnel_id,
     created_at: data.created_at,
+    // Status
     appointment_status_name: status?.appointment_status_name ?? null,
+    // Patient info
     patient_first_name: patient?.f_name ?? null,
     patient_last_name: patient?.l_name ?? null,
-    patient_contact: patient?.contact_number ?? null,
+    patient_middle_name: patient?.m_name ?? null,
+    patient_suffix: patient?.suffix ?? null,
+    patient_email: patient?.email ?? null,
+    patient_contact: patient?.pri_contact_no ?? null,
+    patient_secondary_contact: patient?.sec_contact_no ?? null,
+    patient_gender: patient?.gender ?? null,
+    patient_birthdate: patient?.birthdate ?? null,
+    patient_address: fullAddress,
+    // Personnel info
     personnel_first_name: personnelFirstName,
     personnel_last_name: personnelLastName,
+    // Service info
     service_name: serviceName,
+    service_description: serviceDescription,
     service_fee: serviceFee,
+    service_duration: serviceDuration,
+    service_category_name: serviceCategoryName,
   }
 }
 
@@ -829,8 +864,6 @@ export async function getAppointmentDetails(appointmentId: number): Promise<Appo
  * Fetch all followups for the list view
  */
 export async function fetchAllFollowups(): Promise<FollowupTableRow[]> {
-  console.log('Fetching followups from followup_tbl...')
-  
   const { data, error } = await frontdesk()
     .from('followup_tbl')
     .select(`
@@ -845,15 +878,11 @@ export async function fetchAllFollowups(): Promise<FollowupTableRow[]> {
     `)
     .order('followup_date', { ascending: false })
 
-  console.log('Followups query result:', { data, error })
-
   if (error) {
-    console.error('Error fetching followups:', error)
     throw error
   }
 
   if (!data || data.length === 0) {
-    console.log('No followups found in database')
     return []
   }
 
@@ -897,7 +926,7 @@ export async function fetchAllFollowups(): Promise<FollowupTableRow[]> {
         patientName,
         doctorAssigned: personnelName,
         status: statusName,
-        appointmentDate: followup.followup_date 
+        appointmentDate: followup.followup_date
           ? `${followup.followup_date}${followup.followup_time ? ' ' + followup.followup_time : ''}`
           : 'No date',
         followupTime: followup.followup_time,
@@ -930,7 +959,6 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     .single()
 
   if (error) {
-    console.error('Error fetching followup details:', error)
     throw error
   }
 
@@ -943,13 +971,38 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     .eq('appointment_status_id', data.appointment_status_id)
     .single()
 
-  // Fetch patient info
+  // Fetch full patient info from patient_record schema
   const { data: patient } = await supabase
     .schema('patient_record')
     .from('patient_tbl')
-    .select('f_name, l_name, contact_number')
+    .select(`
+      f_name,
+      l_name,
+      m_name,
+      suffix,
+      email,
+      pri_contact_no,
+      sec_contact_no,
+      gender,
+      birthdate,
+      house_no,
+      street,
+      barangay,
+      city,
+      country
+    `)
     .eq('patient_id', data.patient_id)
     .single()
+
+  // Build full address
+  const addressParts = [
+    patient?.house_no,
+    patient?.street,
+    patient?.barangay,
+    patient?.city,
+    patient?.country
+  ].filter(Boolean)
+  const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null
 
   // Fetch personnel info
   let personnelFirstName: string | null = null
@@ -960,43 +1013,68 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
       .select('f_name, l_name')
       .eq('personnel_id', data.personnel_id)
       .single()
-    
+
     if (personnel) {
       personnelFirstName = personnel.f_name
       personnelLastName = personnel.l_name
     }
   }
 
-  // Fetch service info
+  // Fetch service info from dentist schema
   let serviceName: string | null = null
+  let serviceDescription: string | null = null
   let serviceFee: number | null = null
+  let serviceDuration: string | null = null
+  let serviceCategoryName: string | null = null
+
   if (data.service_id) {
     const { data: service } = await supabase
       .schema('dentist')
       .from('services_tbl')
-      .select('service_name, service_fee')
+      .select(`
+        service_name,
+        service_description,
+        service_fee,
+        service_duration,
+        service_category_id
+      `)
       .eq('service_id', data.service_id)
       .single()
-    
+
     if (service) {
       serviceName = service.service_name
+      serviceDescription = service.service_description
       serviceFee = service.service_fee
+      serviceDuration = service.service_duration
+
+      // Fetch category name if available
+      if (service.service_category_id) {
+        const { data: category } = await supabase
+          .schema('dentist')
+          .from('service_category_tbl')
+          .select('category_name')
+          .eq('service_category_id', service.service_category_id)
+          .single()
+        if (category) serviceCategoryName = category.category_name
+      }
     }
   }
 
   // Fetch original appointment info if exists
   let originalAppointmentDate: string | null = null
+  let originalAppointmentTime: string | null = null
   let originalAppointmentService: string | null = null
   if (data.appointment_id) {
     const { data: originalAppt } = await frontdesk()
       .from('appointment_tbl')
-      .select('appointment_date, service_id')
+      .select('appointment_date, appointment_time, service_id')
       .eq('appointment_id', data.appointment_id)
       .single()
-    
+
     if (originalAppt) {
       originalAppointmentDate = originalAppt.appointment_date
-      
+      originalAppointmentTime = originalAppt.appointment_time
+
       // Get original appointment service name
       if (originalAppt.service_id) {
         const { data: origService } = await supabase
@@ -1019,15 +1097,31 @@ export async function getFollowupDetails(followupId: number): Promise<FollowupDe
     service_id: data.service_id,
     appointment_status_id: data.appointment_status_id,
     personnel_id: data.personnel_id,
+    // Status
     appointment_status_name: status?.appointment_status_name ?? null,
+    // Patient info
     patient_first_name: patient?.f_name ?? null,
     patient_last_name: patient?.l_name ?? null,
-    patient_contact: patient?.contact_number ?? null,
+    patient_middle_name: patient?.m_name ?? null,
+    patient_suffix: patient?.suffix ?? null,
+    patient_email: patient?.email ?? null,
+    patient_contact: patient?.pri_contact_no ?? null,
+    patient_secondary_contact: patient?.sec_contact_no ?? null,
+    patient_gender: patient?.gender ?? null,
+    patient_birthdate: patient?.birthdate ?? null,
+    patient_address: fullAddress,
+    // Personnel info
     personnel_first_name: personnelFirstName,
     personnel_last_name: personnelLastName,
+    // Service info
     service_name: serviceName,
+    service_description: serviceDescription,
     service_fee: serviceFee,
+    service_duration: serviceDuration,
+    service_category_name: serviceCategoryName,
+    // Original appointment info
     original_appointment_date: originalAppointmentDate,
+    original_appointment_time: originalAppointmentTime,
     original_appointment_service: originalAppointmentService,
   }
 }
@@ -1042,7 +1136,6 @@ export async function updateFollowupStatus(followupId: number, statusId: number)
     .eq('followup_id', followupId)
 
   if (error) {
-    console.error('Error updating followup status:', error)
     throw error
   }
 }
@@ -1062,7 +1155,6 @@ export async function updateFollowupStatusByName(
     .single()
 
   if (statusError || !statusData) {
-    console.error('Error finding status:', statusError)
     throw new Error(`Status "${statusName}" not found`)
   }
 
@@ -1073,7 +1165,6 @@ export async function updateFollowupStatusByName(
     .eq('followup_id', followupId)
 
   if (error) {
-    console.error('Error updating followup status:', error)
     throw error
   }
 }
@@ -1117,8 +1208,6 @@ const CANCELLED_STATUS_ID = 5
  * Fetch all cancelled appointments (cancel requests)
  */
 export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[]> {
-  console.log('Fetching cancelled appointments with status ID:', CANCELLED_STATUS_ID)
-
   const { data, error } = await frontdesk()
     .from('appointment_tbl')
     .select(`
@@ -1134,15 +1223,11 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
     .eq('appointment_status_id', CANCELLED_STATUS_ID)
     .order('appointment_date', { ascending: false })
 
-  console.log('Cancelled appointments result:', { data, error })
-
   if (error) {
-    console.error('Error fetching cancelled appointments:', error)
     throw error
   }
 
   if (!data || data.length === 0) {
-    console.log('No cancelled appointments found')
     return []
   }
 
@@ -1175,7 +1260,7 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
         patientName,
         doctorAssigned: personnelName,
         status: 'Cancelled',
-        appointmentDate: apt.appointment_date 
+        appointmentDate: apt.appointment_date
           ? `${apt.appointment_date}${apt.appointment_time ? ' ' + apt.appointment_time : ''}`
           : 'No date',
         appointmentTime: apt.appointment_time,
@@ -1193,8 +1278,8 @@ export async function fetchCancelledAppointments(): Promise<AppointmentTableRow[
 export async function approveCancellation(appointmentId: number): Promise<void> {
   // The appointment is already cancelled, this is just for workflow confirmation
   // In a real system, this might trigger refund processing
-  console.log(`Cancellation approved for appointment ${appointmentId}`)
   // Could add additional logic here like updating a cancellation_approved flag
+  void appointmentId
 }
 
 /**
@@ -1203,4 +1288,79 @@ export async function approveCancellation(appointmentId: number): Promise<void> 
 export async function rejectCancellation(appointmentId: number): Promise<void> {
   // Restore the appointment to Confirmed status
   return updateAppointmentStatusByName(appointmentId, 'Confirmed')
+}
+
+// ============================================
+// PERSONNEL (DOCTORS) API FUNCTIONS
+// ============================================
+
+export interface Personnel {
+  personnel_id: number
+  f_name: string
+  l_name: string
+  role?: string
+}
+
+/**
+ * Fetch all personnel (doctors) for assignment dropdown
+ */
+export async function fetchAllPersonnel(): Promise<Personnel[]> {
+  const { data, error } = await supabase
+    .from('personnel_tbl')
+    .select('personnel_id, f_name, l_name')
+    .order('l_name', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  return data ?? []
+}
+
+// ============================================
+// FOLLOWUP CREATION API
+// ============================================
+
+export interface CreateFollowupInput {
+  patient_id: number
+  appointment_id?: number
+  followup_date: string
+  followup_time?: string
+  service_id?: number
+  personnel_id?: number
+  notes?: string
+}
+
+/**
+ * Create a new followup appointment
+ */
+export async function createFollowup(input: CreateFollowupInput): Promise<number> {
+  // Get the 'Pending' status ID
+  const { data: statusData } = await frontdesk()
+    .from('appointment_status_tbl')
+    .select('appointment_status_id')
+    .eq('appointment_status_name', 'Pending')
+    .single()
+
+  const pendingStatusId = statusData?.appointment_status_id ?? 1
+
+  const { data, error } = await frontdesk()
+    .from('followup_tbl')
+    .insert({
+      patient_id: input.patient_id,
+      appointment_id: input.appointment_id ?? null,
+      followup_date: input.followup_date,
+      followup_time: input.followup_time ?? null,
+      service_id: input.service_id ?? null,
+      personnel_id: input.personnel_id ?? null,
+      appointment_status_id: pendingStatusId,
+    })
+    .select('followup_id')
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return data?.followup_id ?? 0
 }

@@ -17,9 +17,9 @@ export default function CancelRequests() {
                         Review and manage appointment cancellation requests.
                     </p>
                 </div>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
+                <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => refetch()}
                     disabled={isFetching}
                 >
@@ -50,9 +50,9 @@ export default function CancelRequests() {
                     </CardContent>
                 </Card>
             ) : (
-                <div className="mt-4">
-                    <ReceptionistTable 
-                        items={cancelRequests} 
+                <Card className="p-4">
+                    <ReceptionistTable
+                        items={cancelRequests}
                         basePath="/receptionist/cancel-requests"
                         type="appointment"
                     />
@@ -61,7 +61,7 @@ export default function CancelRequests() {
                             No cancellation requests found.
                         </p>
                     )}
-                </div>
+                </Card>
             )}
         </div>
     )

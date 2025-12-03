@@ -42,7 +42,7 @@ export function LoginForm<TFormValues extends Record<string, unknown> = Record<s
     return (
         <div className={wrapperClass} {...props}>
             {/* card fills width, constrained by max-w-7xl, and stretches vertically */}
-            <Card className="my-16 p-0 overflow-hidden w-full max-w-7xl">
+            <Card className="my-16 p-0 overflow-hidden w-full ">
                 <CardContent className="grid p-0 md:grid-cols-2 h-[min(76vh,880px)] w-full">
                     <form onSubmit={onSubmit} className="p-6 md:p-8 flex flex-col justify-center h-full">
                         <FieldGroup>
@@ -89,11 +89,11 @@ export function LoginForm<TFormValues extends Record<string, unknown> = Record<s
 
                         </FieldGroup>
                     </form>
-                    <div className="hidden bg-background md:flex h-full items-center justify-center">
+                    <div className="hidden bg-background/50 md:flex h-full items-center justify-center">
                         <img
                             src={imgDentist}
                             alt="Image"
-                            className="object-contain w-128 h-128"
+                            className="object-contain w-128 h-128 "
                         />
                     </div>
                 </CardContent>
