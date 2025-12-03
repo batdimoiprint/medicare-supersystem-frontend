@@ -4,7 +4,6 @@ import {
     Clock,
     CreditCard,
     FileText,
-    MapPin,
     Pill,
     ChevronRight,
     CheckCircle,
@@ -403,8 +402,6 @@ export default function PatientPage() {
         return transformedPrescriptions.slice(0, 5);
     }, [transformedPrescriptions]);
 
-    const hasMoreUpcoming = upcomingAppointments.length > 5;
-    const hasMorePast = pastAppointments.length > 5;
     const hasMorePrescriptions = transformedPrescriptions.length > 5;
 
     if (loading) {

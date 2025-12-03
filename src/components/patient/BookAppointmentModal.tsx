@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { User, Loader2, Info, CheckCircle, Clock, AlertCircle, CalendarX, CalendarOff } from "lucide-react";
 import supabase from "@/utils/supabase";
@@ -119,7 +118,7 @@ const CLINIC_END_HOUR = 17;
 const parseTimeToDuration = (timeStr: string) => {
   if (!timeStr) return 30;
   try {
-    const [h, m, s] = timeStr.split(':').map(Number);
+    const [h, m] = timeStr.split(':').map(Number);
     return (h * 60) + m;
   } catch (e) {
     return 30;
@@ -218,7 +217,7 @@ const getHolidayName = (dateString: string): string | null => {
 };
 
 // Fetch existing confirmed appointments for availability checking
-const fetchConfirmedAppointments = async (date: string, serviceDuration: number) => {
+const fetchConfirmedAppointments = async (date: string) => {
   try {
     // Get CONFIRMED appointments (status_id: 2 = Confirmed/Paid)
     const { data, error } = await supabase
@@ -448,7 +447,7 @@ export default function BookAppointmentModal({ isOpen, onClose }: BookAppointmen
 
       try {
         // Fetch confirmed appointments for the selected date
-        const appointments = await fetchConfirmedAppointments(formData.date, selectedServiceDuration);
+        const appointments = await fetchConfirmedAppointments(formData.date);
         setConfirmedAppointments(appointments);
 
         // Generate time slots from clinic hours

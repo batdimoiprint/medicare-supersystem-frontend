@@ -7,7 +7,6 @@ import {
     Search,
     FileText,
     Calendar,
-    Receipt,
     Clock,
     Loader2
 } from 'lucide-react';
