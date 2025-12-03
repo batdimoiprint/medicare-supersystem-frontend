@@ -12,8 +12,6 @@ import {
   MapPin,
   User,
   Stethoscope,
-  ClipboardList,
-  Clock,
   CheckCircle2,
   AlertCircle,
   Save,
