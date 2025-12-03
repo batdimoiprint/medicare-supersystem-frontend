@@ -7,6 +7,8 @@ import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@
 import { cn, formatCurrency } from '@/lib/utils'
 import { DownloadCloud, Funnel, Users, Package, Mail, Phone, MapPin, Star, Plus, X, Calendar, CheckCircle } from 'lucide-react'
 import supabase from '@/utils/supabase'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 function SupplierPage() {
     const [activeTab, setActiveTab] = useState<'directory' | 'orders'>('directory')
@@ -107,26 +109,150 @@ function SupplierPage() {
     const [pendingSaveAction, setPendingSaveAction] = useState<'add'|'edit'|null>(null)
     const [formErrors, setFormErrors] = useState<{ name?: string } | null>(null)
 
-    function printElementById(id: string, title = 'Supplier') {
-        const el = document.getElementById(id)
-        if (!el) {
-            window.print()
-            return
-        }
-        const printWindow = window.open('', '_blank', 'width=800,height=600')
-        if (!printWindow) return
-        const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(l => `<link rel="stylesheet" href="${(l as HTMLLinkElement).href}">`).join('')
-        const styles = `\n            <style>\n                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial; padding: 8px; }\n            </style>\n        `
-        const tableEl = el.querySelector('table')
-        const headerHtml = `<div class="mb-2 font-sans"><h3 class="text-lg mb-2">${title}</h3></div>`
-        const bodyHtml = tableEl ? headerHtml + tableEl.outerHTML : el.outerHTML
-        printWindow.document.write(`<!doctype html><html><head><title>${title}</title>${styleLinks}${styles}</head><body>${bodyHtml}</body></html>`)
-        printWindow.document.close()
-        printWindow.focus()
-        setTimeout(() => {
-            printWindow.print()
-            printWindow.close()
-        }, 250)
+    // Export Purchase Orders to PDF
+    function exportPurchaseOrdersToPDF() {
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        // Header background
+        doc.setFillColor(7, 42, 45); // Dark teal #072a2d
+        doc.rect(0, 0, pageWidth, 32, 'F');
+
+        // Title
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Purchase Orders Report', 14, 15);
+
+        // Subtitle
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${purchaseOrders.length} Orders`, 14, 23);
+
+        // Company name and date on right
+        doc.setFontSize(9);
+        doc.setTextColor(180, 220, 220);
+        doc.setFont('helvetica', 'bold');
+        doc.text('MEDICARE DENTAL CLINIC', pageWidth - 14, 12, { align: 'right' });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const today = new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        doc.text(`Generated: ${today}`, pageWidth - 14, 19, { align: 'right' });
+        
+        const timeNow = new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        doc.text(timeNow, pageWidth - 14, 25, { align: 'right' });
+
+        // Prepare table data
+        const tableHeaders = ['Order ID', 'Item Name', 'Qty', 'Supplier', 'Unit Cost', 'Status', 'Expiration', 'Category', 'Date Delivered'];
+
+        // Format currency for PDF (using PHP instead of ₱ symbol for better compatibility)
+        const formatPdfCurrency = (value: number) => {
+            return `PHP ${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
+
+        const tableData = purchaseOrders.map(po => [
+            po.id,
+            po.itemName,
+            po.quantity.toString(),
+            po.supplier,
+            po.unitCost ? formatPdfCurrency(po.unitCost) : '--',
+            po.status,
+            po.expiration || '--',
+            po.category,
+            po.dateDelivered
+        ]);
+
+        // Calculate available width for table
+        const marginLeft = 14;
+        const marginRight = 14;
+        const availableWidth = pageWidth - marginLeft - marginRight;
+
+        // Generate table - full width
+        autoTable(doc, {
+            head: [tableHeaders],
+            body: tableData,
+            startY: 40,
+            theme: 'grid',
+            tableWidth: availableWidth,
+            styles: {
+                fontSize: 9,
+                cellPadding: 3,
+                lineColor: [200, 210, 210],
+                lineWidth: 0.1,
+                textColor: [50, 50, 50],
+                overflow: 'linebreak',
+            },
+            headStyles: {
+                fillColor: [0, 168, 168], // Teal header
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 9,
+                cellPadding: 4,
+            },
+            alternateRowStyles: {
+                fillColor: [248, 252, 252],
+            },
+            columnStyles: {
+                0: { cellWidth: availableWidth * 0.09 },  // Order ID ~9%
+                1: { cellWidth: availableWidth * 0.16 }, // Item Name ~16%
+                2: { cellWidth: availableWidth * 0.06, halign: 'center' }, // Qty ~6%
+                3: { cellWidth: availableWidth * 0.12 }, // Supplier ~12%
+                4: { cellWidth: availableWidth * 0.11, halign: 'right' }, // Unit Cost ~11%
+                5: { cellWidth: availableWidth * 0.09, halign: 'center' }, // Status ~9%
+                6: { cellWidth: availableWidth * 0.11 }, // Expiration ~11%
+                7: { cellWidth: availableWidth * 0.13 }, // Category ~13%
+                8: { cellWidth: availableWidth * 0.13 }, // Date Delivered ~13%
+            },
+            willDrawCell: (data) => {
+                // Set text color for status column
+                if (data.section === 'body' && data.column.index === 5) {
+                    const status = purchaseOrders[data.row.index]?.status;
+                    if (status === 'Received') {
+                        data.cell.styles.textColor = [22, 163, 74]; // Green
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (status === 'Pending') {
+                        data.cell.styles.textColor = [180, 83, 9]; // Amber
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (status === 'Cancelled') {
+                        data.cell.styles.textColor = [220, 38, 38]; // Red
+                        data.cell.styles.fontStyle = 'bold';
+                    }
+                }
+            },
+            margin: { top: 40, right: 14, bottom: 25, left: 14 },
+        });
+
+        // Footer
+        const finalY = (doc as any).lastAutoTable?.finalY || pageHeight - 25;
+        
+        doc.setDrawColor(200, 210, 210);
+        doc.setLineWidth(0.3);
+        doc.line(14, Math.min(finalY + 8, pageHeight - 18), pageWidth - 14, Math.min(finalY + 8, pageHeight - 18));
+        
+        doc.setFontSize(8);
+        doc.setTextColor(120, 130, 140);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Medicare Dental Clinic - Inventory Management System', 14, Math.min(finalY + 14, pageHeight - 10));
+        
+        doc.text('Page 1 of 1', pageWidth - 14, Math.min(finalY + 14, pageHeight - 10), { align: 'right' });
+
+        // Save the PDF
+        const filename = `purchase-orders-${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(filename);
     }
 
     async function handleSaveEdit() {
@@ -280,9 +406,6 @@ function SupplierPage() {
                                         <div className="overflow-x-auto">
                                             <div className="flex items-center justify-end gap-2 mb-3 print:hidden">
                                                 <div className="inline-flex items-center gap-2 text-slate-400 dark:text-slate-300"><Funnel className="w-4 h-4" /> <span className="text-xs dark:text-slate-200">Filter</span></div>
-                                                <Button size="sm" variant="ghost" className="bg-[#00a8a8] text-white" onClick={() => printElementById('supplier-directory-print', 'Supplier Directory')}>
-                                                    <DownloadCloud className="w-4 h-4 mr-2" /> Export
-                                                </Button>
                                             </div>
                                             <div id="supplier-directory-print">
                                                 <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
@@ -363,41 +486,41 @@ function SupplierPage() {
                                         <div className="overflow-x-auto">
                                             <div className="flex items-center justify-end gap-2 mb-3 print:hidden">
                                                 <div className="inline-flex items-center gap-2 text-slate-400 dark:text-slate-300"><Funnel className="w-4 h-4" /> <span className="text-xs dark:text-slate-200">Filter</span></div>
-                                                <Button size="sm" variant="ghost" className="bg-[#00a8a8] text-white" onClick={() => printElementById('purchase-orders-print', 'Purchase Orders')}>
+                                                <Button size="sm" variant="ghost" className="bg-[#00a8a8] text-white" onClick={exportPurchaseOrdersToPDF}>
                                                     <DownloadCloud className="w-4 h-4 mr-2" /> Export
                                                 </Button>
                                             </div>
                                             <div id="purchase-orders-print">
-                                                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+                                                <table className="w-full table-fixed divide-y divide-slate-200 dark:divide-slate-800">
                                                     <thead className="bg-transparent">
-                                                        <tr className="text-xs text-slate-400 dark:text-slate-300">
-                                                            <th className="pl-6 py-4 text-left">Order ID</th>
-                                                            <th className="px-6 py-4 text-left">Item Name</th>
-                                                            <th className="px-6 py-4 text-left">Quantity</th>
-                                                            <th className="px-6 py-4 text-left">Supplier</th>
-                                                            <th className="px-6 py-4 text-left">Unit Cost</th>
-                                                            <th className="px-6 py-4 text-left">Status</th>
-                                                            <th className="px-6 py-4 text-left">Expiration</th>
-                                                            <th className="px-6 py-4 text-left">Category</th>
-                                                            <th className="pr-6 py-4 text-left">Date Delivered</th>
+                                                        <tr className="text-sm text-slate-400 dark:text-slate-300">
+                                                            <th className="pl-4 py-3 text-left w-[10%]">Order ID</th>
+                                                            <th className="px-3 py-3 text-left w-[16%]">Item Name</th>
+                                                            <th className="px-3 py-3 text-left w-[7%]">Qty</th>
+                                                            <th className="px-3 py-3 text-left w-[12%]">Supplier</th>
+                                                            <th className="px-3 py-3 text-left w-[11%]">Unit Cost</th>
+                                                            <th className="px-3 py-3 text-left w-[9%]">Status</th>
+                                                            <th className="px-3 py-3 text-left w-[11%]">Expiration</th>
+                                                            <th className="px-3 py-3 text-left w-[12%]">Category</th>
+                                                            <th className="pr-4 py-3 text-left w-[12%]">Date Delivered</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="bg-white dark:bg-transparent divide-y divide-slate-200 dark:divide-slate-800">
                                                         {purchaseOrders.map((po, idx) => (
                                                             <tr key={po.id} className={cn('group hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors', idx === 0 ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-transparent')}>
-                                                                <td className="pl-6 py-6 text-sm text-slate-700 dark:text-slate-200 font-medium">{po.id}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.itemName}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.quantity}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.supplier}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.unitCost ? formatCurrency(po.unitCost) : '--'}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">
+                                                                <td className="pl-4 py-4 text-sm text-slate-700 dark:text-slate-200 font-medium truncate">{po.id}</td>
+                                                                <td className="px-3 py-4 text-sm text-slate-700 dark:text-slate-200 truncate">{po.itemName}</td>
+                                                                <td className="px-3 py-4 text-sm text-slate-700 dark:text-slate-200">{po.quantity}</td>
+                                                                <td className="px-3 py-4 text-sm text-slate-700 dark:text-slate-200 truncate">{po.supplier}</td>
+                                                                <td className="px-3 py-4 text-sm text-slate-700 dark:text-slate-200">{po.unitCost ? formatCurrency(po.unitCost) : '--'}</td>
+                                                                <td className="px-3 py-4 text-sm text-slate-700 dark:text-slate-200">
                                                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
                                                                         {po.status}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.expiration || '--'}</td>
-                                                                <td className="px-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.category}</td>
-                                                                <td className="pr-6 py-6 text-sm text-slate-700 dark:text-slate-200">{po.dateDelivered}</td>
+                                                                <td className="px-3 py-4 text-sm text-slate-700 dark:text-slate-200">{po.expiration || '--'}</td>
+                                                                <td className="px-3 py-4 text-sm text-slate-700 dark:text-slate-200">{po.category}</td>
+                                                                <td className="pr-4 py-4 text-sm text-slate-700 dark:text-slate-200">{po.dateDelivered}</td>
                                                             </tr>
                                                         ))}
                                                     </tbody>

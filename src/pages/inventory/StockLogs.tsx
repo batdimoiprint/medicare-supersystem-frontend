@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Clock, DownloadCloud, Funnel, ArrowUp, ArrowDown, Clipboard, User, Lock } from 'lucide-react'
 import supabase from '@/utils/supabase'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 function StockLogs() {
     const [activeTab, setActiveTab] = useState<'in' | 'out'>('in')
@@ -277,38 +279,152 @@ function StockLogs() {
         return source.filter(l => l.action === type && new Date(l.date).toDateString() === new Date().toDateString()).length
     }, [activeTab, stockInLogs, stockOutLogs])
 
-    // Print a specific element (transaction tracker) to the printer window
-    function printElementById(id: string) {
-        const el = document.getElementById(id)
-        if (!el) {
-            // fallback to window.print if element not found
-            window.print()
-            return
-        }
-        const printWindow = window.open('', '_blank', 'width=800,height=600')
-        if (!printWindow) return
-        // collect stylesheet links from the page so the printed output keeps project styles
-        const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(l => `<link rel="stylesheet" href="${(l as HTMLLinkElement).href}">`).join('')
-        // Do not inject heavy fallback CSS — rely on Tailwind in the app stylesheet for printing.
-        const styles = `
-            <style>
-                /* Minimal fallback in case the CSS link cannot be loaded in the print window */
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial; padding: 8px; }
-                .sr-only { position:absolute; left:-10000px; }
-            </style>
-        `
-        // Only print the table itself (plus a minimal header), to avoid printing other UI chrome
-        const tableEl = el.querySelector('table')
-        const headerHtml = `<div class="mb-2 font-sans"><h3 class="text-lg mb-2">Transaction Tracker (${filteredLogs.length} items)</h3><p class="m-0 text-sm text-slate-400">Chronological record</p></div>`
-        const bodyHtml = tableEl ? headerHtml + tableEl.outerHTML : el.outerHTML
-        printWindow.document.write(`<!doctype html><html><head><title>Stock Logs</title>${styleLinks}${styles}</head><body>${bodyHtml}</body></html>`) 
-        printWindow.document.close()
-        printWindow.focus()
-        // Wait for content to finish loading then print
-        setTimeout(() => {
-            printWindow.print()
-            printWindow.close()
-        }, 250)
+    // Export to PDF using jsPDF
+    function exportToPDF() {
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        // Header background
+        doc.setFillColor(7, 42, 45); // Dark teal #072a2d
+        doc.rect(0, 0, pageWidth, 32, 'F');
+
+        // Title
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Stock Logs Report', 14, 15);
+
+        // Subtitle
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const tabLabel = activeTab === 'in' 
+            ? (subTab === 'ordered' ? 'Stock In - Ordered' : 'Stock In - Restocked') 
+            : 'Stock Out';
+        doc.text(`${tabLabel} | ${filteredLogs.length} transactions`, 14, 23);
+
+        // Company name and date on right
+        doc.setFontSize(9);
+        doc.setTextColor(180, 220, 220);
+        doc.setFont('helvetica', 'bold');
+        doc.text('MEDICARE DENTAL CLINIC', pageWidth - 14, 12, { align: 'right' });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const today = new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        doc.text(`Generated: ${today}`, pageWidth - 14, 19, { align: 'right' });
+        
+        const timeNow = new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        doc.text(timeNow, pageWidth - 14, 25, { align: 'right' });
+
+        // Prepare table data
+        const showStatusColumn = !(activeTab === 'in' && subTab === 'received');
+        
+        const tableHeaders = showStatusColumn 
+            ? ['Date & Time', 'Item', 'User', 'Supplier', 'Reference', activeTab === 'out' ? 'Notes' : 'Status']
+            : ['Date & Time', 'Item', 'User', 'Supplier', 'Reference'];
+
+        const tableData = filteredLogs.map(log => {
+            const baseData = [
+                `${log.date}\n${log.time}`,
+                log.item,
+                log.user,
+                log.supplier || '-',
+                log.ref
+            ];
+            
+            if (showStatusColumn) {
+                if (activeTab === 'out') {
+                    baseData.push(log.note || '-');
+                } else {
+                    baseData.push(log.isLocked ? 'Ordered' : log.status);
+                }
+            }
+            
+            return baseData;
+        });
+
+        // Generate table
+        autoTable(doc, {
+            head: [tableHeaders],
+            body: tableData,
+            startY: 40,
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 4,
+                lineColor: [200, 210, 210],
+                lineWidth: 0.1,
+                textColor: [50, 50, 50],
+            },
+            headStyles: {
+                fillColor: [0, 168, 168], // Teal header
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 9,
+                cellPadding: 5,
+            },
+            alternateRowStyles: {
+                fillColor: [248, 252, 252],
+            },
+            columnStyles: {
+                0: { cellWidth: 35 }, // Date & Time
+                1: { cellWidth: 55 }, // Item
+                2: { cellWidth: 30 }, // User
+                3: { cellWidth: 45 }, // Supplier
+                4: { cellWidth: 35 }, // Reference
+                5: { cellWidth: showStatusColumn ? 45 : 0 }, // Status/Notes
+            },
+            willDrawCell: (data) => {
+                // Set text colors for status column
+                if (data.section === 'body' && data.column.index === 5 && showStatusColumn && activeTab === 'in') {
+                    const status = filteredLogs[data.row.index]?.status;
+                    const isLocked = filteredLogs[data.row.index]?.isLocked;
+                    
+                    if (status === 'Received' && !isLocked) {
+                        data.cell.styles.textColor = [22, 163, 74]; // Green
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (status === 'Pending' || isLocked) {
+                        data.cell.styles.textColor = [180, 83, 9]; // Amber
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (status === 'Cancelled') {
+                        data.cell.styles.textColor = [220, 38, 38]; // Red
+                        data.cell.styles.fontStyle = 'bold';
+                    }
+                }
+            },
+            margin: { top: 40, right: 14, bottom: 25, left: 14 },
+        });
+
+        // Footer
+        const finalY = (doc as any).lastAutoTable?.finalY || pageHeight - 25;
+        
+        doc.setDrawColor(200, 210, 210);
+        doc.setLineWidth(0.3);
+        doc.line(14, Math.min(finalY + 8, pageHeight - 18), pageWidth - 14, Math.min(finalY + 8, pageHeight - 18));
+        
+        doc.setFontSize(8);
+        doc.setTextColor(120, 130, 140);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Medicare Dental Clinic - Inventory Management System', 14, Math.min(finalY + 14, pageHeight - 10));
+        
+        doc.text('Page 1 of 1', pageWidth - 14, Math.min(finalY + 14, pageHeight - 10), { align: 'right' });
+
+        // Save the PDF
+        const filename = `stock-logs-${activeTab}-${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(filename);
     }
 
     return (
@@ -423,7 +539,7 @@ function StockLogs() {
                                                 </SelectContent>
                                     </Select>
                                 </div>
-                                <Button size="sm" variant="ghost" className="bg-[#00a8a8] text-white print:hidden" onClick={() => printElementById('stock-logs-print')} aria-label="Export Logs">
+                                <Button size="sm" variant="ghost" className="bg-[#00a8a8] text-white print:hidden" onClick={exportToPDF} aria-label="Export Logs">
                                     <DownloadCloud className="w-4 h-4 mr-2" /> Export Logs
                                 </Button>
                             </div>
