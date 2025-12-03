@@ -1,9 +1,6 @@
-import BlurText from '@/components/ui/BlurText'
+import { Navigate } from 'react-router-dom'
 
 export default function ReceptionistPage() {
-    return (
-        <div>
-            <BlurText text="Front Desk Page" delay={100} className="text-lg font-semibold" />
-        </div>
-    )
+    // Redirect to the dashboard as the main entry point
+    return <Navigate to="/receptionist/dashboard" replace />
 }

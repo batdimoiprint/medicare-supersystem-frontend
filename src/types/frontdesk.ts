@@ -170,15 +170,27 @@ export interface AppointmentDetail {
   appointment_status_id: number | null
   personnel_id: number | null
   created_at: string | null
-  // Joined/computed fields
+  // Patient info (joined from patient_record.patient_tbl)
   appointment_status_name: string | null
   patient_first_name: string | null
   patient_last_name: string | null
+  patient_middle_name: string | null
+  patient_suffix: string | null
+  patient_email: string | null
   patient_contact: string | null
+  patient_secondary_contact: string | null
+  patient_gender: string | null
+  patient_birthdate: string | null
+  patient_address: string | null
+  // Personnel info (joined from public.personnel_tbl)
   personnel_first_name: string | null
   personnel_last_name: string | null
+  // Service info (joined from dentist.services_tbl)
   service_name: string | null
+  service_description: string | null
   service_fee: number | null
+  service_duration: string | null
+  service_category_name: string | null
 }
 
 /**
@@ -207,16 +219,30 @@ export interface FollowupDetail {
   service_id: number | null
   appointment_status_id: number | null
   personnel_id: number | null
-  // Joined/computed fields
+  // Status info
   appointment_status_name: string | null
+  // Patient info (joined from patient_record.patient_tbl)
   patient_first_name: string | null
   patient_last_name: string | null
+  patient_middle_name: string | null
+  patient_suffix: string | null
+  patient_email: string | null
   patient_contact: string | null
+  patient_secondary_contact: string | null
+  patient_gender: string | null
+  patient_birthdate: string | null
+  patient_address: string | null
+  // Personnel info (joined from public.personnel_tbl)
   personnel_first_name: string | null
   personnel_last_name: string | null
+  // Service info (joined from dentist.services_tbl)
   service_name: string | null
+  service_description: string | null
   service_fee: number | null
+  service_duration: string | null
+  service_category_name: string | null
   // Original appointment info
   original_appointment_date: string | null
+  original_appointment_time: string | null
   original_appointment_service: string | null
 }
