@@ -71,23 +71,33 @@ const TIME_SLOTS = [
 
 // --- Main Component ---
 const MySchedule = () => {
-  // Get personnel_id from sessionStorage (adjust based on your auth implementation)
+  // Get personnel_id from localStorage (as used by auth system in src/lib/auth.ts)
   const getPersonnelId = (): string | null => {
-    // Check sessionStorage for user_id (as stored in LoginPage.tsx)
-    const userId = sessionStorage.getItem('user_id');
+    // Check localStorage first (as used by auth system)
+    const userId = localStorage.getItem('user_id');
     if (userId) {
+      console.log('Found user_id in localStorage:', userId);
       return userId;
+    }
+    // Fallback: check sessionStorage
+    const sessionUserId = sessionStorage.getItem('user_id');
+    if (sessionUserId) {
+      console.log('Found user_id in sessionStorage:', sessionUserId);
+      return sessionUserId;
     }
     // Fallback: try to get from user object
     const userData = sessionStorage.getItem('user') || localStorage.getItem('user');
     if (userData) {
       try {
         const user = JSON.parse(userData);
-        return user.personnel_id || user.id || null;
+        const personnelId = user.personnel_id || user.id || null;
+        console.log('Found personnel_id from user object:', personnelId);
+        return personnelId;
       } catch {
         return null;
       }
     }
+    console.warn('No user_id or user object found in localStorage/sessionStorage');
     return null;
   };
 
@@ -141,6 +151,7 @@ const MySchedule = () => {
       const pid = getPersonnelId();
       if (!pid) {
         console.warn('No personnel_id found. Please ensure you are logged in.');
+        console.warn('localStorage user_id:', localStorage.getItem('user_id'));
         console.warn('sessionStorage user_id:', sessionStorage.getItem('user_id'));
         setLoading(false);
         return;
@@ -288,6 +299,7 @@ const MySchedule = () => {
       pid = getPersonnelId();
       if (!pid) {
         alert('No personnel ID found. Please ensure you are logged in and refresh the page.');
+        console.error('personnelId is null. localStorage user_id:', localStorage.getItem('user_id'));
         console.error('personnelId is null. sessionStorage user_id:', sessionStorage.getItem('user_id'));
         return;
       }
